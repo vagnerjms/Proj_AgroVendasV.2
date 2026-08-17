@@ -1,0 +1,188 @@
+const mongoose = require('mongoose');
+
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://mongodb:27017/agrovenda';
+
+// --- SCHEMAS ---
+
+const SaleSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  operationType: { type: String, required: true },
+  saleDate: { type: String, required: true },
+  client: { type: String, required: true },
+  clientDocument: { type: String, default: '' },
+  origin: { type: String, default: '' },
+  destCity: { type: String, default: '' },
+  destUF: { type: String, default: '' },
+  notes: { type: String, default: '' },
+  nfFile: { type: String, default: null },
+  nfeKey: { type: String, default: '' },
+  evidenceFile: { type: String, default: null },
+  freightType: { type: String, default: 'FOB (Retira na Origem)' },
+  carrierName: { type: String, default: '' },
+  truckPlate: { type: String, default: '' },
+  driverName: { type: String, default: '' },
+  driverCPF: { type: String, default: '' },
+  freightPricePerUnit: { type: Number, default: 0 },
+  qualityStandard: {
+    maxHumidity: { type: Number, default: 14.0 },
+    maxImpurity: { type: Number, default: 1.0 },
+    maxDamaged: { type: Number, default: 8.0 }
+  },
+  items: [
+    {
+      product: String,
+      quantity: Number,
+      unit: String,
+      price: Number,
+      total: Number,
+      kg: Number
+    }
+  ],
+  feeType: { type: String, default: 'Porcentagem (%)' },
+  feeValue: { type: Number, default: 3.0 },
+  totalVolumes: { type: Number, default: 0 },
+  totalKg: { type: Number, default: 0 },
+  totalOperation: { type: Number, default: 0 },
+  totalCommission: { type: Number, default: 0 },
+  funruralTotal: { type: Number, default: 0 },
+  previdenciaSocial: { type: Number, default: 0 },
+  rat: { type: Number, default: 0 },
+  senar: { type: Number, default: 0 },
+  status: { type: String, default: 'Faturado' },
+  paymentStatus: { type: String, default: 'A Receber' },
+  paidAmount: { type: Number, default: 0 },
+  isDivergent: { type: Boolean, default: false },
+  nfPending: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const WeighingSlipSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  saleId: { type: String, default: '' },
+  client: { type: String, required: true },
+  product: { type: String, default: 'Cenoura (Caixa 29kg)' },
+  truckPlate: { type: String, required: true },
+  driverName: { type: String, default: 'Motorista' },
+  date: { type: String, required: true },
+  originWeightKg: { type: Number, required: true },
+  destWeightKg: { type: Number, required: true },
+  humidityPct: { type: Number, default: 14.0 },
+  impurityPct: { type: Number, default: 1.0 },
+  discountKg: { type: Number, default: 0 },
+  netWeightKg: { type: Number, required: true },
+  weightDifferenceKg: { type: Number, default: 0 },
+  weightDifferencePct: { type: Number, default: 0 },
+  tolerancePct: { type: Number, default: 0.25 },
+  status: { type: String, default: 'Aprovado' },
+  resolutionNotes: { type: String, default: '' },
+  resolvedAt: { type: Date, default: null }
+});
+
+const PurchaseSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  producer: { type: String, required: true },
+  date: { type: String, required: true },
+  product: { type: String, required: true },
+  quantity: { type: Number, default: 0 },
+  unit: { type: String, default: 'Sacas (60kg)' },
+  unitPrice: { type: Number, default: 0 },
+  total: { type: Number, default: 0 },
+  status: { type: String, default: 'Recebido' },
+  paymentStatus: { type: String, default: 'A Pagar' },
+  paidAmount: { type: Number, default: 0 },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const ClientSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  document: { type: String, default: '' },
+  type: { type: String, default: 'Comprador' },
+  city: { type: String, default: '' },
+  uf: { type: String, default: '' },
+  email: { type: String, default: '' },
+  phone: { type: String, default: '' }
+});
+
+const ProductSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  category: { type: String, default: 'Hortifruti' },
+  defaultUnit: { type: String, default: 'Caixas (29kg)' },
+  unitKg: { type: Number, default: 29 },
+  currentStock: { type: Number, default: 0 },
+  averageCost: { type: Number, default: 0 }
+});
+
+const FinancialSummarySchema = new mongoose.Schema({
+  totalAReceber: { type: Number, default: 1111058.01 },
+  totalAPagar: { type: Number, default: 0.00 },
+  vencidos: { type: Number, default: 0.00 },
+  notasPendentes: { type: Number, default: 0 },
+  divergentes: { type: Number, default: 0 }
+});
+
+const UserSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, default: '' },
+  role: { type: String, default: 'Operador Comercial' },
+  phone: { type: String, default: '' },
+  status: { type: String, default: 'Ativo' },
+  permissions: {
+    dashboard: { type: Boolean, default: true },
+    comercial_compras: { type: Boolean, default: true },
+    comercial_vendas: { type: Boolean, default: true },
+    romaneios_pesagem: { type: Boolean, default: true },
+    agenda_alertas: { type: Boolean, default: true },
+    relatorios: { type: Boolean, default: true },
+    financeiro_fiscal: { type: Boolean, default: true },
+    cadastros_clients: { type: Boolean, default: true },
+    cadastros_products: { type: Boolean, default: true },
+    cadastros_users: { type: Boolean, default: true },
+    backup_sistema: { type: Boolean, default: true }
+  },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Sale = mongoose.model('Sale', SaleSchema);
+const WeighingSlip = mongoose.model('WeighingSlip', WeighingSlipSchema);
+const Purchase = mongoose.model('Purchase', PurchaseSchema);
+const Client = mongoose.model('Client', ClientSchema);
+const Product = mongoose.model('Product', ProductSchema);
+const FinancialSummary = mongoose.model('FinancialSummary', FinancialSummarySchema);
+const User = mongoose.model('User', UserSchema);
+
+async function connectDB() {
+  const options = {
+    serverSelectionTimeoutMS: 5000,
+    connectTimeoutMS: 10000
+  };
+
+  const tryConnect = async (retries = 5, delay = 3000) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        await mongoose.connect(MONGO_URI, options);
+        console.log(`🌾 [MongoDB] Conectado ao MongoDB em ${MONGO_URI}`);
+        return;
+      } catch (err) {
+        console.warn(`⏳ [MongoDB] Tentativa ${i + 1}/${retries} falhou (${err.message}). Tentando novamente em ${delay/1000}s...`);
+        await new Promise(res => setTimeout(res, delay));
+      }
+    }
+  };
+
+  await tryConnect();
+}
+
+module.exports = {
+  connectDB,
+  Sale,
+  WeighingSlip,
+  Purchase,
+  Client,
+  Product,
+  FinancialSummary,
+  User
+};

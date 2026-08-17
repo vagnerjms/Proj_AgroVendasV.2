@@ -1,0 +1,59 @@
+services:
+  # MongoDB Database Container
+  mongodb:
+    image: mongo:7
+    container_name: agrovenda-v2-mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - agrovenda_mongo_data:/data/db
+    networks:
+      - agrovenda_network
+
+  # AgroVenda V2 Application Container (Backend API + Frontend)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agrovenda-v2-app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MONGO_URI=mongodb://mongodb:27017/agrovenda
+    depends_on:
+      - mongodb
+    volumes:
+      - agrovenda_uploads:/app/backend/uploads
+    networks:
+      - agrovenda_network
+
+  # Mongo Express (Painel Visual do MongoDB Web GUI)
+  mongo-express:
+    image: mongo-express:1
+    container_name: agrovenda-v2-mongo-express
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_BASICAUTH=false
+    depends_on:
+      - mongodb
+    networks:
+      - agrovenda_network
+
+networks:
+  agrovenda_network:
+    name: agrovenda_v2_network
+    driver: bridge
+
+volumes:
+  agrovenda_mongo_data:
+    name: agrovenda_v2_mongo_data
+  agrovenda_uploads:
+    name: agrovenda_v2_uploads

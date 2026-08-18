@@ -19,6 +19,7 @@ export default function Login({ onLogin }) {
   const [email, setEmail] = useState('admin@agrovenda.com.br');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -35,7 +36,7 @@ export default function Login({ onLogin }) {
     try {
       const data = await api.post('/api/auth/login', { email, password });
       if (data.user) {
-        onLogin(data.user);
+        onLogin(data.user, rememberMe);
       }
     } catch (err) {
       console.error(err);
@@ -138,6 +139,21 @@ export default function Login({ onLogin }) {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+            </div>
+
+            {/* Remember Me Checkbox */}
+            <div className="flex items-center justify-between pt-0.5">
+              <label className="flex items-center gap-2 cursor-pointer select-none group">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-[#091b2e] focus:ring-[#091b2e] focus:ring-offset-0 cursor-pointer accent-[#091b2e]"
+                />
+                <span className="text-xs text-gray-600 group-hover:text-gray-900 font-medium">
+                  Manter conectado por 1 ano
+                </span>
+              </label>
             </div>
 
             {/* Submit Button */}

@@ -17,8 +17,23 @@ import Login from './pages/Login';
 export default function App() {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
-      const saved = localStorage.getItem('agrovenda_user');
-      return saved ? JSON.parse(saved) : null;
+      // Check localStorage first (1-year persistent session)
+      const savedLocal = localStorage.getItem('agrovenda_user');
+      if (savedLocal) {
+        const parsed = JSON.parse(savedLocal);
+        if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
+          localStorage.removeItem('agrovenda_user');
+        } else {
+          return parsed.user || parsed;
+        }
+      }
+      // Fallback to sessionStorage (transient browser session)
+      const savedSession = sessionStorage.getItem('agrovenda_user');
+      if (savedSession) {
+        const parsed = JSON.parse(savedSession);
+        return parsed.user || parsed;
+      }
+      return null;
     } catch (e) {
       return null;
     }
@@ -27,12 +42,26 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [editingSale, setEditingSale] = useState(null);
 
-  const handleLogin = (user) => {
+  const handleLogin = (user, rememberMe = true) => {
     setCurrentUser(user);
     try {
-      localStorage.setItem('agrovenda_user', JSON.stringify(user));
+      const oneYearMs = 365 * 24 * 60 * 60 * 1000;
+      const sessionPayload = {
+        user,
+        rememberMe,
+        savedAt: Date.now(),
+        expiresAt: rememberMe ? (Date.now() + oneYearMs) : null
+      };
+
+      if (rememberMe) {
+        localStorage.setItem('agrovenda_user', JSON.stringify(sessionPayload));
+        sessionStorage.removeItem('agrovenda_user');
+      } else {
+        sessionStorage.setItem('agrovenda_user', JSON.stringify(sessionPayload));
+        localStorage.removeItem('agrovenda_user');
+      }
     } catch (e) {
-      console.error(e);
+      console.error('Erro ao salvar sessão:', e);
     }
     setCurrentPage('dashboard');
   };
@@ -41,6 +70,7 @@ export default function App() {
     setCurrentUser(null);
     try {
       localStorage.removeItem('agrovenda_user');
+      sessionStorage.removeItem('agrovenda_user');
     } catch (e) {
       console.error(e);
     }

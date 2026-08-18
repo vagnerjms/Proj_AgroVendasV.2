@@ -52,11 +52,11 @@ export function calculatePreciseSale({
   // 5. Valor Total da VP (Comercial / Cotação do dia)
   const valorTotalVP = caixas * cot;
 
-  // 6. Comissão AgroVenda
+  // 6. Comissão AgroVenda (Calculada sobre a base comercial / Total VP)
   let totalCommission = 0;
   const val = Number(feeValue) || 0;
   if (feeType === 'Porcentagem (%)') {
-    totalCommission = valorTotalNF * (val / 100);
+    totalCommission = valorTotalVP * (val / 100);
   } else if (feeType === 'Valor Fixo por Saca/Volume') {
     totalCommission = caixas * val;
   } else if (feeType === 'Valor Fixo Total') {

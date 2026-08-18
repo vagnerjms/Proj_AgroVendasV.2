@@ -277,7 +277,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     : (calculatedVolumes * numQuote);
 
   const totalCommission = feeType === 'Porcentagem (%)' 
-    ? effectiveTotalNF * (Number(feeValue) / 100)
+    ? (valorTotalVP * (Number(feeValue) / 100))
     : (feeType === 'Valor Fixo por Saca/Volume' ? calculatedVolumes * Number(feeValue) : Number(feeValue));
 
   // Dynamic Title

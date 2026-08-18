@@ -16,12 +16,13 @@ import {
 import { api } from '../services/api';
 
 export default function Login({ onLogin }) {
-  const [email, setEmail] = useState('admin@agrovenda.com.br');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [forgotModalOpen, setForgotModalOpen] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -44,12 +45,6 @@ export default function Login({ onLogin }) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const autofillAdmin = () => {
-    setEmail('admin@agrovenda.com.br');
-    setPassword('admin');
-    setError('');
   };
 
   return (
@@ -117,9 +112,13 @@ export default function Login({ onLogin }) {
                 <label className="block text-xs font-bold text-gray-700">
                   Senha
                 </label>
-                <span className="text-[11px] text-gray-400 font-medium cursor-pointer hover:text-[#df7b1b]" onClick={autofillAdmin}>
+                <button
+                  type="button"
+                  onClick={() => setForgotModalOpen(true)}
+                  className="text-[11px] text-gray-400 font-medium cursor-pointer hover:text-[#df7b1b] transition-colors"
+                >
                   Esqueceu a senha?
-                </span>
+                </button>
               </div>
               <div className="relative">
                 <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-3" />
@@ -182,6 +181,33 @@ export default function Login({ onLogin }) {
         </div>
 
       </div>
+
+      {/* Secure Forgot Password Modal */}
+      {forgotModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 space-y-4">
+            <div className="w-12 h-12 rounded-xl bg-amber-50 text-[#df7b1b] flex items-center justify-center border border-amber-200/60 mx-auto">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1.5">
+              <h3 className="text-sm font-bold text-gray-900">Recuperação de Acesso</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Por motivos de segurança, a redefinição de senhas é realizada diretamente pelo <strong>Administrador do Sistema</strong> no painel de <em>Usuários & Permissões</em>.
+              </p>
+            </div>
+            <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 text-[11px] text-gray-600 text-center">
+              Entre em contato com o suporte interno ou o administrador da sua unidade.
+            </div>
+            <button
+              type="button"
+              onClick={() => setForgotModalOpen(false)}
+              className="w-full bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold py-2.5 rounded-xl cursor-pointer transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

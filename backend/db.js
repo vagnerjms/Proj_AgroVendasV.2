@@ -97,6 +97,7 @@ const ClientSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
   document: { type: String, default: '' },
+  ie: { type: String, default: '' },
   type: { type: String, default: 'Comprador' },
   city: { type: String, default: '' },
   uf: { type: String, default: '' },

@@ -106,9 +106,10 @@ export default function Cadastros({ tab = 'clients' }) {
       setClientForm({
         name: client.name,
         document: client.document || '',
+        ie: client.ie || '',
         type: client.type || 'Comprador',
         city: client.city || '',
-        uf: client.uf || 'MT',
+        uf: client.uf || 'MG',
         email: client.email || '',
         phone: client.phone || ''
       });
@@ -117,9 +118,10 @@ export default function Cadastros({ tab = 'clients' }) {
       setClientForm({
         name: '',
         document: '',
-        type: 'Comprador',
+        ie: '',
+        type: 'Produtor',
         city: '',
-        uf: 'MT',
+        uf: 'MG',
         email: '',
         phone: ''
       });
@@ -369,7 +371,10 @@ export default function Cadastros({ tab = 'clients' }) {
                 <div className="space-y-1.5 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
                   <div className="flex items-center gap-2">
                     <Building className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                    <span>{c.document || 'Doc não informado'}</span>
+                    <span className="font-medium text-gray-700">{c.document || 'Doc não informado'}</span>
+                    {c.ie && (
+                      <span className="text-[11px] text-gray-500">· IE: <strong className="text-gray-800">{c.ie}</strong></span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
@@ -517,12 +522,35 @@ export default function Cadastros({ tab = 'clients' }) {
                 />
               </div>
               <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Inscrição Estadual (IE)</label>
+                <input
+                  type="text"
+                  placeholder="Ex: 000.000.000.000 ou ISENTO"
+                  value={clientForm.ie}
+                  onChange={e => setClientForm({ ...clientForm, ie: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Telefone / WhatsApp</label>
                 <input
                   type="text"
-                  placeholder="(64) 99999-0000"
+                  placeholder="(34) 99876-1122"
                   value={clientForm.phone}
                   onChange={e => setClientForm({ ...clientForm, phone: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">E-mail Comercial</label>
+                <input
+                  type="email"
+                  placeholder="contato@empresa.com.br"
+                  value={clientForm.email}
+                  onChange={e => setClientForm({ ...clientForm, email: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
                 />
               </div>
@@ -533,7 +561,7 @@ export default function Cadastros({ tab = 'clients' }) {
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Cidade</label>
                 <input
                   type="text"
-                  placeholder="Ex: Rio Verde"
+                  placeholder="Ex: São Gotardo"
                   value={clientForm.city}
                   onChange={e => setClientForm({ ...clientForm, city: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
@@ -544,23 +572,12 @@ export default function Cadastros({ tab = 'clients' }) {
                 <input
                   type="text"
                   maxLength={2}
-                  placeholder="GO"
+                  placeholder="MG"
                   value={clientForm.uf}
                   onChange={e => setClientForm({ ...clientForm, uf: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37] uppercase"
                 />
               </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">E-mail Comercial</label>
-              <input
-                type="email"
-                placeholder="contato@empresa.com.br"
-                value={clientForm.email}
-                onChange={e => setClientForm({ ...clientForm, email: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
-              />
             </div>
 
             <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">

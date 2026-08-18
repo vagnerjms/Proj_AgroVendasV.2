@@ -177,9 +177,8 @@ export default function Login({ onLogin }) {
         </div>
 
         {/* Footer */}
-        <div className="bg-gray-50 border-t border-gray-100 py-3 px-6 text-center text-[10px] text-gray-400 flex items-center justify-between">
-          <span>AgroVenda V2 — Produção</span>
-          <span className="text-emerald-700 font-semibold">MongoDB + Docker Ativo</span>
+        <div className="bg-gray-50 border-t border-gray-100 py-3.5 px-6 text-center text-[11px] text-gray-400 font-medium">
+          <span>AgroVenda V2 — Sistema de Gestão Comercial Agrícola</span>
         </div>
 
       </div>

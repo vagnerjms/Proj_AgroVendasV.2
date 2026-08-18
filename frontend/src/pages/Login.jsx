@@ -52,18 +52,19 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d2316] flex items-center justify-center p-4 relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-gradient-to-br from-[#051322] via-[#091b2e] to-[#0c2440] flex items-center justify-center p-4 relative overflow-hidden font-sans">
       
       {/* Background Decorative Gradient Orbs */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-600/20 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#2d7348]/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#df7b1b]/15 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#163a63]/40 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-sky-900/10 rounded-full blur-3xl pointer-events-none"></div>
 
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 relative z-10">
+      <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-700/30 relative z-10">
         
         {/* Header Branding */}
         <div className="bg-[#091b2e] text-white p-8 text-center relative border-b border-[#162e4a]">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-teal-500/20 text-teal-300 mb-3 border border-teal-400/30 shadow-xs">
-            <Sprout className="w-8 h-8 text-teal-300" />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#df7b1b]/15 text-[#df7b1b] mb-3 border border-[#df7b1b]/30 shadow-xs">
+            <Sprout className="w-8 h-8 text-[#df7b1b]" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-white">
             AGROVENDA V2

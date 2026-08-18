@@ -215,6 +215,44 @@ async function connectDB() {
   };
 
   await tryConnect();
+
+  // Auto-seed default Administrator if missing
+  try {
+    const adminExists = await User.findOne({ 
+      $or: [
+        { email: 'admin@agrovenda.com.br' },
+        { role: 'Administrador Geral' }
+      ]
+    });
+    if (!adminExists) {
+      const defaultAdmin = new User({
+        id: 'USR-001',
+        name: 'Administrador AgroVenda',
+        email: 'admin@agrovenda.com.br',
+        password: 'admin',
+        role: 'Administrador Geral',
+        phone: '(62) 99999-0001',
+        status: 'Ativo',
+        permissions: {
+          dashboard: true,
+          comercial_compras: true,
+          comercial_vendas: true,
+          romaneios_pesagem: true,
+          agenda_alertas: true,
+          relatorios: true,
+          financeiro_fiscal: true,
+          cadastros_clients: true,
+          cadastros_products: true,
+          cadastros_users: true,
+          backup_sistema: true
+        }
+      });
+      await defaultAdmin.save();
+      console.log('🌾 [MongoDB] Administrador padrão inicializado com sucesso (admin@agrovenda.com.br / admin)');
+    }
+  } catch (seedErr) {
+    console.warn('Aviso: erro ao verificar administrador padrão:', seedErr.message);
+  }
 }
 
 module.exports = {

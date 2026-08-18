@@ -12,7 +12,7 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('ErrorBoundary capturou uma falha de renderização:', error, errorInfo);
+    console.error('🌾 [AgroVenda ErrorBoundary] Falha capturada:', error, errorInfo);
   }
 
   handleReset = () => {
@@ -23,33 +23,36 @@ export default class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6 select-none font-['Inter',sans-serif]">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl border border-gray-200 text-center space-y-4">
-            <div className="w-14 h-14 rounded-full bg-red-100 text-red-700 flex items-center justify-center mx-auto shadow-inner">
-              <AlertTriangle className="w-7 h-7" />
+        <div className="min-h-screen flex items-center justify-center bg-[#f8faf9] p-6">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full border border-gray-200 shadow-2xl text-center space-y-4">
+            <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto border border-red-100 shadow-inner">
+              <AlertTriangle className="w-8 h-8" />
             </div>
             
-            <div>
-              <h2 className="text-xl font-extrabold text-gray-900">Ops! Algo deu errado</h2>
-              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                Ocorreu uma falha inesperada na interface. Seus dados e lançamentos no banco de dados continuam 100% seguros.
-              </p>
-            </div>
+            <h2 className="text-xl font-extrabold text-gray-900">
+              Instabilidade Detectada
+            </h2>
+            
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Ocorreu um erro inesperado na visualização desta tela. O restante do sistema e seus dados continuam seguros.
+            </p>
 
             {this.state.error?.message && (
-              <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-[11px] text-gray-600 font-mono text-left max-h-24 overflow-y-auto">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-[11px] font-mono text-gray-700 text-left overflow-x-auto max-h-24">
                 {this.state.error.message}
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={this.handleReset}
-              className="w-full bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-bold py-3 rounded-xl shadow-lg shadow-emerald-950/20 flex items-center justify-center gap-2 transition-all cursor-pointer"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span>Recarregar Sistema</span>
-            </button>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={this.handleReset}
+                className="flex-1 bg-[#091b2e] hover:bg-[#132c4a] text-white font-bold text-xs py-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-md"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Recarregar Página
+              </button>
+            </div>
           </div>
         </div>
       );

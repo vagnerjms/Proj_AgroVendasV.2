@@ -30,7 +30,7 @@ export default function Financial({ view = 'overview' }) {
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto space-y-6">
       <div>
-        <div className="text-xs font-semibold text-[#173e27] uppercase">INICIO / FINANCEIRO & FISCAL</div>
+        <div className="text-xs font-bold text-[#091b2e] uppercase">INICIO / FINANCEIRO & FISCAL</div>
         <h1 className="text-2xl font-extrabold text-gray-900 mt-1">
           {view === 'funrural' ? 'Apuração e Retenção de FUNRURAL' : 'Contas, Cobrança e Fluxo Financeiro'}
         </h1>
@@ -41,7 +41,7 @@ export default function Financial({ view = 'overview' }) {
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <div className="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
             <span>Total a Receber</span>
-            <ArrowUpRight className="w-4 h-4 text-emerald-600" />
+            <ArrowUpRight className="w-4 h-4 text-[#df7b1b]" />
           </div>
           <div className="text-2xl font-extrabold text-gray-900 mt-2">
             {formatCurrency(financial.totalAReceber)}
@@ -61,9 +61,9 @@ export default function Financial({ view = 'overview' }) {
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <div className="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
             <span>FUNRURAL Total Retido (1,63%)</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <ShieldCheck className="w-4 h-4 text-[#df7b1b]" />
           </div>
-          <div className="text-2xl font-extrabold text-[#173e27] mt-2">
+          <div className="text-2xl font-extrabold text-[#091b2e] mt-2">
             {formatCurrency(totalFunrural)}
           </div>
         </div>

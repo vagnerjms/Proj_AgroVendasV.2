@@ -20,16 +20,16 @@ export default function Navbar({ title, currentUser, onLogout, mobileOpen, onTog
         <button
           type="button"
           onClick={onToggleMobileMenu}
-          className="md:hidden p-2 -ml-1 text-gray-700 hover:text-[#173e27] hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+          className="md:hidden p-2 -ml-1 text-gray-700 hover:text-[#091b2e] hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
           title="Menu de Navegação"
           aria-label="Menu de Navegação"
         >
-          {mobileOpen ? <X className="w-5 h-5 text-emerald-800" /> : <Menu className="w-5 h-5 text-emerald-800" />}
+          {mobileOpen ? <X className="w-5 h-5 text-[#091b2e]" /> : <Menu className="w-5 h-5 text-[#091b2e]" />}
         </button>
 
         <div className="flex items-center gap-2">
-          <div className="md:hidden w-7 h-7 rounded bg-emerald-600/20 flex items-center justify-center border border-emerald-600/40">
-            <Sprout className="w-4 h-4 text-emerald-700" />
+          <div className="md:hidden w-7 h-7 rounded bg-teal-600/20 flex items-center justify-center border border-teal-600/40">
+            <Sprout className="w-4 h-4 text-teal-700" />
           </div>
           <h1 className="text-sm sm:text-lg font-bold text-gray-900 tracking-tight truncate max-w-[160px] sm:max-w-none">
             {title || `Olá, ${userName.split(' ')[0]}`}
@@ -37,9 +37,10 @@ export default function Navbar({ title, currentUser, onLogout, mobileOpen, onTog
         </div>
       </div>
 
-      <div className="flex items-center gap-2 sm:gap-4">
-        <div className="flex items-center gap-2.5 sm:gap-3 pl-2 sm:pl-4 border-l border-gray-200">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#1b5a37] text-white flex items-center justify-center font-bold text-xs sm:text-sm shadow-sm shrink-0">
+      <div className="flex items-center gap-3 sm:gap-4">
+        {/* User Profile Pill */}
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#091b2e] text-white flex items-center justify-center font-bold text-xs sm:text-sm shadow-sm shrink-0 border border-[#162e4a]">
             {initials}
           </div>
           <div className="flex flex-col">
@@ -52,7 +53,7 @@ export default function Navbar({ title, currentUser, onLogout, mobileOpen, onTog
               </span>
               <button 
                 onClick={onLogout}
-                className="text-[11px] text-red-600 hover:text-red-800 transition-colors text-left font-bold flex items-center gap-1 cursor-pointer"
+                className="text-[11px] text-[#c84b31] hover:text-red-700 transition-colors text-left font-bold flex items-center gap-1 cursor-pointer"
                 title="Encerrar sessão e voltar ao login"
               >
                 <LogOut className="w-3 h-3" />
@@ -61,6 +62,18 @@ export default function Navbar({ title, currentUser, onLogout, mobileOpen, onTog
             </div>
           </div>
         </div>
+
+        {/* Encerrar Sessão Button */}
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="hidden sm:flex bg-[#c84b31] hover:bg-[#b03f27] text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow-sm items-center gap-1.5 transition-colors cursor-pointer ml-2"
+            title="Encerrar sessão de trabalho"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Encerrar Sessão</span>
+          </button>
+        )}
       </div>
     </header>
   );

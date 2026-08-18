@@ -120,6 +120,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       setFeeValue(editingSale.feeValue || 3.0);
       setNfFile(editingSale.nfFile || null);
       setNfeKey(editingSale.nfeKey || '');
+      setEvidenceFile(editingSale.evidenceFile || null);
 
       const prodName = editingSale.items?.[0]?.product || 'Cenoura (Caixa 29kg)';
       setSelectedProduct(prodName);
@@ -392,6 +393,32 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     }
   };
 
+  const handleEvidenceUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setEvidenceFile(data.filename || file.name);
+        setSuccessMessage('Comprovante/Anexo da venda carregado com sucesso!');
+        setTimeout(() => setSuccessMessage(''), 3500);
+      } else {
+        setEvidenceFile(file.name);
+      }
+    } catch (err) {
+      console.error(err);
+      setEvidenceFile(file.name);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -491,7 +518,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold text-[#173e27] tracking-wider uppercase">
+          <div className="text-xs font-bold text-[#091b2e] tracking-wider uppercase">
             <span className="hover:underline cursor-pointer" onClick={() => setCurrentPage('dashboard')}>INICIO</span> / <span className="hover:underline cursor-pointer" onClick={() => setCurrentPage('sales-history')}>VENDAS</span>
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900 mt-1">
@@ -515,7 +542,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
             <button
               type="button"
               onClick={resetForm}
-              className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-semibold px-3.5 py-2 rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
+              className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-semibold px-3.5 py-2 rounded-lg shadow-sm transition-colors flex items-center gap-1.5 cursor-pointer"
               title="Limpar todos os campos do formulário"
             >
               <RotateCcw className="w-3.5 h-3.5 text-gray-500" />
@@ -526,7 +553,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
           <button
             type="button"
             onClick={() => setCurrentPage('sales-history')}
-            className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors"
+            className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm transition-colors cursor-pointer"
           >
             Ver Histórico de Vendas
           </button>
@@ -770,34 +797,58 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
 
           {/* Card: Dados Gerais da Emissão */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 pb-3 gap-2">
               <h2 className="text-sm font-bold text-gray-900">Dados da Emissão & Faturamento</h2>
               
-              {nfFile ? (
-                <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-300 px-3 py-1 rounded-lg text-xs">
-                  <FileText className="w-3.5 h-3.5 text-emerald-700" />
-                  <span className="font-bold text-emerald-950 max-w-[200px] truncate">{nfFile}</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNfFile(null);
-                      setNfeKey('');
-                      setXmlSuccess(false);
-                    }}
-                    className="ml-1 text-red-600 hover:text-red-800 hover:bg-red-100 p-1 rounded transition-colors flex items-center gap-1 font-bold"
-                    title="Excluir / Desanexar Nota Fiscal"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Remover</span>
-                  </button>
-                </div>
-              ) : (
-                <label className="flex items-center gap-1.5 text-xs font-semibold text-[#173e27] hover:underline cursor-pointer bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200 hover:bg-emerald-100 transition-colors">
-                  <Paperclip className="w-3.5 h-3.5" />
-                  <span>Importar NF-e (XML/PDF)</span>
-                  <input type="file" accept=".pdf,.xml" onChange={handleXmlUpload} className="hidden" />
-                </label>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Botão 1: Importar NF-e (XML/PDF) */}
+                {nfFile ? (
+                  <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-lg text-xs">
+                    <FileText className="w-3.5 h-3.5 text-emerald-700" />
+                    <span className="font-bold text-emerald-950 max-w-[150px] truncate" title={nfFile}>{nfFile}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNfFile(null);
+                        setNfeKey('');
+                        setXmlSuccess(false);
+                      }}
+                      className="ml-1 text-red-600 hover:text-red-800 p-0.5 rounded transition-colors font-bold"
+                      title="Excluir / Desanexar Nota Fiscal"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-[#091b2e] hover:underline cursor-pointer bg-slate-100 px-3 py-1 rounded-lg border border-slate-300 hover:bg-slate-200 transition-colors">
+                    <Paperclip className="w-3.5 h-3.5 text-[#091b2e]" />
+                    <span>Importar NF-e (XML/PDF)</span>
+                    <input type="file" accept=".pdf,.xml" onChange={handleXmlUpload} className="hidden" />
+                  </label>
+                )}
+
+                {/* Botão 2: Anexo Venda (Comprovantes, Canhotos, Fotos) */}
+                {evidenceFile ? (
+                  <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-300 px-2.5 py-1 rounded-lg text-xs">
+                    <Paperclip className="w-3.5 h-3.5 text-blue-700" />
+                    <span className="font-bold text-blue-950 max-w-[150px] truncate" title={evidenceFile}>{evidenceFile}</span>
+                    <button
+                      type="button"
+                      onClick={() => setEvidenceFile(null)}
+                      className="ml-1 text-red-600 hover:text-red-800 p-0.5 rounded transition-colors font-bold"
+                      title="Remover anexo da venda"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-[#091b2e] hover:underline cursor-pointer bg-slate-50 px-3 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 transition-colors" title="Anexar foto de canhoto, comprovante ou romaneio">
+                    <Paperclip className="w-3.5 h-3.5 text-[#091b2e]" />
+                    <span>Anexo Venda</span>
+                    <input type="file" accept="image/*,.pdf" onChange={handleEvidenceUpload} className="hidden" />
+                  </label>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -806,7 +857,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                 <select
                   value={operationType}
                   onChange={(e) => setOperationType(e.target.value)}
-                  className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none font-semibold focus:ring-2 focus:ring-[#1d5a37]"
+                  className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none font-semibold focus:ring-2 focus:ring-[#091b2e]"
                 >
                   {operationTypes.map(t => (
                     <option key={t} value={t}>{t}</option>
@@ -820,7 +871,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                   type="date"
                   value={saleDate}
                   onChange={(e) => setSaleDate(e.target.value)}
-                  className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                  className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#091b2e]"
                 />
               </div>
             </div>
@@ -833,7 +884,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                   placeholder="Ex: BRUNO PERES ROMEIRO (Fazenda São Gotardo/MG)"
                   value={origin}
                   onChange={(e) => setOrigin(e.target.value)}
-                  className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                  className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#091b2e]"
                 />
               </div>
 
@@ -962,7 +1013,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                 <span className="font-semibold text-gray-800">{formatCurrency(valorTotalVP)}</span>
               </div>
 
-              <div className="flex justify-between text-emerald-800 font-bold border-t border-gray-100 pt-2">
+              <div className="flex justify-between text-gray-800 font-bold border-t border-gray-100 pt-2">
                 <span>Comissão AgroVenda ({feeValue}%):</span>
                 <span className="text-sm">{formatCurrency(totalCommission)}</span>
               </div>
@@ -971,7 +1022,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
             <button
               type="submit"
               disabled={submitting}
-              className="w-full bg-[#173e27] hover:bg-[#1f5435] text-white font-bold text-xs py-3 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 mt-4"
+              className="w-full bg-[#091b2e] hover:bg-[#132c4a] text-white font-bold text-xs py-3.5 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer"
             >
               {submitting ? 'Gravando no MongoDB...' : 'Confirmar & Gravar Venda'}
             </button>

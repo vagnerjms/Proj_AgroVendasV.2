@@ -119,8 +119,8 @@ export default function BackupRestore({ setCurrentPage }) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
         <div>
-          <div className="text-xs font-semibold text-[#173e27] tracking-wider uppercase flex items-center gap-1.5">
-            <Database className="w-4 h-4 text-emerald-700" />
+          <div className="text-xs font-bold text-[#091b2e] tracking-wider uppercase flex items-center gap-1.5">
+            <Database className="w-4 h-4 text-[#df7b1b]" />
             <span>AGROVENDA — SISTEMA & INFRAESTRUTURA</span>
           </div>
           <h1 className="text-2xl font-black text-gray-900 mt-1">
@@ -133,7 +133,7 @@ export default function BackupRestore({ setCurrentPage }) {
 
         <button
           onClick={fetchStats}
-          className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-semibold px-3 py-2 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors"
+          className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-semibold px-3 py-2 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${loadingStats ? 'animate-spin' : ''}`} />
           Atualizar Status
@@ -225,7 +225,7 @@ export default function BackupRestore({ setCurrentPage }) {
           <button
             onClick={handleExportBackup}
             disabled={exporting}
-            className="w-full bg-[#173e27] hover:bg-[#1f5435] text-white font-bold text-xs py-3.5 rounded-lg shadow-md transition-all flex items-center justify-center gap-2"
+            className="w-full bg-[#091b2e] hover:bg-[#132c4a] text-white font-bold text-xs py-3.5 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
             <Download className="w-4 h-4" />
             <span>{exporting ? 'Empacotando Backup...' : 'Baixar Arquivo de Backup Completo (.JSON)'}</span>

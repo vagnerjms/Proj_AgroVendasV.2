@@ -13,6 +13,7 @@ import {
   Boxes,
   Truck
 } from 'lucide-react';
+import { api } from '../services/api';
 
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState('admin@agrovenda.com.br');
@@ -32,22 +33,13 @@ export default function Login({ onLogin }) {
     setError('');
 
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.user) {
+      const data = await api.post('/api/auth/login', { email, password });
+      if (data.user) {
         onLogin(data.user);
-      } else {
-        setError(data.error || 'Credenciais inválidas. Verifique seu e-mail e senha.');
       }
     } catch (err) {
       console.error(err);
-      setError('Não foi possível conectar ao servidor. Verifique se o container está ativo.');
+      setError(err.message || 'Credenciais inválidas. Verifique seu e-mail e senha.');
     } finally {
       setLoading(false);
     }
@@ -69,14 +61,14 @@ export default function Login({ onLogin }) {
       <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 relative z-10">
         
         {/* Header Branding */}
-        <div className="bg-[#173e27] text-white p-8 text-center relative">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-500/20 text-emerald-300 mb-3 border border-emerald-400/30">
-            <Sprout className="w-8 h-8 text-emerald-400" />
+        <div className="bg-[#091b2e] text-white p-8 text-center relative border-b border-[#162e4a]">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-teal-500/20 text-teal-300 mb-3 border border-teal-400/30 shadow-xs">
+            <Sprout className="w-8 h-8 text-teal-300" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-white">
             AGROVENDA V2
           </h1>
-          <p className="text-xs text-emerald-200/80 mt-1 font-medium">
+          <p className="text-xs text-[#8fa3bf] mt-1 font-medium">
             Gestão Comercial, Faturamento & Fechamento Agrícola
           </p>
         </div>
@@ -112,7 +104,7 @@ export default function Login({ onLogin }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="seu.email@empresa.com.br"
-                  className="w-full bg-gray-50 border border-gray-300 rounded-xl pl-10 pr-4 py-2.5 text-xs text-gray-900 outline-none focus:bg-white focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 transition-all font-medium"
+                  className="w-full bg-gray-50 border border-gray-300 rounded-xl pl-10 pr-4 py-2.5 text-xs text-gray-900 outline-none focus:bg-white focus:border-[#091b2e] focus:ring-2 focus:ring-[#091b2e]/20 transition-all font-medium"
                 />
               </div>
             </div>
@@ -123,7 +115,7 @@ export default function Login({ onLogin }) {
                 <label className="block text-xs font-bold text-gray-700">
                   Senha
                 </label>
-                <span className="text-[11px] text-gray-400 font-medium cursor-pointer hover:text-emerald-700" onClick={autofillAdmin}>
+                <span className="text-[11px] text-gray-400 font-medium cursor-pointer hover:text-[#df7b1b]" onClick={autofillAdmin}>
                   Esqueceu a senha?
                 </span>
               </div>
@@ -135,7 +127,7 @@ export default function Login({ onLogin }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-gray-50 border border-gray-300 rounded-xl pl-10 pr-10 py-2.5 text-xs text-gray-900 outline-none focus:bg-white focus:border-emerald-700 focus:ring-2 focus:ring-emerald-700/20 transition-all font-medium font-mono"
+                  className="w-full bg-gray-50 border border-gray-300 rounded-xl pl-10 pr-10 py-2.5 text-xs text-gray-900 outline-none focus:bg-white focus:border-[#091b2e] focus:ring-2 focus:ring-[#091b2e]/20 transition-all font-medium font-mono"
                 />
                 <button
                   type="button"
@@ -151,7 +143,7 @@ export default function Login({ onLogin }) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-bold py-3 rounded-xl shadow-lg shadow-emerald-950/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-2 cursor-pointer"
+              className="w-full bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold py-3.5 rounded-xl shadow-lg shadow-slate-950/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 mt-2 cursor-pointer"
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>

@@ -53,19 +53,31 @@ export default function Cadastros({ tab = 'clients' }) {
   // Feedback notifications
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [submittingClient, setSubmittingClient] = useState(false);
+  const [submittingProduct, setSubmittingProduct] = useState(false);
 
-  const fetchClients = () => {
-    fetch('/api/clients')
-      .then(res => res.json())
-      .then(setClients)
-      .catch(console.error);
+  const fetchClients = async () => {
+    try {
+      const res = await fetch('/api/clients');
+      if (res.ok) {
+        const data = await res.json();
+        setClients(data);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar clientes:', err);
+    }
   };
 
-  const fetchProducts = () => {
-    fetch('/api/products')
-      .then(res => res.json())
-      .then(setProducts)
-      .catch(console.error);
+  const fetchProducts = async () => {
+    try {
+      const res = await fetch('/api/products');
+      if (res.ok) {
+        const data = await res.json();
+        setProducts(data);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar produtos:', err);
+    }
   };
 
   useEffect(() => {
@@ -75,7 +87,16 @@ export default function Cadastros({ tab = 'clients' }) {
 
   const showNotification = (msg) => {
     setSuccessMsg(msg);
-    setTimeout(() => setSuccessMsg(''), 3000);
+    setErrorMsg('');
+    const timer = setTimeout(() => setSuccessMsg(''), 3500);
+    return () => clearTimeout(timer);
+  };
+
+  const showErrorNotification = (msg) => {
+    setErrorMsg(msg);
+    setSuccessMsg('');
+    const timer = setTimeout(() => setErrorMsg(''), 4500);
+    return () => clearTimeout(timer);
   };
 
   // --- CLIENT HANDLERS ---
@@ -108,35 +129,29 @@ export default function Cadastros({ tab = 'clients' }) {
 
   const handleSaveClient = async (e) => {
     e.preventDefault();
+    if (submittingClient) return;
+    setSubmittingClient(true);
     try {
-      if (editingClient) {
-        // Update
-        const res = await fetch(`/api/clients/${editingClient.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(clientForm)
-        });
-        if (res.ok) {
-          showNotification(`Cadastro de ${clientForm.name} atualizado com sucesso!`);
-          setClientModalOpen(false);
-          fetchClients();
-        }
+      const url = editingClient ? `/api/clients/${editingClient.id}` : '/api/clients';
+      const method = editingClient ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(clientForm)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showNotification(editingClient ? `Cadastro de ${clientForm.name} atualizado com sucesso!` : `Novo parceiro ${clientForm.name} cadastrado com sucesso!`);
+        setClientModalOpen(false);
+        fetchClients();
       } else {
-        // Create
-        const res = await fetch('/api/clients', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(clientForm)
-        });
-        if (res.ok) {
-          showNotification(`Novo parceiro ${clientForm.name} cadastrado com sucesso!`);
-          setClientModalOpen(false);
-          fetchClients();
-        }
+        showErrorNotification(data.error || 'Falha ao salvar parceiro comercial.');
       }
     } catch (err) {
       console.error(err);
-      setErrorMsg('Erro ao salvar parceiro.');
+      showErrorNotification('Erro de conexão ao salvar parceiro.');
+    } finally {
+      setSubmittingClient(false);
     }
   };
 
@@ -144,12 +159,16 @@ export default function Cadastros({ tab = 'clients' }) {
     if (!window.confirm(`Tem certeza que deseja excluir o cadastro de "${client.name}"?`)) return;
     try {
       const res = await fetch(`/api/clients/${client.id}`, { method: 'DELETE' });
+      const data = await res.json();
       if (res.ok) {
         showNotification(`Cadastro de ${client.name} excluído.`);
         fetchClients();
+      } else {
+        showErrorNotification(data.error || 'Não foi possível excluir o parceiro.');
       }
     } catch (err) {
       console.error(err);
+      showErrorNotification('Erro de rede ao tentar excluir parceiro.');
     }
   };
 
@@ -181,35 +200,29 @@ export default function Cadastros({ tab = 'clients' }) {
 
   const handleSaveProduct = async (e) => {
     e.preventDefault();
+    if (submittingProduct) return;
+    setSubmittingProduct(true);
     try {
-      if (editingProduct) {
-        // Update
-        const res = await fetch(`/api/products/${editingProduct.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(productForm)
-        });
-        if (res.ok) {
-          showNotification(`Produto ${productForm.name} atualizado com sucesso!`);
-          setProductModalOpen(false);
-          fetchProducts();
-        }
+      const url = editingProduct ? `/api/products/${editingProduct.id}` : '/api/products';
+      const method = editingProduct ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(productForm)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showNotification(editingProduct ? `Produto ${productForm.name} atualizado com sucesso!` : `Produto ${productForm.name} cadastrado com sucesso!`);
+        setProductModalOpen(false);
+        fetchProducts();
       } else {
-        // Create
-        const res = await fetch('/api/products', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(productForm)
-        });
-        if (res.ok) {
-          showNotification(`Produto ${productForm.name} cadastrado com sucesso!`);
-          setProductModalOpen(false);
-          fetchProducts();
-        }
+        showErrorNotification(data.error || 'Falha ao salvar produto.');
       }
     } catch (err) {
       console.error(err);
-      setErrorMsg('Erro ao salvar produto.');
+      showErrorNotification('Erro de conexão ao salvar produto.');
+    } finally {
+      setSubmittingProduct(false);
     }
   };
 
@@ -217,12 +230,16 @@ export default function Cadastros({ tab = 'clients' }) {
     if (!window.confirm(`Tem certeza que deseja excluir o produto "${product.name}"?`)) return;
     try {
       const res = await fetch(`/api/products/${product.id}`, { method: 'DELETE' });
+      const data = await res.json();
       if (res.ok) {
-        showNotification(`Produto ${product.name} excluído.`);
+        showNotification(`Produto ${product.name} excluído com sucesso.`);
         fetchProducts();
+      } else {
+        showErrorNotification(data.error || 'Não foi possível excluir o produto.');
       }
     } catch (err) {
       console.error(err);
+      showErrorNotification('Erro de rede ao tentar excluir produto.');
     }
   };
 
@@ -242,7 +259,7 @@ export default function Cadastros({ tab = 'clients' }) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold text-[#173e27] uppercase">INICIO / CADASTROS GERAIS</div>
+          <div className="text-xs font-bold text-[#091b2e] uppercase">INICIO / CADASTROS GERAIS</div>
           <h1 className="text-2xl font-extrabold text-gray-900 mt-1">
             {activeTab === 'clients' ? 'Gestão de Clientes & Produtores' : 'Gestão de Produtos & Grãos'}
           </h1>
@@ -252,7 +269,7 @@ export default function Cadastros({ tab = 'clients' }) {
           {activeTab === 'clients' ? (
             <button
               onClick={() => handleOpenClientModal()}
-              className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow flex items-center gap-1.5 transition-colors"
+              className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               Novo Parceiro (Cliente / Produtor)
@@ -260,7 +277,7 @@ export default function Cadastros({ tab = 'clients' }) {
           ) : (
             <button
               onClick={() => handleOpenProductModal()}
-              className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow flex items-center gap-1.5 transition-colors"
+              className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               Novo Produto / Commodity
@@ -271,9 +288,16 @@ export default function Cadastros({ tab = 'clients' }) {
 
       {/* Notifications */}
       {successMsg && (
-        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 px-4 py-3 rounded-lg flex items-center gap-2 text-sm shadow-xs">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
           <span>{successMsg}</span>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-lg flex items-center gap-2 text-sm shadow-xs">
+          <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+          <span>{errorMsg}</span>
         </div>
       )}
 
@@ -281,14 +305,14 @@ export default function Cadastros({ tab = 'clients' }) {
       <div className="flex border-b border-gray-200 gap-6 text-sm font-semibold">
         <button
           onClick={() => setActiveTab('clients')}
-          className={`pb-3 flex items-center gap-2 ${activeTab === 'clients' ? 'border-b-2 border-[#173e27] text-[#173e27]' : 'text-gray-400 hover:text-gray-600'}`}
+          className={`pb-3 flex items-center gap-2 cursor-pointer transition-colors ${activeTab === 'clients' ? 'border-b-2 border-[#df7b1b] text-[#df7b1b]' : 'text-gray-400 hover:text-gray-600'}`}
         >
           <Users className="w-4 h-4" />
           Clientes & Produtores ({clients.length})
         </button>
         <button
           onClick={() => setActiveTab('products')}
-          className={`pb-3 flex items-center gap-2 ${activeTab === 'products' ? 'border-b-2 border-[#173e27] text-[#173e27]' : 'text-gray-400 hover:text-gray-600'}`}
+          className={`pb-3 flex items-center gap-2 cursor-pointer transition-colors ${activeTab === 'products' ? 'border-b-2 border-[#df7b1b] text-[#df7b1b]' : 'text-gray-400 hover:text-gray-600'}`}
         >
           <Boxes className="w-4 h-4" />
           Produtos, Culturas & Estoque ({products.length})
@@ -542,16 +566,19 @@ export default function Cadastros({ tab = 'clients' }) {
             <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
               <button
                 type="button"
+                disabled={submittingClient}
                 onClick={() => setClientModalOpen(false)}
-                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg"
+                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-semibold px-5 py-2 rounded-lg transition-colors"
+                disabled={submittingClient}
+                className="bg-[#091b2e] hover:bg-[#132c4a] disabled:opacity-50 text-white text-xs font-bold px-5 py-2 rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
               >
-                {editingClient ? 'Salvar Alterações' : 'Cadastrar Parceiro'}
+                {submittingClient && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                <span>{submittingClient ? 'Gravando...' : (editingClient ? 'Salvar Alterações' : 'Cadastrar Parceiro')}</span>
               </button>
             </div>
           </form>
@@ -580,7 +607,7 @@ export default function Cadastros({ tab = 'clients' }) {
                   placeholder="Ex: Soja Grão Comercial Safra 25/26"
                   value={productForm.name}
                   onChange={e => setProductForm({ ...productForm, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
                 />
               </div>
 
@@ -589,7 +616,7 @@ export default function Cadastros({ tab = 'clients' }) {
                 <select
                   value={productForm.category}
                   onChange={e => setProductForm({ ...productForm, category: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37] font-semibold"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e] font-semibold"
                 >
                   <option value="Hortifruti">Hortifruti</option>
                   <option value="Grãos">Grãos</option>
@@ -619,7 +646,7 @@ export default function Cadastros({ tab = 'clients' }) {
                     else if (u === 'Paletes (pal)') kg = 800;
                     setProductForm({ ...productForm, defaultUnit: u, unitKg: kg });
                   }}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37] font-semibold text-gray-800"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e] font-semibold text-gray-800"
                 >
                   <option value="Caixas (cx)">Caixas (cx)</option>
                   <option value="Sacas (sc)">Sacas (sc)</option>
@@ -641,7 +668,7 @@ export default function Cadastros({ tab = 'clients' }) {
                   placeholder="Ex: 29, 60, 20..."
                   value={productForm.unitKg}
                   onChange={e => setProductForm({ ...productForm, unitKg: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37] font-bold text-gray-900"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e] font-bold text-gray-900"
                 />
               </div>
             </div>
@@ -653,7 +680,7 @@ export default function Cadastros({ tab = 'clients' }) {
                   type="number"
                   value={productForm.currentStock}
                   onChange={e => setProductForm({ ...productForm, currentStock: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
                 />
               </div>
 
@@ -664,7 +691,7 @@ export default function Cadastros({ tab = 'clients' }) {
                   step="0.01"
                   value={productForm.averageCost}
                   onChange={e => setProductForm({ ...productForm, averageCost: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
                 />
               </div>
             </div>
@@ -672,16 +699,19 @@ export default function Cadastros({ tab = 'clients' }) {
             <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
               <button
                 type="button"
+                disabled={submittingProduct}
                 onClick={() => setProductModalOpen(false)}
-                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg"
+                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-semibold px-5 py-2 rounded-lg transition-colors"
+                disabled={submittingProduct}
+                className="bg-[#091b2e] hover:bg-[#132c4a] disabled:opacity-50 text-white text-xs font-bold px-5 py-2 rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
               >
-                {editingProduct ? 'Salvar Alterações' : 'Cadastrar Produto'}
+                {submittingProduct && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                <span>{submittingProduct ? 'Gravando...' : (editingProduct ? 'Salvar Alterações' : 'Cadastrar Produto')}</span>
               </button>
             </div>
           </form>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, 
   Filter, 
@@ -19,10 +19,39 @@ import {
   FileCheck2,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Settings,
+  RotateCcw,
+  Check
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatKg, formatNumber } from '../utils/formatters';
 import ContractModal from '../components/ContractModal';
+
+const DEFAULT_COLUMNS = {
+  id: true,
+  saleDate: true,
+  client: true,
+  totalKg: true,
+  totalOperation: true,
+  funrural: true,
+  net: true,
+  feeValue: true,
+  status: true,
+  actions: true
+};
+
+const COLUMN_DEFINITIONS = [
+  { id: 'id', label: 'Cód VP / NF' },
+  { id: 'saleDate', label: 'Data VP / NF' },
+  { id: 'client', label: 'Destinatário (Cliente)' },
+  { id: 'totalKg', label: 'Peso (kg) / Caixas' },
+  { id: 'totalOperation', label: 'Valor Total da NF' },
+  { id: 'funrural', label: '(-) FUNRURAL (1,63%)' },
+  { id: 'net', label: '(=) Líquido a Receber' },
+  { id: 'feeValue', label: 'Comissão (3%)' },
+  { id: 'status', label: 'Status' },
+  { id: 'actions', label: 'Ações' }
+];
 
 export default function SalesHistory({ setCurrentPage, onEditSale }) {
   const [sales, setSales] = useState([]);
@@ -83,6 +112,57 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
     }
   };
 
+  // Column Visibility State with Persistence
+  const [visibleColumns, setVisibleColumns] = useState(() => {
+    try {
+      const saved = localStorage.getItem('agrovenda_sales_visible_columns');
+      if (saved) {
+        return { ...DEFAULT_COLUMNS, ...JSON.parse(saved) };
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return DEFAULT_COLUMNS;
+  });
+
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const columnMenuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(event.target)) {
+        setShowColumnMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const toggleColumn = (colId) => {
+    setVisibleColumns((prev) => {
+      const updated = { ...prev, [colId]: !prev[colId] };
+      try {
+        localStorage.setItem('agrovenda_sales_visible_columns', JSON.stringify(updated));
+      } catch (e) {
+        console.error(e);
+      }
+      return updated;
+    });
+  };
+
+  const resetColumns = () => {
+    setVisibleColumns(DEFAULT_COLUMNS);
+    try {
+      localStorage.setItem('agrovenda_sales_visible_columns', JSON.stringify(DEFAULT_COLUMNS));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const activeColumnCount = Object.values(visibleColumns).filter(Boolean).length || 1;
+
   // Edit Sale Modal State
   const [editingSale, setEditingSale] = useState(null);
   const [editForm, setEditForm] = useState({
@@ -97,6 +177,8 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
   });
 
   const [notification, setNotification] = useState('');
+  const [errorNotification, setErrorNotification] = useState('');
+  const [submittingEdit, setSubmittingEdit] = useState(false);
 
   const fetchSales = async () => {
     setLoading(true);
@@ -110,9 +192,13 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
       if (res.ok) {
         const data = await res.json();
         setSales(data);
+      } else {
+        const data = await res.json();
+        showErrorNotification(data.error || 'Erro ao carregar lista de vendas.');
       }
     } catch (err) {
       console.error('Erro ao carregar vendas:', err);
+      showErrorNotification('Falha de conexão ao carregar vendas.');
     } finally {
       setLoading(false);
     }
@@ -124,7 +210,16 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
 
   const showNotification = (msg) => {
     setNotification(msg);
-    setTimeout(() => setNotification(''), 3500);
+    setErrorNotification('');
+    const timer = setTimeout(() => setNotification(''), 3500);
+    return () => clearTimeout(timer);
+  };
+
+  const showErrorNotification = (msg) => {
+    setErrorNotification(msg);
+    setNotification('');
+    const timer = setTimeout(() => setErrorNotification(''), 4500);
+    return () => clearTimeout(timer);
   };
 
   const handleSearchSubmit = (e) => {
@@ -148,20 +243,27 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
-    if (!editingSale) return;
+    if (!editingSale || submittingEdit) return;
+    setSubmittingEdit(true);
     try {
       const res = await fetch(`/api/sales/${editingSale.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm)
       });
+      const data = await res.json();
       if (res.ok) {
         showNotification(`Venda ${editingSale.id} atualizada com sucesso!`);
         setEditingSale(null);
         fetchSales();
+      } else {
+        showErrorNotification(data.error || 'Erro ao atualizar dados da operação.');
       }
     } catch (err) {
       console.error(err);
+      showErrorNotification('Erro de conexão ao salvar alterações da venda.');
+    } finally {
+      setSubmittingEdit(false);
     }
   };
 
@@ -169,12 +271,16 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
     if (!window.confirm(`Tem certeza que deseja cancelar e excluir a venda ${sale.id} de ${sale.client}?`)) return;
     try {
       const res = await fetch(`/api/sales/${sale.id}`, { method: 'DELETE' });
+      const data = await res.json();
       if (res.ok) {
         showNotification(`Venda ${sale.id} excluída com sucesso.`);
         fetchSales();
+      } else {
+        showErrorNotification(data.error || 'Erro ao excluir operação de venda.');
       }
     } catch (err) {
       console.error(err);
+      showErrorNotification('Erro de rede ao tentar excluir venda.');
     }
   };
 
@@ -182,12 +288,16 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
     if (!window.confirm(`Deseja registrar o recebimento e liquidação integral da venda ${saleId}?`)) return;
     try {
       const res = await fetch(`/api/sales/${saleId}/settle`, { method: 'POST' });
+      const data = await res.json();
       if (res.ok) {
         showNotification(`Venda ${saleId} liquidada com sucesso!`);
         fetchSales();
+      } else {
+        showErrorNotification(data.error || 'Não foi possível liquidar a venda.');
       }
     } catch (err) {
       console.error(err);
+      showErrorNotification('Erro de rede ao registrar liquidação.');
     }
   };
 
@@ -267,7 +377,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold text-[#173e27] tracking-wider uppercase">
+          <div className="text-xs font-bold text-[#091b2e] tracking-wider uppercase">
             <span className="hover:underline cursor-pointer" onClick={() => setCurrentPage('dashboard')}>INICIO</span> / HISTÓRICO DE VENDAS
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900 mt-1">
@@ -281,7 +391,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
         <div className="flex items-center gap-3">
           <button
             onClick={() => alert('Exportando relatório consolidado de vendas e comissões para Excel/CSV...')}
-            className="hidden sm:flex bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition-colors items-center gap-1.5"
+            className="hidden sm:flex bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition-colors items-center gap-1.5 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             Exportar Excel
@@ -289,7 +399,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
 
           <button
             onClick={() => setCurrentPage('new-sale')}
-            className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
+            className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             Nova Venda / VP
@@ -299,9 +409,16 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
 
       {/* Notification */}
       {notification && (
-        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 px-4 py-3 rounded-lg flex items-center gap-2 text-sm shadow-xs">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
           <span>{notification}</span>
+        </div>
+      )}
+
+      {errorNotification && (
+        <div className="bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-lg flex items-center gap-2 text-sm shadow-xs">
+          <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+          <span>{errorNotification}</span>
         </div>
       )}
 
@@ -314,14 +431,14 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
             placeholder="Buscar por código VP, cliente destinatário, nota fiscal..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1d5a37]"
+            className="w-full pl-9 pr-3 py-2 text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#091b2e]"
           />
         </form>
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Seletor de Ordenação Persistente */}
           <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-300 rounded-lg px-2.5 py-1.5 shadow-sm">
-            <ArrowUpDown className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+            <ArrowUpDown className="w-3.5 h-3.5 text-[#091b2e] shrink-0" />
             <span className="text-[11px] font-bold text-gray-700">Ordem:</span>
             <select
               value={`${sortField}_${sortDirection}`}
@@ -364,6 +481,70 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
             <option value="Pendente NF">Pendente NF</option>
             <option value="Concluído">Concluído</option>
           </select>
+
+          {/* Botão de Engrenagem / Seletor de Colunas Visíveis */}
+          <div className="relative" ref={columnMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowColumnMenu(!showColumnMenu)}
+              className={`px-3 py-2 border rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ${
+                showColumnMenu 
+                  ? 'bg-amber-50 border-[#df7b1b] text-[#df7b1b] ring-2 ring-[#df7b1b]/20' 
+                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+              title="Configurar colunas exibidas na tabela"
+            >
+              <Settings className={`w-3.5 h-3.5 ${showColumnMenu ? 'text-[#df7b1b]' : 'text-gray-500'}`} />
+              <span className="hidden sm:inline">Colunas</span>
+            </button>
+
+            {/* Menu Popover das Colunas */}
+            {showColumnMenu && (
+              <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-3 text-xs animate-in fade-in zoom-in-95 duration-100">
+                <div className="flex items-center justify-between pb-2 border-b border-gray-100 mb-2">
+                  <div className="flex items-center gap-1.5 font-bold text-gray-800">
+                    <Settings className="w-3.5 h-3.5 text-[#df7b1b]" />
+                    <span>Exibir Colunas</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={resetColumns}
+                    className="text-[10px] text-[#df7b1b] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                    title="Restaurar visualização original de todas as colunas"
+                  >
+                    <RotateCcw className="w-2.5 h-2.5" />
+                    Restaurar
+                  </button>
+                </div>
+                
+                <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+                  {COLUMN_DEFINITIONS.map((col) => {
+                    const isChecked = !!visibleColumns[col.id];
+                    return (
+                      <label
+                        key={col.id}
+                        className="flex items-center justify-between px-2.5 py-1.5 hover:bg-amber-50/50 rounded-lg cursor-pointer select-none transition-colors group"
+                      >
+                        <span className={`text-xs ${isChecked ? 'text-gray-800 font-medium' : 'text-gray-400'}`}>
+                          {col.label}
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleColumn(col.id)}
+                          className="w-4 h-4 text-[#df7b1b] accent-[#df7b1b] rounded border-gray-300 focus:ring-[#df7b1b] cursor-pointer"
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+                
+                <div className="pt-2 mt-2 border-t border-gray-100 text-[10px] text-gray-400 text-center">
+                  Preferências salvas automaticamente
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -373,111 +554,131 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
           <table className="w-full text-left text-xs">
             <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 font-bold uppercase tracking-wider text-[10px]">
               <tr>
-                <th 
-                  onClick={() => handleSortChange('id')}
-                  className="py-3.5 px-4 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
-                  title="Clique para ordenar por Código VP"
-                >
-                  <div className="flex items-center">
-                    <span>Cód VP / NF</span>
-                    {renderSortIndicator('id')}
-                  </div>
-                </th>
+                {visibleColumns.id && (
+                  <th 
+                    onClick={() => handleSortChange('id')}
+                    className="py-3.5 px-4 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
+                    title="Clique para ordenar por Código VP"
+                  >
+                    <div className="flex items-center">
+                      <span>Cód VP / NF</span>
+                      {renderSortIndicator('id')}
+                    </div>
+                  </th>
+                )}
 
-                <th 
-                  onClick={() => handleSortChange('saleDate')}
-                  className="py-3.5 px-4 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
-                  title="Clique para ordenar por Data"
-                >
-                  <div className="flex items-center">
-                    <span>Data VP / NF</span>
-                    {renderSortIndicator('saleDate')}
-                  </div>
-                </th>
+                {visibleColumns.saleDate && (
+                  <th 
+                    onClick={() => handleSortChange('saleDate')}
+                    className="py-3.5 px-4 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
+                    title="Clique para ordenar por Data"
+                  >
+                    <div className="flex items-center">
+                      <span>Data VP / NF</span>
+                      {renderSortIndicator('saleDate')}
+                    </div>
+                  </th>
+                )}
 
-                <th 
-                  onClick={() => handleSortChange('client')}
-                  className="py-3.5 px-4 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
-                  title="Clique para ordenar por Destinatário"
-                >
-                  <div className="flex items-center">
-                    <span>Destinatário (Cliente)</span>
-                    {renderSortIndicator('client')}
-                  </div>
-                </th>
+                {visibleColumns.client && (
+                  <th 
+                    onClick={() => handleSortChange('client')}
+                    className="py-3.5 px-4 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
+                    title="Clique para ordenar por Destinatário"
+                  >
+                    <div className="flex items-center">
+                      <span>Destinatário (Cliente)</span>
+                      {renderSortIndicator('client')}
+                    </div>
+                  </th>
+                )}
 
-                <th 
-                  onClick={() => handleSortChange('totalKg')}
-                  className="py-3.5 px-4 text-right cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
-                  title="Clique para ordenar por Peso"
-                >
-                  <div className="flex items-center justify-end">
-                    <span>Peso (kg) / Caixas</span>
-                    {renderSortIndicator('totalKg')}
-                  </div>
-                </th>
+                {visibleColumns.totalKg && (
+                  <th 
+                    onClick={() => handleSortChange('totalKg')}
+                    className="py-3.5 px-4 text-right cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
+                    title="Clique para ordenar por Peso"
+                  >
+                    <div className="flex items-center justify-end">
+                      <span>Peso (kg) / Caixas</span>
+                      {renderSortIndicator('totalKg')}
+                    </div>
+                  </th>
+                )}
 
-                <th 
-                  onClick={() => handleSortChange('totalOperation')}
-                  className="py-3.5 px-4 text-right bg-gray-50/50 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
-                  title="Clique para ordenar por Valor Total da NF"
-                >
-                  <div className="flex items-center justify-end">
-                    <span>Valor Total da NF</span>
-                    {renderSortIndicator('totalOperation')}
-                  </div>
-                </th>
+                {visibleColumns.totalOperation && (
+                  <th 
+                    onClick={() => handleSortChange('totalOperation')}
+                    className="py-3.5 px-4 text-right bg-gray-50/50 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
+                    title="Clique para ordenar por Valor Total da NF"
+                  >
+                    <div className="flex items-center justify-end">
+                      <span>Valor Total da NF</span>
+                      {renderSortIndicator('totalOperation')}
+                    </div>
+                  </th>
+                )}
 
-                <th className="py-3.5 px-4 text-right text-red-600 bg-red-50/30">
-                  (-) FUNRURAL (1,63%)
-                </th>
+                {visibleColumns.funrural && (
+                  <th className="py-3.5 px-4 text-right text-red-600 bg-red-50/30">
+                    (-) FUNRURAL (1,63%)
+                  </th>
+                )}
 
-                <th 
-                  onClick={() => handleSortChange('net')}
-                  className="py-3.5 px-4 text-right font-bold text-gray-900 bg-emerald-50/30 cursor-pointer select-none hover:bg-emerald-100/50 group transition-colors"
-                  title="Clique para ordenar por Líquido a Receber"
-                >
-                  <div className="flex items-center justify-end">
-                    <span>(=) Líquido a Receber</span>
-                    {renderSortIndicator('net')}
-                  </div>
-                </th>
+                {visibleColumns.net && (
+                  <th 
+                    onClick={() => handleSortChange('net')}
+                    className="py-3.5 px-4 text-right font-bold text-gray-900 bg-emerald-50/30 cursor-pointer select-none hover:bg-emerald-100/50 group transition-colors"
+                    title="Clique para ordenar por Líquido a Receber"
+                  >
+                    <div className="flex items-center justify-end">
+                      <span>(=) Líquido a Receber</span>
+                      {renderSortIndicator('net')}
+                    </div>
+                  </th>
+                )}
 
-                <th 
-                  onClick={() => handleSortChange('feeValue')}
-                  className="py-3.5 px-4 text-right text-emerald-800 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
-                  title="Clique para ordenar por Comissão"
-                >
-                  <div className="flex items-center justify-end">
-                    <span>Comissão (3%)</span>
-                    {renderSortIndicator('feeValue')}
-                  </div>
-                </th>
+                {visibleColumns.feeValue && (
+                  <th 
+                    onClick={() => handleSortChange('feeValue')}
+                    className="py-3.5 px-4 text-right text-emerald-800 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
+                    title="Clique para ordenar por Comissão"
+                  >
+                    <div className="flex items-center justify-end">
+                      <span>Comissão (3%)</span>
+                      {renderSortIndicator('feeValue')}
+                    </div>
+                  </th>
+                )}
 
-                <th 
-                  onClick={() => handleSortChange('status')}
-                  className="py-3.5 px-4 text-center cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
-                  title="Clique para ordenar por Status"
-                >
-                  <div className="flex items-center justify-center">
-                    <span>Status</span>
-                    {renderSortIndicator('status')}
-                  </div>
-                </th>
+                {visibleColumns.status && (
+                  <th 
+                    onClick={() => handleSortChange('status')}
+                    className="py-3.5 px-4 text-center cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
+                    title="Clique para ordenar por Status"
+                  >
+                    <div className="flex items-center justify-center">
+                      <span>Status</span>
+                      {renderSortIndicator('status')}
+                    </div>
+                  </th>
+                )}
 
-                <th className="py-3.5 px-4 text-center">Ações</th>
+                {visibleColumns.actions && (
+                  <th className="py-3.5 px-4 text-center">Ações</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-gray-400">
+                  <td colSpan={activeColumnCount} className="py-12 text-center text-gray-400">
                     Carregando negociações...
                   </td>
                 </tr>
               ) : sortedSales.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-gray-400">
+                  <td colSpan={activeColumnCount} className="py-12 text-center text-gray-400">
                     Nenhuma venda encontrada para os critérios selecionados.
                   </td>
                 </tr>
@@ -486,117 +687,137 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                   const net = getNetReceivable(sale);
                   return (
                     <tr key={sale.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-gray-900 font-mono">{sale.id}</div>
-                        <div className="text-gray-400 text-[11px]">
-                          {sale.nfFile ? sale.nfFile.replace('.pdf', '') : 'Pendente NF'}
-                        </div>
-                      </td>
+                      {visibleColumns.id && (
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-gray-900 font-mono">{sale.id}</div>
+                          <div className="text-gray-400 text-[11px]">
+                            {sale.nfFile ? sale.nfFile.replace('.pdf', '') : 'Pendente NF'}
+                          </div>
+                        </td>
+                      )}
 
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-gray-800">{formatDate(sale.saleDate)}</div>
-                        <div className="text-gray-400 text-[10px]">
-                          {sale.notes?.includes('Vencimento') ? sale.notes.split('Vencimento:')[1]?.split('.')[0] : ''}
-                        </div>
-                      </td>
+                      {visibleColumns.saleDate && (
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-gray-800">{formatDate(sale.saleDate)}</div>
+                          <div className="text-gray-400 text-[10px]">
+                            {sale.notes?.includes('Vencimento') ? sale.notes.split('Vencimento:')[1]?.split('.')[0] : ''}
+                          </div>
+                        </td>
+                      )}
 
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-gray-900 truncate max-w-[200px]" title={sale.client}>
-                          {sale.client}
-                        </div>
-                        <div className="text-gray-400 text-[11px]">
-                          {sale.items?.[0]?.product || 'Cenoura'}
-                        </div>
-                      </td>
+                      {visibleColumns.client && (
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-gray-900 truncate max-w-[200px]" title={sale.client}>
+                            {sale.client}
+                          </div>
+                          <div className="text-gray-400 text-[11px]">
+                            {sale.items?.[0]?.product || 'Cenoura'}
+                          </div>
+                        </td>
+                      )}
 
-                      <td className="py-3 px-4 text-right">
-                        <div className="font-bold text-gray-900">{formatNumber(sale.totalKg, 0)} kg</div>
-                        <div className="text-gray-500 text-[11px]">
-                          {formatNumber(sale.totalVolumes, 2)} cx (29kg)
-                        </div>
-                      </td>
+                      {visibleColumns.totalKg && (
+                        <td className="py-3 px-4 text-right">
+                          <div className="font-bold text-gray-900">{formatNumber(sale.totalKg, 0)} kg</div>
+                          <div className="text-gray-500 text-[11px]">
+                            {formatNumber(sale.totalVolumes, 2)} cx (29kg)
+                          </div>
+                        </td>
+                      )}
 
                       {/* Valor Total da NF */}
-                      <td className="py-3 px-4 text-right font-bold text-gray-900 bg-gray-50/40">
-                        {formatCurrency(sale.totalOperation)}
-                      </td>
+                      {visibleColumns.totalOperation && (
+                        <td className="py-3 px-4 text-right font-bold text-gray-900 bg-gray-50/40">
+                          {formatCurrency(sale.totalOperation)}
+                        </td>
+                      )}
 
                       {/* FUNRURAL DEDUZIDO DA NOTA */}
-                      <td className="py-3 px-4 text-right font-medium text-red-600 bg-red-50/20">
-                        -{formatCurrency(sale.funruralTotal)}
-                      </td>
+                      {visibleColumns.funrural && (
+                        <td className="py-3 px-4 text-right font-medium text-red-600 bg-red-50/20">
+                          -{formatCurrency(sale.funruralTotal)}
+                        </td>
+                      )}
 
                       {/* LÍQUIDO A RECEBER (VALOR NF - FUNRURAL) */}
-                      <td className="py-3 px-4 text-right font-extrabold text-emerald-950 bg-emerald-50/30">
-                        {formatCurrency(net)}
-                      </td>
+                      {visibleColumns.net && (
+                        <td className="py-3 px-4 text-right font-extrabold text-emerald-950 bg-emerald-50/30">
+                          {formatCurrency(net)}
+                        </td>
+                      )}
 
                       {/* Comissão 3% */}
-                      <td className="py-3 px-4 text-right font-bold text-emerald-800">
-                        {formatCurrency(sale.totalCommission)}
-                        <span className="block text-[10px] text-gray-400 font-normal">3,0%</span>
-                      </td>
+                      {visibleColumns.feeValue && (
+                        <td className="py-3 px-4 text-right font-bold text-emerald-800">
+                          {formatCurrency(sale.totalCommission)}
+                          <span className="block text-[10px] text-gray-400 font-normal">3,0%</span>
+                        </td>
+                      )}
 
-                      <td className="py-3 px-4 text-center">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          sale.paymentStatus === 'Recebido'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : (sale.status === 'Pendente NF' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800')
-                        }`}>
-                          {sale.paymentStatus === 'Recebido' ? 'Recebido' : (sale.status === 'Pendente NF' ? 'Pendente NF' : 'Em aberto')}
-                        </span>
-                      </td>
+                      {visibleColumns.status && (
+                        <td className="py-3 px-4 text-center">
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            sale.paymentStatus === 'Recebido'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : (sale.status === 'Pendente NF' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800')
+                          }`}>
+                            {sale.paymentStatus === 'Recebido' ? 'Recebido' : (sale.status === 'Pendente NF' ? 'Pendente NF' : 'Em aberto')}
+                          </span>
+                        </td>
+                      )}
 
-                      <td className="py-3 px-4 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {/* Ver detalhes */}
-                          <button
-                            onClick={() => setViewSale(sale)}
-                            className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 p-1.5 rounded transition-colors"
-                            title="Ver detalhes da negociação / Rastreio VP"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Imprimir Contrato Agrícola */}
-                          <button
-                            onClick={() => setContractSale(sale)}
-                            className="text-blue-700 hover:bg-blue-50 p-1.5 rounded transition-colors"
-                            title="Imprimir Contrato Agrícola / Confirmação de Negócio"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Editar - Abre o Formulário Completo */}
-                          <button
-                            onClick={() => onEditSale ? onEditSale(sale) : handleOpenEdit(sale)}
-                            className="text-emerald-700 hover:bg-emerald-50 p-1.5 rounded transition-colors"
-                            title="Editar todos os dados da venda no formulário completo"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Liquidar */}
-                          {sale.paymentStatus !== 'Recebido' && (
+                      {visibleColumns.actions && (
+                        <td className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            {/* Ver detalhes */}
                             <button
-                              onClick={() => handleSettle(sale.id)}
-                              className="text-amber-700 hover:bg-amber-50 p-1.5 rounded transition-colors"
-                              title="Dar baixa / Registrar recebimento"
+                              onClick={() => setViewSale(sale)}
+                              className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 p-1.5 rounded transition-colors"
+                              title="Ver detalhes da negociação / Rastreio VP"
                             >
-                              <DollarSign className="w-3.5 h-3.5" />
+                              <Eye className="w-3.5 h-3.5" />
                             </button>
-                          )}
 
-                          {/* Excluir */}
-                          <button
-                            onClick={() => handleDeleteSale(sale)}
-                            className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition-colors"
-                            title="Excluir negociação"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
+                            {/* Imprimir Contrato Agrícola */}
+                            <button
+                              onClick={() => setContractSale(sale)}
+                              className="text-blue-700 hover:bg-blue-50 p-1.5 rounded transition-colors"
+                              title="Imprimir Contrato Agrícola / Confirmação de Negócio"
+                            >
+                              <Printer className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Editar - Abre o Formulário Completo */}
+                            <button
+                              onClick={() => onEditSale ? onEditSale(sale) : handleOpenEdit(sale)}
+                              className="text-emerald-700 hover:bg-emerald-50 p-1.5 rounded transition-colors"
+                              title="Editar todos os dados da venda no formulário completo"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Liquidar */}
+                            {sale.paymentStatus !== 'Recebido' && (
+                              <button
+                                onClick={() => handleSettle(sale.id)}
+                                className="text-amber-700 hover:bg-amber-50 p-1.5 rounded transition-colors"
+                                title="Dar baixa / Registrar recebimento"
+                              >
+                                <DollarSign className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            {/* Excluir */}
+                            <button
+                              onClick={() => handleDeleteSale(sale)}
+                              className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition-colors"
+                              title="Excluir negociação"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -640,8 +861,24 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
               </div>
               <div>
                 <span className="text-gray-500 block">Documento Fiscal:</span>
-                <span className="font-semibold text-emerald-700 font-mono">{viewSale.nfFile || 'Pendente de emissão'}</span>
+                {viewSale.nfFile ? (
+                  <a href={`/uploads/${viewSale.nfFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:underline font-mono flex items-center gap-1">
+                    <FileText className="w-3 h-3" />
+                    <span>{viewSale.nfFile}</span>
+                  </a>
+                ) : (
+                  <span className="font-semibold text-gray-400">Pendente de emissão</span>
+                )}
               </div>
+              {viewSale.evidenceFile && (
+                <div>
+                  <span className="text-gray-500 block">Anexo da Venda (Comprovante):</span>
+                  <a href={`/uploads/${viewSale.evidenceFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 hover:underline font-mono flex items-center gap-1">
+                    <Paperclip className="w-3 h-3" />
+                    <span>{viewSale.evidenceFile}</span>
+                  </a>
+                </div>
+              )}
             </div>
 
             {/* Itens e Pesos */}
@@ -776,16 +1013,19 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
             <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
               <button
                 type="button"
+                disabled={submittingEdit}
                 onClick={() => setEditingSale(null)}
-                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg"
+                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-semibold px-4 py-2 rounded-lg"
+                disabled={submittingEdit}
+                className="bg-[#091b2e] hover:bg-[#132c4a] disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer transition-all flex items-center gap-2"
               >
-                Salvar Alterações
+                {submittingEdit && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                <span>{submittingEdit ? 'Gravando...' : 'Salvar Alterações'}</span>
               </button>
             </div>
           </form>

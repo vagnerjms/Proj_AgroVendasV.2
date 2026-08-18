@@ -12,6 +12,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '../utils/formatters';
+import { api } from '../services/api';
 
 export default function Dashboard({ setCurrentPage }) {
   const [startDate, setStartDate] = useState('');
@@ -22,17 +23,8 @@ export default function Dashboard({ setCurrentPage }) {
   const fetchDashboard = async (sDate = '', eDate = '') => {
     setLoading(true);
     try {
-      let url = '/api/dashboard';
-      const params = new URLSearchParams();
-      if (sDate) params.append('startDate', sDate);
-      if (eDate) params.append('endDate', eDate);
-      if (params.toString()) url += `?${params.toString()}`;
-
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        setDashboardData(data);
-      }
+      const data = await api.get('/api/dashboard', { startDate: sDate, endDate: eDate });
+      setDashboardData(data);
     } catch (err) {
       console.error('Erro ao buscar dados do dashboard:', err);
     } finally {
@@ -86,7 +78,7 @@ export default function Dashboard({ setCurrentPage }) {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#1d5a37] focus:border-transparent outline-none shadow-sm"
+              className="bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#091b2e] focus:border-transparent outline-none shadow-sm"
               placeholder="dd/mm/aaaa"
             />
           </div>
@@ -99,7 +91,7 @@ export default function Dashboard({ setCurrentPage }) {
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#1d5a37] focus:border-transparent outline-none shadow-sm"
+              className="bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#091b2e] focus:border-transparent outline-none shadow-sm"
               placeholder="dd/mm/aaaa"
             />
           </div>
@@ -107,7 +99,7 @@ export default function Dashboard({ setCurrentPage }) {
 
         <button
           type="submit"
-          className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-medium px-5 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-1.5"
+          className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-semibold px-5 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
         >
           Filtrar Período
         </button>
@@ -135,10 +127,10 @@ export default function Dashboard({ setCurrentPage }) {
           className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase group-hover:text-[#173e27]">
+            <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase group-hover:text-[#df7b1b] transition-colors">
               VENDAS DO PERÍODO
             </span>
-            <span className="w-3.5 h-3.5 bg-blue-500 rounded-sm text-white flex items-center justify-center text-[9px] font-bold">
+            <span className="w-4 h-4 bg-blue-600 rounded text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
               ✓
             </span>
           </div>
@@ -161,7 +153,7 @@ export default function Dashboard({ setCurrentPage }) {
             <div className="text-2xl font-extrabold text-gray-900 tracking-tight">
               {formatCurrency(kpis.totalSold)}
             </div>
-            <span className="inline-flex items-center gap-1 mt-2 text-[11px] font-medium text-emerald-600">
+            <span className="inline-flex items-center gap-1 mt-2 text-[11px] font-medium text-[#c87a1e]">
               <ArrowUpRight className="w-3.5 h-3.5" />
               {kpis.totalSoldGrowth} em relação ao período anterior
             </span>
@@ -192,8 +184,8 @@ export default function Dashboard({ setCurrentPage }) {
             <div className="text-2xl font-extrabold text-gray-900 tracking-tight">
               {formatCurrency(kpis.grossProfit)}
             </div>
-            <span className="inline-flex items-center gap-1 mt-2 text-[11px] font-medium text-emerald-700">
-              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+            <span className="inline-flex items-center gap-1 mt-2 text-[11px] font-medium text-[#c87a1e]">
+              <CheckCircle2 className="w-3 h-3 text-[#d97706]" />
               meta atingida
             </span>
           </div>
@@ -203,9 +195,9 @@ export default function Dashboard({ setCurrentPage }) {
       {/* Row 2: Status / Alert Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Vencidos */}
-        <div className="bg-white rounded-xl border border-red-200 p-4 flex items-center justify-between shadow-sm">
+        <div className="bg-white rounded-xl border border-[#d4984f]/60 p-4 flex items-center justify-between shadow-xs">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-red-50 text-red-500 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-[#fbf3e6] text-[#c87a1e] flex items-center justify-center border border-[#d4984f]/30">
               <Clock className="w-5 h-5" />
             </div>
             <div>
@@ -222,10 +214,10 @@ export default function Dashboard({ setCurrentPage }) {
         {/* Notas Pendentes */}
         <div 
           onClick={() => setCurrentPage('reports')}
-          className="bg-white rounded-xl border border-amber-200 p-4 flex items-center justify-between shadow-sm hover:border-amber-400 transition-colors cursor-pointer"
+          className="bg-white rounded-xl border border-[#d4984f]/60 p-4 flex items-center justify-between shadow-xs hover:border-[#d4984f] transition-all cursor-pointer group"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-[#fbf3e6] text-[#c87a1e] flex items-center justify-center border border-[#d4984f]/30">
               <FileCheck2 className="w-5 h-5" />
             </div>
             <div>
@@ -237,28 +229,30 @@ export default function Dashboard({ setCurrentPage }) {
               </span>
             </div>
           </div>
-          <span className="text-xs text-amber-600 font-semibold hover:underline">Ver</span>
+          <span className="text-xs text-[#c87a1e] font-semibold group-hover:underline flex items-center gap-0.5">
+            Ver <ArrowRight className="w-3 h-3" />
+          </span>
         </div>
 
         {/* Divergentes */}
         <div 
           onClick={() => setCurrentPage('weighing-slips')}
-          className="bg-white rounded-xl border border-emerald-200 p-4 flex items-center justify-between shadow-sm hover:border-emerald-400 transition-colors cursor-pointer"
+          className="bg-white rounded-xl border border-[#d4984f]/60 p-4 flex items-center justify-between shadow-xs hover:border-[#d4984f] transition-all cursor-pointer group"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-[#fbf3e6] text-[#c87a1e] flex items-center justify-center border border-[#d4984f]/30">
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
               <span className="text-[10px] font-bold text-gray-500 tracking-wider uppercase block">
                 DIVERGENTES (PESAGEM)
               </span>
-              <span className="text-lg font-bold text-emerald-700">
+              <span className="text-lg font-bold text-gray-900">
                 {alerts.divergentes}
               </span>
             </div>
           </div>
-          <span className="text-xs text-emerald-700 font-semibold hover:underline flex items-center gap-1">
+          <span className="text-xs text-[#c87a1e] font-semibold group-hover:underline flex items-center gap-1">
             Conferir <ArrowRight className="w-3.5 h-3.5" />
           </span>
         </div>
@@ -277,21 +271,28 @@ export default function Dashboard({ setCurrentPage }) {
 
           <div className="h-60 flex flex-col justify-end relative pt-6">
             <div className="w-full h-44 flex items-end justify-between px-4 border-b border-gray-200 relative">
-              {performanceDays.map((item, idx) => (
-                <div key={idx} className="flex flex-col items-center gap-2 group relative">
-                  <div className="text-[10px] text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity absolute -top-6 bg-gray-800 text-white px-1.5 py-0.5 rounded whitespace-nowrap z-10">
-                    {formatCurrency(item.total)} ({item.count} ops)
+              {performanceDays.map((item, idx) => {
+                const barColors = ['#eed9bf', '#e2ba87', '#d99b52', '#cc7f33', '#c87217', '#b85b1b', '#8f380f'];
+                const color = barColors[idx % barColors.length];
+                return (
+                  <div key={idx} className="flex flex-col items-center gap-2 group relative">
+                    <div className="text-[10px] text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity absolute -top-6 bg-gray-800 text-white px-1.5 py-0.5 rounded whitespace-nowrap z-10">
+                      {formatCurrency(item.total)} ({item.count} ops)
+                    </div>
+                    <div 
+                      className="w-10 rounded-t-md transition-all cursor-pointer hover:brightness-110 shadow-xs"
+                      style={{ 
+                        height: `${Math.max(16, Math.min(140, (item.total / 50000) * 120))}px`,
+                        backgroundColor: color
+                      }}
+                    ></div>
+                    <span className="text-[10px] font-medium text-gray-500">{item.label}</span>
                   </div>
-                  <div 
-                    className="w-10 bg-emerald-700/80 rounded-t-md hover:bg-emerald-600 transition-all cursor-pointer"
-                    style={{ height: `${Math.max(12, Math.min(140, (item.total / 50000) * 120))}px` }}
-                  ></div>
-                  <span className="text-[10px] font-medium text-gray-500">{item.label}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
-            <div className="w-full h-[3px] bg-[#1b5a37] rounded-full mt-3"></div>
+            <div className="w-full h-[3px] bg-gradient-to-r from-[#eed9bf] via-[#d99b52] to-[#8f380f] rounded-full mt-3"></div>
           </div>
         </div>
 
@@ -303,7 +304,7 @@ export default function Dashboard({ setCurrentPage }) {
             </h2>
             <button 
               onClick={() => setCurrentPage('sales-history')}
-              className="text-xs text-[#173e27] font-semibold hover:underline"
+              className="text-xs text-[#091b2e] font-semibold hover:text-[#df7b1b] transition-colors"
             >
               Ver todas
             </button>

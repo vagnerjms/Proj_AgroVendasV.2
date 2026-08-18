@@ -170,13 +170,16 @@ export default function UserManagement({ setCurrentPage }) {
     setFormData(prev => ({ ...prev, permissions: newPerms }));
   };
 
+  const [submittingUser, setSubmittingUser] = useState(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.email) {
+    if (!formData.name || !formData.email || submittingUser) {
       showError('Preencha o nome e o e-mail do usuário.');
       return;
     }
 
+    setSubmittingUser(true);
     try {
       const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
       const method = editingUser ? 'PUT' : 'POST';
@@ -198,6 +201,8 @@ export default function UserManagement({ setCurrentPage }) {
     } catch (err) {
       console.error(err);
       showError('Falha de conexão com o servidor.');
+    } finally {
+      setSubmittingUser(false);
     }
   };
 
@@ -230,8 +235,8 @@ export default function UserManagement({ setCurrentPage }) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
         <div>
-          <div className="text-xs font-semibold text-[#173e27] tracking-wider uppercase flex items-center gap-1.5">
-            <ShieldCheck className="w-4 h-4 text-emerald-700" />
+          <div className="text-xs font-bold text-[#091b2e] tracking-wider uppercase flex items-center gap-1.5">
+            <ShieldCheck className="w-4 h-4 text-[#df7b1b]" />
             <span>AGROVENDA — CONTROLE DE ACESSOS E SEGURANÇA</span>
           </div>
           <h1 className="text-2xl font-black text-gray-900 mt-1">
@@ -244,7 +249,7 @@ export default function UserManagement({ setCurrentPage }) {
 
         <button
           onClick={handleOpenCreate}
-          className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-colors"
+          className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-all cursor-pointer"
         >
           <UserPlus className="w-4 h-4" />
           <span>Cadastrar Novo Usuário</span>
@@ -572,16 +577,19 @@ export default function UserManagement({ setCurrentPage }) {
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
                 <button
                   type="button"
+                  disabled={submittingUser}
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-bold px-6 py-2.5 rounded-lg shadow-sm transition-colors"
+                  disabled={submittingUser}
+                  className="bg-[#091b2e] hover:bg-[#132c4a] disabled:opacity-50 text-white text-xs font-bold px-6 py-2.5 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-2"
                 >
-                  {editingUser ? 'Salvar Permissões' : 'Criar Usuário'}
+                  {submittingUser && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                  <span>{submittingUser ? 'Gravando...' : (editingUser ? 'Salvar Permissões' : 'Criar Usuário')}</span>
                 </button>
               </div>
 

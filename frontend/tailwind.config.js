@@ -8,14 +8,16 @@ export default {
     extend: {
       colors: {
         agro: {
-          dark: '#173e27',
-          sidebar: '#12311f',
-          hover: '#1e4e32',
-          primary: '#1d5a37',
-          light: '#eaf4ee',
-          border: '#cfe3d6',
-          text: '#173e27',
-          accent: '#2d7a4b'
+          navy: '#091b2e',
+          navyLight: '#132c4a',
+          navyBorder: '#162e4a',
+          amber: '#df7b1b',
+          amberHover: '#c86e18',
+          ochre: '#d4984f',
+          terracotta: '#c84b31',
+          slateText: '#8fa3bf',
+          primary: '#091b2e',
+          accent: '#df7b1b'
         }
       }
     },

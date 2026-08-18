@@ -150,8 +150,8 @@ export default function AgendaAlerts({ setCurrentPage }) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
         <div>
-          <div className="text-xs font-semibold text-[#173e27] tracking-wider uppercase flex items-center gap-1.5">
-            <Calendar className="w-4 h-4 text-emerald-700" />
+          <div className="text-xs font-bold text-[#091b2e] tracking-wider uppercase flex items-center gap-1.5">
+            <Calendar className="w-4 h-4 text-[#df7b1b]" />
             <span>AGROVENDA — CRONOGRAMA FINANCEIRO</span>
           </div>
           <h1 className="text-2xl font-black text-gray-900 mt-1">
@@ -165,7 +165,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
         <div className="flex items-center gap-3">
           <button
             onClick={() => window.print()}
-            className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-colors"
+            className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-colors cursor-pointer"
           >
             <Printer className="w-4 h-4" />
             Imprimir Cronograma

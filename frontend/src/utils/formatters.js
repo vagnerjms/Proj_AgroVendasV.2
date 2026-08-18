@@ -1,32 +1,45 @@
-export function formatCurrency(value) {
-  const num = Number(value) || 0;
-  return new Intl.NumberFormat('pt-BR', {
+import { TAX_RATES } from '../constants/agriConstants';
+
+export const formatCurrency = (val) => {
+  return (Number(val) || 0).toLocaleString('pt-BR', {
     style: 'currency',
     currency: 'BRL',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  }).format(num);
-}
+  });
+};
 
-export function formatNumber(value, decimals = 0) {
-  const num = Number(value) || 0;
-  return new Intl.NumberFormat('pt-BR', {
+export const formatNumber = (val, decimals = 0) => {
+  return (Number(val) || 0).toLocaleString('pt-BR', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals
-  }).format(num);
-}
+  });
+};
 
-export function formatDate(dateString) {
-  if (!dateString) return '';
-  if (dateString.includes('/')) return dateString;
-  const parts = dateString.split('T')[0].split('-');
-  if (parts.length === 3) {
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  }
-  return dateString;
-}
+export const formatDateBR = (dateStr) => {
+  if (!dateStr) return '-';
+  const parts = String(dateStr).split('T')[0].split('-');
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateStr;
+};
 
-export function formatKg(value) {
-  const num = Number(value) || 0;
-  return `${formatNumber(num, 0)} kg`;
-}
+export const formatDate = formatDateBR;
+
+export const formatKg = (val) => {
+  return (Number(val) || 0).toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  }) + ' kg';
+};
+
+export const calculateFunrural = (totalOperation) => {
+  const total = Number(totalOperation) || 0;
+  const previdencia = total * TAX_RATES.PREVIDENCIA;
+  const rat = total * TAX_RATES.RAT;
+  const senar = total * TAX_RATES.SENAR;
+  return {
+    previdencia,
+    rat,
+    senar,
+    funruralTotal: total * TAX_RATES.FUNRURAL_TOTAL
+  };
+};

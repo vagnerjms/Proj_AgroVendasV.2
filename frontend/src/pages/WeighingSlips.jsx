@@ -106,6 +106,24 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
     }
   };
 
+  const [submittingSlip, setSubmittingSlip] = useState(false);
+  const [notification, setNotification] = useState('');
+  const [errorNotification, setErrorNotification] = useState('');
+
+  const showNotification = (msg) => {
+    setNotification(msg);
+    setErrorNotification('');
+    const timer = setTimeout(() => setNotification(''), 3500);
+    return () => clearTimeout(timer);
+  };
+
+  const showErrorNotification = (msg) => {
+    setErrorNotification(msg);
+    setNotification('');
+    const timer = setTimeout(() => setErrorNotification(''), 4500);
+    return () => clearTimeout(timer);
+  };
+
   const handleOpenEdit = (slip) => {
     setEditingSlip(slip);
     setEditForm({
@@ -122,19 +140,27 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
 
   const handleSaveEdit = async (e) => {
     e.preventDefault();
-    if (!editingSlip) return;
+    if (!editingSlip || submittingSlip) return;
+    setSubmittingSlip(true);
     try {
       const res = await fetch(`/api/weighings/${editingSlip.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm)
       });
+      const data = await res.json();
       if (res.ok) {
+        showNotification(`Romaneio ${editingSlip.id} atualizado com sucesso!`);
         setEditingSlip(null);
         fetchSlips();
+      } else {
+        showErrorNotification(data.error || 'Erro ao atualizar romaneio.');
       }
     } catch (err) {
       console.error(err);
+      showErrorNotification('Erro de conexão ao salvar alterações.');
+    } finally {
+      setSubmittingSlip(false);
     }
   };
 
@@ -142,28 +168,42 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
     if (!window.confirm(`Deseja excluir o romaneio ${slip.id} (${slip.truckPlate})?`)) return;
     try {
       const res = await fetch(`/api/weighings/${slip.id}`, { method: 'DELETE' });
+      const data = await res.json();
       if (res.ok) {
+        showNotification(`Romaneio ${slip.id} excluído.`);
         fetchSlips();
+      } else {
+        showErrorNotification(data.error || 'Não foi possível excluir o romaneio.');
       }
     } catch (err) {
       console.error(err);
+      showErrorNotification('Erro de rede ao tentar excluir romaneio.');
     }
   };
 
   const handleCreateSlip = async (e) => {
     e.preventDefault();
+    if (submittingSlip) return;
+    setSubmittingSlip(true);
     try {
       const res = await fetch('/api/weighings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newForm)
       });
+      const data = await res.json();
       if (res.ok) {
+        showNotification(`Novo romaneio lançado com sucesso!`);
         setShowNewModal(false);
         fetchSlips();
+      } else {
+        showErrorNotification(data.error || 'Erro ao lançar romaneio.');
       }
     } catch (err) {
       console.error(err);
+      showErrorNotification('Erro de conexão ao lançar romaneio.');
+    } finally {
+      setSubmittingSlip(false);
     }
   };
 
@@ -174,22 +214,36 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold text-[#173e27] uppercase">
+          <div className="text-xs font-bold text-[#091b2e] uppercase">
             <span className="hover:underline cursor-pointer" onClick={() => setCurrentPage('dashboard')}>INICIO</span> / PESAGEM
           </div>
           <h1 className="text-2xl font-extrabold text-gray-900 mt-1">
             Romaneios de Pesagem & Divergências de Carga
           </h1>
         </div>
-
         <button
           onClick={() => setShowNewModal(true)}
-          className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow flex items-center gap-1.5 transition-colors"
+          className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow flex items-center gap-1.5 transition-all cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
           Lançar Romaneio
         </button>
       </div>
+
+      {/* Notifications */}
+      {notification && (
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 px-4 py-3 rounded-lg flex items-center gap-2 text-sm shadow-xs">
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          <span>{notification}</span>
+        </div>
+      )}
+
+      {errorNotification && (
+        <div className="bg-red-50 border border-red-300 text-red-800 px-4 py-3 rounded-lg flex items-center gap-2 text-sm shadow-xs">
+          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+          <span>{errorNotification}</span>
+        </div>
+      )}
 
       {/* Overview Alert */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -535,7 +589,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
               <button
                 type="button"
                 onClick={() => setResolvingSlip(null)}
-                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg"
+                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
               >
                 Cancelar
               </button>
@@ -544,7 +598,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
                 type="button"
                 disabled={submittingResolution}
                 onClick={() => handleResolve('Ajustado')}
-                className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-semibold px-4 py-2 rounded-lg"
+                className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer transition-all"
               >
                 Ajustar e Compensar
               </button>
@@ -568,7 +622,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
                   placeholder="Ex: RVE-9B12"
                   value={newForm.truckPlate}
                   onChange={e => setNewForm({ ...newForm, truckPlate: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2 text-xs uppercase outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                  className="w-full border border-gray-300 rounded-lg p-2 text-xs uppercase outline-none focus:ring-2 focus:ring-[#091b2e]"
                 />
               </div>
 
@@ -579,7 +633,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
                   placeholder="Nome do motorista"
                   value={newForm.driverName}
                   onChange={e => setNewForm({ ...newForm, driverName: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                  className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
                 />
               </div>
             </div>
@@ -592,7 +646,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
                   required
                   value={newForm.originWeightKg}
                   onChange={e => setNewForm({ ...newForm, originWeightKg: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                  className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
                 />
               </div>
 
@@ -603,7 +657,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
                   required
                   value={newForm.destWeightKg}
                   onChange={e => setNewForm({ ...newForm, destWeightKg: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                  className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
                 />
               </div>
             </div>
@@ -611,16 +665,19 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
             <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
               <button
                 type="button"
+                disabled={submittingSlip}
                 onClick={() => setShowNewModal(false)}
-                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg"
+                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="bg-[#173e27] text-white text-xs font-semibold px-4 py-2 rounded-lg"
+                disabled={submittingSlip}
+                className="bg-[#091b2e] hover:bg-[#132c4a] disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer transition-all flex items-center gap-2"
               >
-                Salvar Romaneio
+                {submittingSlip && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                <span>{submittingSlip ? 'Gravando...' : 'Salvar Romaneio'}</span>
               </button>
             </div>
           </form>

@@ -138,12 +138,12 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
       <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <div className="text-xs font-semibold text-[#173e27] uppercase">INICIO / COMPRAS</div>
+            <div className="text-xs font-bold text-[#091b2e] uppercase">INICIO / COMPRAS</div>
             <h1 className="text-2xl font-extrabold text-gray-900 mt-1">Histórico de Compras de Grãos</h1>
           </div>
           <button
             onClick={() => setCurrentPage('new-purchase')}
-            className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow flex items-center gap-1.5 transition-colors"
+            className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             Nova Compra
@@ -157,7 +157,7 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
             placeholder="Buscar por código, produtor ou produto..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+            className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
           />
         </div>
 
@@ -297,7 +297,7 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
                 </button>
                 <button
                   type="submit"
-                  className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-semibold px-4 py-2 rounded-lg"
+                  className="bg-[#df7b1b] hover:bg-[#c86e18] text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer"
                 >
                   Salvar Alterações
                 </button>
@@ -312,7 +312,7 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1000px] mx-auto space-y-6">
       <div>
-        <div className="text-xs font-semibold text-[#173e27] uppercase">INICIO / COMPRAS</div>
+        <div className="text-xs font-bold text-[#091b2e] uppercase">INICIO / COMPRAS</div>
         <h1 className="text-2xl font-extrabold text-gray-900 mt-1">Nova Compra de Grãos (Produtor)</h1>
       </div>
 
@@ -333,7 +333,7 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
               placeholder="Ex: João Batista (Fazenda Boa Esperança)"
               value={producer}
               onChange={(e) => setProducer(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
             />
           </div>
 
@@ -343,7 +343,7 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
             />
           </div>
         </div>
@@ -354,7 +354,7 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
             <select
               value={product}
               onChange={(e) => setProduct(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
             >
               {products.map(p => (
                 <option key={p.id} value={p.name}>{p.name}</option>
@@ -369,7 +369,7 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
               min="1"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
             />
           </div>
 
@@ -380,20 +380,20 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
               step="0.01"
               value={unitPrice}
               onChange={(e) => setUnitPrice(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
             />
           </div>
         </div>
 
         <div className="bg-gray-50 p-4 rounded-lg flex items-center justify-between">
           <span className="text-sm font-semibold text-gray-700">Valor Total do Contrato:</span>
-          <span className="text-xl font-extrabold text-[#173e27]">{formatCurrency(total)}</span>
+          <span className="text-xl font-extrabold text-gray-900">{formatCurrency(total)}</span>
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[#173e27] hover:bg-[#1f5435] text-white font-bold text-xs py-3 rounded-lg shadow"
+          className="w-full bg-[#091b2e] hover:bg-[#132c4a] text-white font-bold text-xs py-3.5 rounded-lg shadow-md transition-all cursor-pointer"
         >
           {loading ? 'Gravando...' : 'Confirmar Compra'}
         </button>

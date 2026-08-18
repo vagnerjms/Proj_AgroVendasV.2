@@ -15,7 +15,7 @@ export default function ContractModal({ sale, onClose }) {
         {/* Modal Top Actions (Hidden on Print) */}
         <div className="flex items-center justify-between border-b border-gray-200 pb-4 print:hidden">
           <div className="flex items-center gap-2">
-            <FileText className="w-5 h-5 text-[#173e27]" />
+            <FileText className="w-5 h-5 text-[#091b2e]" />
             <h2 className="text-base font-bold text-gray-900">
               Confirmação de Negociação & Contrato Agrícola ({sale.id})
             </h2>
@@ -23,7 +23,7 @@ export default function ContractModal({ sale, onClose }) {
           <div className="flex items-center gap-3">
             <button
               onClick={handlePrint}
-              className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow"
+              className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               Imprimir Contrato

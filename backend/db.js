@@ -154,6 +154,47 @@ const Product = mongoose.model('Product', ProductSchema);
 const FinancialSummary = mongoose.model('FinancialSummary', FinancialSummarySchema);
 const User = mongoose.model('User', UserSchema);
 
+// Atomic Counter Schema for concurrency-safe sequential IDs
+const CounterSchema = new mongoose.Schema({
+  _id: { type: String, required: true },
+  seq: { type: Number, default: 0 }
+});
+const Counter = mongoose.model('Counter', CounterSchema);
+
+/**
+ * Atomically increments and returns the next sequential integer for a given domain.
+ * Initializes from existing max IDs on first run to avoid collisions.
+ */
+async function getNextSequence(sequenceName, initModel = null, idPrefix = '') {
+  let counter = await Counter.findById(sequenceName);
+
+  if (!counter && initModel) {
+    // Determine existing max sequence from collection
+    const allDocs = await initModel.find({}, { id: 1 }).lean();
+    let maxId = 0;
+    for (const doc of allDocs) {
+      if (doc.id) {
+        const cleaned = doc.id.replace(idPrefix, '').replace(/^[^\d]+/, '');
+        const num = parseInt(cleaned, 10);
+        if (!isNaN(num) && num > maxId) maxId = num;
+      }
+    }
+    counter = await Counter.findByIdAndUpdate(
+      sequenceName,
+      { $setOnInsert: { seq: maxId } },
+      { new: true, upsert: true }
+    );
+  }
+
+  const updated = await Counter.findByIdAndUpdate(
+    sequenceName,
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+
+  return updated.seq;
+}
+
 async function connectDB() {
   const options = {
     serverSelectionTimeoutMS: 5000,
@@ -184,5 +225,7 @@ module.exports = {
   Client,
   Product,
   FinancialSummary,
-  User
+  User,
+  Counter,
+  getNextSequence
 };

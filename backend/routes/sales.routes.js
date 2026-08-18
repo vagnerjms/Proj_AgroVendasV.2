@@ -5,6 +5,7 @@ const fs = require('fs');
 const { Sale, WeighingSlip, getNextSequence } = require('../db');
 const { TAX_RATES } = require('../constants');
 const { uploadDir } = require('../middlewares/upload');
+const { sendSaleWebhook } = require('../services/webhook.service');
 
 // GET /api/sales
 router.get('/', async (req, res) => {
@@ -142,6 +143,9 @@ router.post('/', async (req, res) => {
       console.error('Erro ao sincronizar romaneio automático:', e);
     }
 
+    // Disparar Webhook para o n8n em tempo real (não bloqueante)
+    sendSaleWebhook('sale.created', newSale);
+
     res.status(201).json(newSale);
   } catch (err) {
     console.error('Erro ao salvar venda:', err);
@@ -195,6 +199,12 @@ router.put('/:id', async (req, res) => {
       updateFields,
       { new: true }
     );
+
+    // Disparar Webhook para o n8n
+    if (updated) {
+      sendSaleWebhook('sale.updated', updated);
+    }
+
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao atualizar venda' });
@@ -257,9 +267,25 @@ router.post('/:id/settle', async (req, res) => {
     sale.status = 'Concluído';
     await sale.save();
 
+    // Disparar Webhook para atualizar status no n8n / Calendar
+    sendSaleWebhook('sale.settled', sale);
+
     res.json({ success: true, sale });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao liquidar venda' });
+  }
+});
+
+// POST /api/sales/:id/sync-calendar (Manual sync trigger for a specific sale)
+router.post('/:id/sync-calendar', async (req, res) => {
+  try {
+    const sale = await Sale.findOne({ id: req.params.id });
+    if (!sale) return res.status(404).json({ error: 'Venda não encontrada' });
+
+    sendSaleWebhook('sale.manual_sync', sale);
+    res.json({ success: true, message: `Webhook disparado para a venda ${sale.id}` });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao sincronizar venda com o calendário' });
   }
 });
 

@@ -1003,14 +1003,14 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                 <div className="flex justify-between"><span>↳ SENAR (0,23%):</span><span>{formatCurrency(funrural.senar)}</span></div>
               </div>
 
-              <div className="flex justify-between text-emerald-950 font-extrabold text-sm border-t border-emerald-200 pt-2 bg-emerald-50/50 p-2 rounded-lg">
-                <span>(=) Líquido a Receber:</span>
-                <span className="text-emerald-900">{formatCurrency(liquidoAReceber)}</span>
-              </div>
-
-              <div className="flex justify-between text-gray-600 pt-1">
-                <span>Valor Total VP (R$ {numQuote}/{getUnitShortLabel()}):</span>
-                <span className="font-semibold text-gray-800">{formatCurrency(valorTotalVP)}</span>
+              {/* VALOR TOTAL VP EM EVIDÊNCIA */}
+              <div className="flex justify-between items-center text-blue-950 font-black text-sm border border-blue-200 bg-blue-50/60 p-2.5 rounded-xl shadow-xs">
+                <span className="text-blue-900 font-bold">
+                  Valor Total VP {numQuote > 0 ? `(R$ ${numQuote}/${getUnitShortLabel()})` : ''}:
+                </span>
+                <span className="text-blue-950 font-black text-base">
+                  {formatCurrency(valorTotalVP)}
+                </span>
               </div>
 
               <div className="flex justify-between text-gray-800 font-bold border-t border-gray-100 pt-2">

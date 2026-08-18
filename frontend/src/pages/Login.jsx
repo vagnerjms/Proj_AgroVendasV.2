@@ -151,7 +151,7 @@ export default function Login({ onLogin }) {
                   className="w-4 h-4 rounded border-gray-300 text-[#091b2e] focus:ring-[#091b2e] focus:ring-offset-0 cursor-pointer accent-[#091b2e]"
                 />
                 <span className="text-xs text-gray-600 group-hover:text-gray-900 font-medium">
-                  Manter conectado por 1 ano
+                  Manter sessão ativa
                 </span>
               </label>
             </div>

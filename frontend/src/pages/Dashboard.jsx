@@ -47,7 +47,7 @@ export default function Dashboard({ setCurrentPage }) {
     totalSoldGrowth: '+0%',
     totalAReceber: 1054406.28,
     totalAPagar: 0,
-    grossProfit: 34773.28,
+    grossProfit: 35581.40,
     targetReached: true
   };
 

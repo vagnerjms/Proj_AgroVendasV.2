@@ -24,10 +24,22 @@ router.get('/', async (req, res) => {
 
     const totalSalesCount = filteredSales.length;
     const totalSold = filteredSales.reduce((acc, s) => acc + (Number(s.totalOperation) || 0), 0);
-    const totalCommission = filteredSales.reduce((acc, s) => acc + (Number(s.totalCommission) || 0), 0);
-    const grossProfit = totalCommission + filteredSales
-      .filter(s => s.operationType === 'Venda de Estoque Próprio' || s.operationType === 'Revenda Padrão (Compra e Venda)')
-      .reduce((acc, s) => acc + (Number(s.totalOperation) * 0.08 || 0), 0);
+    
+    // Cálculo em tempo real 100% harmonizado com a rota de Relatórios
+    const totalCommission = filteredSales.reduce((acc, s) => {
+      const caixas = s.totalVolumes || (s.totalKg > 0 ? (s.totalKg / 29) : 0);
+      let cotacao = 45.0;
+      if (s.notes) {
+        const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
+        if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
+      }
+      const valorVP = caixas * cotacao;
+      const taxa = Number(s.feeValue) || 3.0;
+      const comissao = valorVP > 0 ? (valorVP * (taxa / 100)) : (Number(s.totalCommission) || 0);
+      return acc + comissao;
+    }, 0);
+
+    const grossProfit = totalCommission;
 
     const totalAReceber = allSales
       .filter(s => s.paymentStatus !== 'Recebido')

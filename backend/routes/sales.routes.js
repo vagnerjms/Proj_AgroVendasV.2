@@ -35,6 +35,52 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/sales/agenda-events (Recebíveis formatados por Data de Vencimento para Google Calendar)
+router.get('/agenda-events', async (req, res) => {
+  try {
+    const sales = await Sale.find().sort({ saleDate: -1 });
+    const events = sales.map(s => {
+      let dueDate = '';
+      if (s.notes) {
+        const match = s.notes.match(/Vencimento:\s*([^\s|]+)/i);
+        if (match && match[1]) {
+          const parts = match[1].split('/');
+          if (parts.length === 3) {
+            dueDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+          }
+        }
+      }
+      if (!dueDate && s.saleDate) {
+        const d = new Date(s.saleDate);
+        d.setDate(d.getDate() + 30);
+        dueDate = d.toISOString().split('T')[0];
+      }
+      if (!dueDate) dueDate = new Date().toISOString().split('T')[0];
+
+      const clientShort = s.client ? s.client.split(' ')[0] : 'Cliente';
+      const totalOp = Number(s.totalOperation) || 0;
+
+      return {
+        id: s.id,
+        client: s.client,
+        saleDate: s.saleDate,
+        dueDate: dueDate,
+        totalOperation: totalOp,
+        status: s.status,
+        paymentStatus: s.paymentStatus,
+        summary: `💰 ${clientShort} · R$ ${totalOp.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${s.id})`,
+        start: `${dueDate}T09:00:00-03:00`,
+        end: `${dueDate}T10:00:00-03:00`,
+        description: `🏪 Comprador: ${s.client}\n📅 Vencimento: ${dueDate.split('-').reverse().join('/')}\n💰 Valor a Receber: R$ ${totalOp.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📦 Volumes: ${s.totalVolumes || 0} cx\n📄 Nota Fiscal: ${s.nfFile || 'Pendente'}\n📌 Status: ${s.paymentStatus || 'A Receber'}`
+      };
+    });
+
+    res.json(events);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao listar agenda de eventos' });
+  }
+});
+
 // GET /api/sales/check-nfe/:key
 router.get('/check-nfe/:key', async (req, res) => {
   try {

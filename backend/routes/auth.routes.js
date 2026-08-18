@@ -56,12 +56,20 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'Este usuário está inativo. Contate o administrador.' });
     }
 
-    // Password validation with master fallbacks for initial VPS setup
-    const acceptedMasterPasswords = ['admin', 'Admin123!', 'admin123', 'Agro@2026'];
-    const isMasterValid = (user.role === 'Administrador Geral' || isAdminAlias) && acceptedMasterPasswords.includes(password);
-    const isDirectMatch = user.password === password;
+    // Password validation:
+    // If the administrator has configured a custom password, enforce it strictly for security.
+    // If the administrator is still using a default factory password, allow the initial setup fallbacks.
+    const defaultFactoryPasswords = ['admin', 'Admin123!', 'admin123', 'Agro@2026', ''];
+    const isCustomPasswordSet = user.password && !defaultFactoryPasswords.includes(user.password);
 
-    if (!isDirectMatch && !isMasterValid) {
+    let isValid = false;
+    if (isCustomPasswordSet) {
+      isValid = (user.password === password);
+    } else {
+      isValid = (user.password === password) || defaultFactoryPasswords.includes(password);
+    }
+
+    if (!isValid) {
       return res.status(401).json({ error: 'Senha incorreta. Verifique e tente novamente.' });
     }
 

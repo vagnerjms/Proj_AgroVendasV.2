@@ -326,8 +326,8 @@ export default function Reports({ setCurrentPage }) {
       {/* ========================================================================= */}
       {activeTab === 'geral' && (
         <div className="space-y-6">
-          {/* Tabela Principal: Resumo Geral por Loja (Exata réplica do Excel) */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden space-y-3">
+          {/* Tabela Principal: Resumo Geral por Loja (Folha 1 na Impressão) */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden space-y-3 page-break-after print:shadow-none print:border-none">
             <div className="bg-[#1b4363] text-white px-6 py-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileSpreadsheet className="w-4 h-4 text-sky-200" />
@@ -412,16 +412,16 @@ export default function Reports({ setCurrentPage }) {
             </div>
           </div>
 
-          {/* Seção 2: Detalhamento Individual de Cada Loja com Linhas de VP */}
-          <div className="space-y-4 pt-2">
-            <h2 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+          {/* Seção 2: Detalhamento Individual de Cada Loja (Folhas Seguintes) */}
+          <div className="space-y-4 pt-2 print:space-y-6">
+            <h2 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider flex items-center gap-2 print:text-xs">
               <span>Detalhamento Individual das Vendas por Loja (VPs)</span>
             </h2>
 
             {filteredLojas.map((lojaGroup, lIdx) => {
               const isExpanded = expandedLojas[lojaGroup.loja];
               return (
-                <div key={lIdx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div key={lIdx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden page-break-avoid page-break-after print:border-gray-300 print:shadow-none print:mb-6">
                   <div 
                     onClick={() => toggleExpand(lojaGroup.loja)}
                     className="bg-gray-50 hover:bg-gray-100/80 p-4 flex items-center justify-between cursor-pointer border-b border-gray-200 transition-colors"
@@ -446,88 +446,88 @@ export default function Reports({ setCurrentPage }) {
                       <span className="text-gray-500">
                         VP: <strong className="text-blue-900">{formatCurrency(lojaGroup.totalVendaAReceber)}</strong>
                       </span>
-                      {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                      <span className="print:hidden">
+                        {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                      </span>
                     </div>
                   </div>
 
-                  {isExpanded && (
-                    <div className="overflow-x-auto p-4 pt-2">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px]">
-                          <tr>
-                            <th className="py-2 px-3">Nº VP</th>
-                            <th className="py-2 px-2">Data VP</th>
-                            <th className="py-2 px-3">Nº NF</th>
-                            <th className="py-2 px-2">Data NF</th>
-                            <th className="py-2 px-3 text-right">Peso NF (kg)</th>
-                            <th className="py-2 px-3 text-right">Peso Colheita (kg)</th>
-                            <th className="py-2 px-3 text-right">Caixas (29kg)</th>
-                            <th className="py-2 px-3 text-right">Preço/kg NF</th>
-                            <th className="py-2 px-3 text-right">Valor Total NF</th>
-                            <th className="py-2 px-3 text-right">FUNRURAL (1,63%)</th>
-                            <th className="py-2 px-3 text-right">Cotação Dia</th>
-                            <th className="py-2 px-3 text-right">Valor Total VP</th>
-                            <th className="py-2 px-3 text-right">Líquido a Receber</th>
-                            <th className="py-2 px-3 text-center">Vencimento</th>
-                            <th className="py-2 px-3 text-center">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {lojaGroup.itens?.map((it, rIdx) => (
-                            <tr key={rIdx} className="hover:bg-gray-50/70 transition-colors">
-                              <td className="py-2 px-3">
-                                <div className="font-bold text-[#173e27]">{it.vp}</div>
-                                <div className="text-[10px] text-gray-500 font-medium truncate max-w-[140px]" title={it.product}>
-                                  {it.product}
-                                </div>
-                              </td>
-                              <td className="py-2 px-2 text-gray-600">{it.dataVP}</td>
-                              <td className="py-2 px-3 font-semibold text-gray-800">{it.nf}</td>
-                              <td className="py-2 px-2 text-gray-600">{it.dataNF}</td>
-                              <td className="py-2 px-3 text-right text-gray-600">{formatNumber(it.pesoNF, 0)} kg</td>
-                              <td className="py-2 px-3 text-right font-bold text-gray-900">{formatNumber(it.pesoColheita, 0)} kg</td>
-                              <td className="py-2 px-3 text-right font-bold text-gray-900">
-                                {formatNumber(it.cxs, 2)} {it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
-                              </td>
-                              <td className="py-2 px-3 text-right text-gray-700">{it.precoKg > 0 ? `R$ ${it.precoKg.toFixed(2)}` : '-'}</td>
-                              <td className="py-2 px-3 text-right font-bold text-gray-900">{formatCurrency(it.valorNF)}</td>
-                              <td className="py-2 px-3 text-right text-red-600">-{formatCurrency(it.funrural)}</td>
-                              <td className="py-2 px-3 text-right font-semibold text-blue-900">
-                                R$ {it.cotacao.toFixed(2)}/{it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
-                              </td>
-                              <td className="py-2 px-3 text-right font-black text-blue-950 bg-blue-50/30">{formatCurrency(it.valorVP)}</td>
-                              <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/30">{formatCurrency(it.liquido)}</td>
-                              <td className="py-2 px-3 text-center text-gray-600">{it.venc}</td>
-                              <td className="py-2 px-3 text-center">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  it.status === 'Faturado' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
-                                }`}>
-                                  {it.status}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot className="bg-gray-100 font-bold text-xs border-t-2 border-gray-300">
-                          <tr>
-                            <td colSpan={4} className="py-2.5 px-3 uppercase text-gray-700 font-extrabold">
-                              TOTAL {lojaGroup.loja.split(' ')[0]}
+                  <div className={`overflow-x-auto p-4 pt-2 ${isExpanded ? 'block' : 'hidden print:block'}`}>
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px]">
+                        <tr>
+                          <th className="py-2 px-3">Nº VP</th>
+                          <th className="py-2 px-2">Data VP</th>
+                          <th className="py-2 px-3">Nº NF</th>
+                          <th className="py-2 px-2">Data NF</th>
+                          <th className="py-2 px-3 text-right">Peso NF (kg)</th>
+                          <th className="py-2 px-3 text-right">Peso Colheita (kg)</th>
+                          <th className="py-2 px-3 text-right">Caixas (29kg)</th>
+                          <th className="py-2 px-3 text-right">Preço/kg NF</th>
+                          <th className="py-2 px-3 text-right">Valor Total NF</th>
+                          <th className="py-2 px-3 text-right">FUNRURAL (1,63%)</th>
+                          <th className="py-2 px-3 text-right">Cotação Dia</th>
+                          <th className="py-2 px-3 text-right">Valor Total VP</th>
+                          <th className="py-2 px-3 text-right">Líquido a Receber</th>
+                          <th className="py-2 px-3 text-center">Vencimento</th>
+                          <th className="py-2 px-3 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {lojaGroup.itens?.map((it, rIdx) => (
+                          <tr key={rIdx} className="hover:bg-gray-50/70 transition-colors">
+                            <td className="py-2 px-3">
+                              <div className="font-bold text-[#173e27]">{it.vp}</div>
+                              <div className="text-[10px] text-gray-500 font-medium truncate max-w-[140px]" title={it.product}>
+                                {it.product}
+                              </div>
                             </td>
-                            <td className="py-2.5 px-3 text-right text-gray-700 font-bold">{formatNumber(lojaGroup.pesoNF, 2)}</td>
-                            <td className="py-2.5 px-3 text-right font-bold text-gray-900">{formatNumber(lojaGroup.pesoColheita, 2)}</td>
-                            <td className="py-2.5 px-3 text-right font-bold text-gray-900">{formatNumber(lojaGroup.cxsVendidas, 2)}</td>
-                            <td className="py-2.5 px-3 text-right text-gray-400">-</td>
-                            <td className="py-2.5 px-3 text-right font-black text-gray-900">{formatCurrency(lojaGroup.valorTotalNF)}</td>
-                            <td className="py-2.5 px-3 text-right font-bold text-red-700">-{formatCurrency(lojaGroup.funrural)}</td>
-                            <td className="py-2.5 px-3 text-right text-gray-400">-</td>
-                            <td className="py-2.5 px-3 text-right font-black text-blue-900">{formatCurrency(lojaGroup.totalVendaAReceber)}</td>
-                            <td className="py-2.5 px-3 text-right font-black text-emerald-950">{formatCurrency(lojaGroup.liquidoNF)}</td>
-                            <td colSpan={2}></td>
+                            <td className="py-2 px-2 text-gray-600">{it.dataVP}</td>
+                            <td className="py-2 px-3 font-semibold text-gray-800">{it.nf}</td>
+                            <td className="py-2 px-2 text-gray-600">{it.dataNF}</td>
+                            <td className="py-2 px-3 text-right text-gray-600">{formatNumber(it.pesoNF, 0)} kg</td>
+                            <td className="py-2 px-3 text-right font-bold text-gray-900">{formatNumber(it.pesoColheita, 0)} kg</td>
+                            <td className="py-2 px-3 text-right font-bold text-gray-900">
+                              {formatNumber(it.cxs, 2)} {it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
+                            </td>
+                            <td className="py-2 px-3 text-right text-gray-700">{it.precoKg > 0 ? `R$ ${it.precoKg.toFixed(2)}` : '-'}</td>
+                            <td className="py-2 px-3 text-right font-bold text-gray-900">{formatCurrency(it.valorNF)}</td>
+                            <td className="py-2 px-3 text-right text-red-600">-{formatCurrency(it.funrural)}</td>
+                            <td className="py-2 px-3 text-right font-semibold text-blue-900">
+                              R$ {it.cotacao.toFixed(2)}/{it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
+                            </td>
+                            <td className="py-2 px-3 text-right font-black text-blue-950 bg-blue-50/30">{formatCurrency(it.valorVP)}</td>
+                            <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/30">{formatCurrency(it.liquido)}</td>
+                            <td className="py-2 px-3 text-center text-gray-600">{it.venc}</td>
+                            <td className="py-2 px-3 text-center">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                it.status === 'Faturado' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
+                              }`}>
+                                {it.status}
+                              </span>
+                            </td>
                           </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  )}
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-100 font-bold text-xs border-t-2 border-gray-300">
+                        <tr>
+                          <td colSpan={4} className="py-2.5 px-3 uppercase text-gray-700 font-extrabold">
+                            TOTAL {lojaGroup.loja.split(' ')[0]}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-gray-700 font-bold">{formatNumber(lojaGroup.pesoNF, 2)}</td>
+                          <td className="py-2.5 px-3 text-right font-bold text-gray-900">{formatNumber(lojaGroup.pesoColheita, 2)}</td>
+                          <td className="py-2.5 px-3 text-right font-bold text-gray-900">{formatNumber(lojaGroup.cxsVendidas, 2)}</td>
+                          <td className="py-2.5 px-3 text-right text-gray-400">-</td>
+                          <td className="py-2.5 px-3 text-right font-black text-gray-900">{formatCurrency(lojaGroup.valorTotalNF)}</td>
+                          <td className="py-2.5 px-3 text-right font-bold text-red-600">-{formatCurrency(lojaGroup.funrural)}</td>
+                          <td className="py-2.5 px-3 text-right text-gray-400">-</td>
+                          <td className="py-2.5 px-3 text-right font-black text-blue-900 bg-blue-100/60">{formatCurrency(lojaGroup.totalVendaAReceber)}</td>
+                          <td className="py-2.5 px-3 text-right font-black text-emerald-950 bg-emerald-100/60">{formatCurrency(lojaGroup.liquidoNF)}</td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 </div>
               );
             })}
@@ -576,8 +576,8 @@ export default function Reports({ setCurrentPage }) {
 
           </div>
 
-          {/* Matriz Geral por Loja com Comissões */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden space-y-3">
+          {/* Matriz Geral por Loja com Comissões (Folha 1 na Impressão) */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden space-y-3 page-break-after print:shadow-none print:border-none">
             <div className="bg-[#173e27] text-white px-6 py-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <BadgePercent className="w-4 h-4 text-emerald-200" />
@@ -655,16 +655,16 @@ export default function Reports({ setCurrentPage }) {
             </div>
           </div>
 
-          {/* Detalhamento Individual com Comissões por VP */}
-          <div className="space-y-4 pt-2">
-            <h2 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+          {/* Detalhamento Individual com Comissões por VP (Folhas Seguintes) */}
+          <div className="space-y-4 pt-2 print:space-y-6">
+            <h2 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider flex items-center gap-2 print:text-xs">
               <span>Detalhamento de Comissões por Venda / Loja (VPs)</span>
             </h2>
 
             {filteredLojas.map((lojaGroup, lIdx) => {
               const isExpanded = expandedLojas[lojaGroup.loja];
               return (
-                <div key={lIdx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div key={lIdx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden page-break-avoid page-break-after print:border-gray-300 print:shadow-none print:mb-6">
                   <div 
                     onClick={() => toggleExpand(lojaGroup.loja)}
                     className="bg-gray-50 hover:bg-gray-100/80 p-4 flex items-center justify-between cursor-pointer border-b border-gray-200 transition-colors"
@@ -689,79 +689,79 @@ export default function Reports({ setCurrentPage }) {
                       <span className="text-gray-500">
                         Líquido Produtor: <strong className="text-emerald-800">{formatCurrency(lojaGroup.totalLiquidoProdutor)}</strong>
                       </span>
-                      {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                      <span className="print:hidden">
+                        {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+                      </span>
                     </div>
                   </div>
 
-                  {isExpanded && (
-                    <div className="overflow-x-auto p-4 pt-2">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px]">
-                          <tr>
-                            <th className="py-2 px-3">Nº VP</th>
-                            <th className="py-2 px-2">Data</th>
-                            <th className="py-2 px-3">Nº NF</th>
-                            <th className="py-2 px-3 text-right">Caixas (29kg)</th>
-                            <th className="py-2 px-3 text-right">Cotação Dia</th>
-                            <th className="py-2 px-3 text-right">Valor Total VP</th>
-                            <th className="py-2 px-3 text-center">Taxa Com.</th>
-                            <th className="py-2 px-3 text-right bg-blue-50/50 font-bold text-blue-900">Comissão (R$)</th>
-                            <th className="py-2 px-3 text-right bg-emerald-50/50 font-bold text-emerald-950">Líquido Produtor (R$)</th>
-                            <th className="py-2 px-3 text-center">Vencimento</th>
-                            <th className="py-2 px-3 text-center">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                          {lojaGroup.itens?.map((it, rIdx) => (
-                            <tr key={rIdx} className="hover:bg-gray-50/70 transition-colors">
-                              <td className="py-2 px-3">
-                                <div className="font-bold text-[#173e27]">{it.vp}</div>
-                                <div className="text-[10px] text-gray-500 font-medium truncate max-w-[140px]" title={it.product}>
-                                  {it.product}
-                                </div>
-                              </td>
-                              <td className="py-2 px-2 text-gray-600">{it.dataVP}</td>
-                              <td className="py-2 px-3 font-semibold text-gray-800">{it.nf}</td>
-                              <td className="py-2 px-3 text-right font-bold text-gray-900">
-                                {formatNumber(it.cxs, 2)} {it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
-                              </td>
-                              <td className="py-2 px-3 text-right font-semibold text-blue-900">
-                                R$ {it.cotacao.toFixed(2)}/{it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
-                              </td>
-                              <td className="py-2 px-3 text-right font-black text-blue-950">{formatCurrency(it.valorVP)}</td>
-                              <td className="py-2 px-3 text-center font-semibold text-gray-700">{it.taxaComissao.toFixed(1)}%</td>
-                              <td className="py-2 px-3 text-right font-black text-blue-900 bg-blue-50/30">
-                                {formatCurrency(it.comissao)}
-                              </td>
-                              <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/30">
-                                {formatCurrency(it.liquidoProdutor)}
-                              </td>
-                              <td className="py-2 px-3 text-center text-gray-600">{it.venc}</td>
-                              <td className="py-2 px-3 text-center">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  it.status === 'Faturado' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
-                                }`}>
-                                  {it.status}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot className="bg-gray-100 font-bold text-xs border-t-2 border-gray-300">
-                          <tr>
-                            <td colSpan={5} className="py-2.5 px-3 uppercase text-gray-700 font-extrabold">
-                              TOTAL {lojaGroup.loja.split(' ')[0]}
+                  <div className={`overflow-x-auto p-4 pt-2 ${isExpanded ? 'block' : 'hidden print:block'}`}>
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px]">
+                        <tr>
+                          <th className="py-2 px-3">Nº VP</th>
+                          <th className="py-2 px-2">Data</th>
+                          <th className="py-2 px-3">Nº NF</th>
+                          <th className="py-2 px-3 text-right">Caixas (29kg)</th>
+                          <th className="py-2 px-3 text-right">Cotação Dia</th>
+                          <th className="py-2 px-3 text-right">Valor Total VP</th>
+                          <th className="py-2 px-3 text-center">Taxa Com.</th>
+                          <th className="py-2 px-3 text-right bg-blue-50/50 font-bold text-blue-900">Comissão (R$)</th>
+                          <th className="py-2 px-3 text-right bg-emerald-50/50 font-bold text-emerald-950">Líquido Produtor (R$)</th>
+                          <th className="py-2 px-3 text-center">Vencimento</th>
+                          <th className="py-2 px-3 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {lojaGroup.itens?.map((it, rIdx) => (
+                          <tr key={rIdx} className="hover:bg-gray-50/70 transition-colors">
+                            <td className="py-2 px-3">
+                              <div className="font-bold text-[#173e27]">{it.vp}</div>
+                              <div className="text-[10px] text-gray-500 font-medium truncate max-w-[140px]" title={it.product}>
+                                {it.product}
+                              </div>
                             </td>
-                            <td className="py-2.5 px-3 text-right font-black text-blue-900">{formatCurrency(lojaGroup.totalVendaAReceber)}</td>
-                            <td className="py-2.5 px-3 text-center">3,0%</td>
-                            <td className="py-2.5 px-3 text-right font-black text-blue-950 bg-blue-100">{formatCurrency(lojaGroup.totalComissao)}</td>
-                            <td className="py-2.5 px-3 text-right font-black text-emerald-950 bg-emerald-100">{formatCurrency(lojaGroup.totalLiquidoProdutor)}</td>
-                            <td colSpan={2}></td>
+                            <td className="py-2 px-2 text-gray-600">{it.dataVP}</td>
+                            <td className="py-2 px-3 font-semibold text-gray-800">{it.nf}</td>
+                            <td className="py-2 px-3 text-right font-bold text-gray-900">
+                              {formatNumber(it.cxs, 2)} {it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
+                            </td>
+                            <td className="py-2 px-3 text-right font-semibold text-blue-900">
+                              R$ {it.cotacao.toFixed(2)}/{it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
+                            </td>
+                            <td className="py-2 px-3 text-right font-black text-blue-950">{formatCurrency(it.valorVP)}</td>
+                            <td className="py-2 px-3 text-center font-semibold text-gray-700">{it.taxaComissao.toFixed(1)}%</td>
+                            <td className="py-2 px-3 text-right font-black text-blue-900 bg-blue-50/30">
+                              {formatCurrency(it.comissao)}
+                            </td>
+                            <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/30">
+                              {formatCurrency(it.liquidoProdutor)}
+                            </td>
+                            <td className="py-2 px-3 text-center text-gray-600">{it.venc}</td>
+                            <td className="py-2 px-3 text-center">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                it.status === 'Faturado' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
+                              }`}>
+                                {it.status}
+                              </span>
+                            </td>
                           </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  )}
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-100 font-bold text-xs border-t-2 border-gray-300">
+                        <tr>
+                          <td colSpan={5} className="py-2.5 px-3 uppercase text-gray-700 font-extrabold">
+                            TOTAL {lojaGroup.loja.split(' ')[0]}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-black text-blue-900">{formatCurrency(lojaGroup.totalVendaAReceber)}</td>
+                          <td className="py-2.5 px-3 text-center">3,0%</td>
+                          <td className="py-2.5 px-3 text-right font-black text-blue-950 bg-blue-100">{formatCurrency(lojaGroup.totalComissao)}</td>
+                          <td className="py-2.5 px-3 text-right font-black text-emerald-950 bg-emerald-100">{formatCurrency(lojaGroup.totalLiquidoProdutor)}</td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 </div>
               );
             })}

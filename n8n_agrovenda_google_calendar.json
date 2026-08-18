@@ -1,0 +1,67 @@
+{
+  "name": "AgroVenda V2 - Sincronização Google Calendar (Anti-Duplicidade)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agrovenda-sale",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7b8f9e12-4c23-4567-89ab-cdef01234567",
+      "name": "Webhook AgroVenda"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "drtecnologiaeservicosdeti@gmail.com",
+          "mode": "id"
+        },
+        "start": "={{ $json.body.calendar.start }}",
+        "end": "={{ $json.body.calendar.end }}",
+        "additionalFields": {
+          "description": "={{ $json.body.calendar.description }}",
+          "summary": "={{ $json.body.calendar.summary }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.2,
+      "position": [
+        260,
+        0
+      ],
+      "id": "8c9a0f23-5d34-5678-90bc-def012345678",
+      "name": "Google Calendar",
+      "credentials": {
+        "googleCalendarOAuth2": {
+          "id": "Google Calendar account",
+          "name": "Google Calendar account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook AgroVenda": {
+      "main": [
+        [
+          {
+            "node": "Google Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

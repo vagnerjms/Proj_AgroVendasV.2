@@ -22,11 +22,7 @@ router.get('/', async (req, res) => {
     const pendingDivergences = await WeighingSlip.countDocuments({ status: 'Divergente' });
     const pendingNfs = allSales.filter(s => s.nfPending || !s.nfFile).length;
 
-    const totalSalesCount = filteredSales.length;
-    const totalSold = filteredSales.reduce((acc, s) => acc + (Number(s.totalOperation) || 0), 0);
-    
-    // Cálculo em tempo real 100% harmonizado com a rota de Relatórios
-    const totalCommission = filteredSales.reduce((acc, s) => {
+    const getSaleCommercialValue = (s) => {
       const caixas = s.totalVolumes || (s.totalKg > 0 ? (s.totalKg / 29) : 0);
       let cotacao = 45.0;
       if (s.notes) {
@@ -34,16 +30,25 @@ router.get('/', async (req, res) => {
         if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
       }
       const valorVP = caixas * cotacao;
+      return valorVP > 0 ? valorVP : (Number(s.totalOperation) || 0);
+    };
+
+    const totalSalesCount = filteredSales.length;
+    // Total Comercial (Total VP) 100% harmonizado com a rota de Relatórios
+    const totalSold = filteredSales.reduce((acc, s) => acc + getSaleCommercialValue(s), 0);
+    
+    // Comissão e Lucro sobre a base comercial
+    const totalCommission = filteredSales.reduce((acc, s) => {
+      const valorVP = getSaleCommercialValue(s);
       const taxa = Number(s.feeValue) || 3.0;
-      const comissao = valorVP > 0 ? (valorVP * (taxa / 100)) : (Number(s.totalCommission) || 0);
-      return acc + comissao;
+      return acc + (valorVP * (taxa / 100));
     }, 0);
 
     const grossProfit = totalCommission;
 
     const totalAReceber = allSales
       .filter(s => s.paymentStatus !== 'Recebido')
-      .reduce((acc, s) => acc + (Number(s.totalOperation) || 0), 0);
+      .reduce((acc, s) => acc + getSaleCommercialValue(s), 0);
 
     const allPurchases = await Purchase.find();
     const totalAPagar = allPurchases
@@ -62,7 +67,7 @@ router.get('/', async (req, res) => {
         module: 'Venda',
         type: s.operationType,
         client: s.client,
-        value: Number(s.totalOperation) || 0
+        value: getSaleCommercialValue(s)
       };
     });
 
@@ -75,7 +80,7 @@ router.get('/', async (req, res) => {
       const dayLabel = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
       
       const daySales = allSales.filter(s => s.saleDate === dateStr);
-      const dayTotal = daySales.reduce((acc, s) => acc + (Number(s.totalOperation) || 0), 0);
+      const dayTotal = daySales.reduce((acc, s) => acc + getSaleCommercialValue(s), 0);
       performanceDays.push({
         date: dateStr,
         label: dayLabel,

@@ -43,9 +43,9 @@ export default function Dashboard({ setCurrentPage }) {
 
   const kpis = dashboardData?.kpis || {
     salesCount: 34,
-    totalSold: 1054406.28,
+    totalSold: 1186046.72,
     totalSoldGrowth: '+0%',
-    totalAReceber: 1054406.28,
+    totalAReceber: 1186046.72,
     totalAPagar: 0,
     grossProfit: 35581.40,
     targetReached: true

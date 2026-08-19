@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { User, getNextSequence } = require('../db');
+const { hashPassword } = require('../middlewares/auth');
 
 // GET /api/users
 router.get('/', async (req, res) => {
@@ -11,6 +12,7 @@ router.get('/', async (req, res) => {
         id: 'USR-001',
         name: 'Administrador AgroVenda',
         email: 'admin@agrovenda.com.br',
+        password: hashPassword('Admin123!'),
         role: 'Administrador Geral',
         phone: '(62) 99999-0001',
         status: 'Ativo',
@@ -45,7 +47,7 @@ router.post('/', async (req, res) => {
       id: `USR-${String(nextSeq).padStart(3, '0')}`,
       name: req.body.name,
       email: req.body.email,
-      password: req.body.password || 'Agro@2026',
+      password: hashPassword(req.body.password || 'Agro@2026'),
       role: req.body.role || 'Operador Comercial',
       phone: req.body.phone || '',
       status: req.body.status || 'Ativo',
@@ -76,6 +78,8 @@ router.put('/:id', async (req, res) => {
     const updateData = { ...req.body };
     if (!updateData.password) {
       delete updateData.password;
+    } else {
+      updateData.password = hashPassword(updateData.password);
     }
     const updated = await User.findOneAndUpdate(
       { id: req.params.id },

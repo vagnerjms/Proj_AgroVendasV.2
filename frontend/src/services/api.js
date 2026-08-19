@@ -23,8 +23,10 @@ const buildUrl = (endpoint, params) => {
 
 const request = async (endpoint, options = {}) => {
   const isFormData = options.body instanceof FormData;
+  const token = typeof window !== 'undefined' ? localStorage.getItem('agrovenda_token') : null;
   const headers = {
     ...(!isFormData && { 'Content-Type': 'application/json' }),
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     ...(options.headers || {})
   };
 

@@ -36,6 +36,9 @@ export default function Login({ onLogin }) {
 
     try {
       const data = await api.post('/api/auth/login', { email, password });
+      if (data.token) {
+        localStorage.setItem('agrovenda_token', data.token);
+      }
       if (data.user) {
         onLogin(data.user, rememberMe);
       }

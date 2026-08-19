@@ -115,11 +115,12 @@ export default function App() {
     try {
       localStorage.removeItem(SESSION_KEY);
       localStorage.removeItem('agrovenda_user');
+      localStorage.removeItem('agrovenda_token');
       sessionStorage.removeItem(SESSION_KEY);
       sessionStorage.removeItem('agrovenda_user');
       eraseCookie('agrovenda_session');
     } catch (e) {
-      console.error(e);
+      console.error('Erro ao encerrar sessão:', e);
     }
     setCurrentPage('dashboard');
   };

@@ -1,11 +1,26 @@
 const express = require('express');
 const router = express.Router();
 const { Purchase, getNextSequence } = require('../db');
+const { escapeRegex } = require('../utils/security');
 
 // GET /api/purchases
 router.get('/', async (req, res) => {
   try {
-    const purchases = await Purchase.find().sort({ createdAt: -1 });
+    const { search, status } = req.query;
+    let filter = {};
+    if (status && status !== 'all') {
+      filter.status = status;
+    }
+    if (search && search.trim()) {
+      const escaped = escapeRegex(search);
+      const regex = new RegExp(escaped, 'i');
+      filter.$or = [
+        { id: regex },
+        { producer: regex },
+        { product: regex }
+      ];
+    }
+    const purchases = await Purchase.find(filter).sort({ createdAt: -1 }).lean();
     res.json(purchases);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar compras' });

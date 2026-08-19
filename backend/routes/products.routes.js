@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Product, Sale, getNextSequence } = require('../db');
+const { escapeRegex } = require('../utils/security');
 
 // GET /api/products
 router.get('/', async (req, res) => {
@@ -10,11 +11,12 @@ router.get('/', async (req, res) => {
     if (category && category !== 'all') {
       filter.category = category;
     }
-    if (search) {
-      const regex = new RegExp(search, 'i');
+    if (search && search.trim()) {
+      const escaped = escapeRegex(search);
+      const regex = new RegExp(escaped, 'i');
       filter.name = regex;
     }
-    const products = await Product.find(filter).sort({ name: 1 });
+    const products = await Product.find(filter).sort({ name: 1 }).lean();
     res.json(products);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar produtos' });

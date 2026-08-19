@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, ShoppingCart, CheckCircle2, AlertCircle, Edit, Trash2, X, Search } from 'lucide-react';
 import { formatCurrency, formatDate } from '../utils/formatters';
+import { api } from '../services/api';
 
 export default function Purchases({ mode = 'new', setCurrentPage }) {
   const [purchases, setPurchases] = useState([]);
@@ -11,7 +12,7 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
   // Form states (Create)
   const [producer, setProducer] = useState('');
   const [product, setProduct] = useState('');
-  const [date, setDate] = useState('2026-08-17');
+  const [date, setDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [quantity, setQuantity] = useState(500);
   const [unit, setUnit] = useState('Sacas (60kg)');
   const [unitPrice, setUnitPrice] = useState(55.00);
@@ -29,21 +30,22 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
     paymentStatus: 'A Pagar'
   });
 
-  const fetchPurchases = () => {
-    fetch('/api/purchases')
-      .then(res => res.json())
-      .then(setPurchases)
-      .catch(console.error);
+  const fetchPurchases = async () => {
+    try {
+      const data = await api.get('/api/purchases');
+      setPurchases(data || []);
+    } catch (err) {
+      console.error('Erro ao buscar compras:', err);
+    }
   };
 
   useEffect(() => {
     fetchPurchases();
 
-    fetch('/api/products')
-      .then(res => res.json())
+    api.get('/api/products')
       .then(data => {
-        setProducts(data);
-        if (data.length > 0) setProduct(data[0].name);
+        setProducts(data || []);
+        if (data && data.length > 0) setProduct(data[0].name);
       })
       .catch(console.error);
   }, []);
@@ -54,25 +56,19 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch('/api/purchases', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          producer,
-          product,
-          date,
-          quantity,
-          unit,
-          unitPrice,
-          total
-        })
+      await api.post('/api/purchases', {
+        producer,
+        product,
+        date,
+        quantity,
+        unit,
+        unitPrice,
+        total
       });
-      if (res.ok) {
-        setSuccess('Contrato de compra registrado com sucesso no MongoDB!');
-        setTimeout(() => {
-          setCurrentPage('purchases-history');
-        }, 1000);
-      }
+      setSuccess('Contrato de compra registrado com sucesso no MongoDB!');
+      setTimeout(() => {
+        setCurrentPage('purchases-history');
+      }, 1000);
     } catch (err) {
       console.error(err);
     } finally {
@@ -98,18 +94,12 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
     if (!editingPurchase) return;
     try {
       const editTotal = Number(editForm.quantity) * Number(editForm.unitPrice);
-      const res = await fetch(`/api/purchases/${editingPurchase.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...editForm,
-          total: editTotal
-        })
+      await api.put(`/api/purchases/${editingPurchase.id}`, {
+        ...editForm,
+        total: editTotal
       });
-      if (res.ok) {
-        setEditingPurchase(null);
-        fetchPurchases();
-      }
+      setEditingPurchase(null);
+      fetchPurchases();
     } catch (err) {
       console.error(err);
     }
@@ -118,10 +108,8 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
   const handleDeletePurchase = async (p) => {
     if (!window.confirm(`Deseja realmente cancelar e excluir o contrato de compra ${p.id}?`)) return;
     try {
-      const res = await fetch(`/api/purchases/${p.id}`, { method: 'DELETE' });
-      if (res.ok) {
-        fetchPurchases();
-      }
+      await api.delete(`/api/purchases/${p.id}`);
+      fetchPurchases();
     } catch (err) {
       console.error(err);
     }

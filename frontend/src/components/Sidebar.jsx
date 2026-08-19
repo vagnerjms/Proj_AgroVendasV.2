@@ -27,6 +27,9 @@ export default function Sidebar({ currentPage, setCurrentPage, currentUser, onLo
   const [financeiroOpen, setFinanceiroOpen] = useState(false);
   const [cadastrosOpen, setCadastrosOpen] = useState(false);
 
+  const perms = currentUser?.permissions || {};
+  const isAdmin = currentUser?.role === 'Administrador Geral';
+
   const navigateTo = (page) => {
     setCurrentPage(page);
     onCloseMobile?.();
@@ -70,17 +73,19 @@ export default function Sidebar({ currentPage, setCurrentPage, currentUser, onLo
       {/* Navigation items */}
       <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto text-sm font-medium">
         {/* Dashboard Link */}
-        <button
-          onClick={() => navigateTo('dashboard')}
-          className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all ${
-            currentPage === 'dashboard'
-              ? 'bg-[#df7b1b] text-white font-bold shadow-sm'
-              : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-          }`}
-        >
-          <LayoutDashboard className={`w-4 h-4 ${currentPage === 'dashboard' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-          <span>Dashboard</span>
-        </button>
+        {perms.dashboard !== false && (
+          <button
+            onClick={() => navigateTo('dashboard')}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg transition-all ${
+              currentPage === 'dashboard'
+                ? 'bg-[#df7b1b] text-white font-bold shadow-sm'
+                : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+            }`}
+          >
+            <LayoutDashboard className={`w-4 h-4 ${currentPage === 'dashboard' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+            <span>Dashboard</span>
+          </button>
+        )}
 
         {/* Comercial Accordion */}
         <div className="pt-1">
@@ -97,116 +102,132 @@ export default function Sidebar({ currentPage, setCurrentPage, currentUser, onLo
 
           {comercialOpen && (
             <div className="pl-6 pr-1 py-1 space-y-1">
-              <button
-                onClick={() => navigateTo('new-purchase')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
-                  currentPage === 'new-purchase' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-                }`}
-              >
-                <PlusCircle className={`w-3.5 h-3.5 ${currentPage === 'new-purchase' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-                <span>Nova Compra</span>
-              </button>
+              {perms.comercial_compras !== false && (
+                <button
+                  onClick={() => navigateTo('new-purchase')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                    currentPage === 'new-purchase' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+                  }`}
+                >
+                  <PlusCircle className={`w-3.5 h-3.5 ${currentPage === 'new-purchase' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+                  <span>Nova Compra</span>
+                </button>
+              )}
 
-              <button
-                onClick={() => navigateTo('new-sale')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
-                  currentPage === 'new-sale' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-                }`}
-              >
-                <PlusCircle className={`w-3.5 h-3.5 ${currentPage === 'new-sale' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-                <span>Nova Venda</span>
-              </button>
+              {perms.comercial_vendas !== false && (
+                <button
+                  onClick={() => navigateTo('new-sale')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                    currentPage === 'new-sale' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+                  }`}
+                >
+                  <PlusCircle className={`w-3.5 h-3.5 ${currentPage === 'new-sale' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+                  <span>Nova Venda</span>
+                </button>
+              )}
 
-              <button
-                onClick={() => navigateTo('purchases-history')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
-                  currentPage === 'purchases-history' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-                }`}
-              >
-                <History className={`w-3.5 h-3.5 ${currentPage === 'purchases-history' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-                <span>Hist. Compras</span>
-              </button>
+              {perms.comercial_compras !== false && (
+                <button
+                  onClick={() => navigateTo('purchases-history')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                    currentPage === 'purchases-history' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+                  }`}
+                >
+                  <History className={`w-3.5 h-3.5 ${currentPage === 'purchases-history' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+                  <span>Hist. Compras</span>
+                </button>
+              )}
 
-              <button
-                onClick={() => navigateTo('sales-history')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
-                  currentPage === 'sales-history' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-                }`}
-              >
-                <History className={`w-3.5 h-3.5 ${currentPage === 'sales-history' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-                <span>Hist. Vendas</span>
-              </button>
+              {perms.comercial_vendas !== false && (
+                <button
+                  onClick={() => navigateTo('sales-history')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                    currentPage === 'sales-history' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+                  }`}
+                >
+                  <History className={`w-3.5 h-3.5 ${currentPage === 'sales-history' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+                  <span>Hist. Vendas</span>
+                </button>
+              )}
 
               {/* Romaneios & Pesagem */}
-              <button
-                onClick={() => navigateTo('weighing-slips')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
-                  currentPage === 'weighing-slips' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-                }`}
-              >
-                <Scale className={`w-3.5 h-3.5 ${currentPage === 'weighing-slips' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-                <span>Romaneios & Pesagem</span>
-              </button>
+              {perms.romaneios_pesagem !== false && (
+                <button
+                  onClick={() => navigateTo('weighing-slips')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                    currentPage === 'weighing-slips' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+                  }`}
+                >
+                  <Scale className={`w-3.5 h-3.5 ${currentPage === 'weighing-slips' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+                  <span>Romaneios & Pesagem</span>
+                </button>
+              )}
 
-              <button
-                onClick={() => navigateTo('alerts')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
-                  currentPage === 'alerts' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-                }`}
-              >
-                <BellRing className={`w-3.5 h-3.5 ${currentPage === 'alerts' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-                <span>Agenda & Alertas</span>
-              </button>
+              {perms.agenda_alertas !== false && (
+                <button
+                  onClick={() => navigateTo('alerts')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                    currentPage === 'alerts' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+                  }`}
+                >
+                  <BellRing className={`w-3.5 h-3.5 ${currentPage === 'alerts' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+                  <span>Agenda & Alertas</span>
+                </button>
+              )}
 
-              <button
-                onClick={() => navigateTo('reports')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
-                  currentPage === 'reports' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-                }`}
-              >
-                <BarChart3 className={`w-3.5 h-3.5 ${currentPage === 'reports' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-                <span>Relatórios</span>
-              </button>
+              {perms.relatorios !== false && (
+                <button
+                  onClick={() => navigateTo('reports')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                    currentPage === 'reports' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+                  }`}
+                >
+                  <BarChart3 className={`w-3.5 h-3.5 ${currentPage === 'reports' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+                  <span>Relatórios</span>
+                </button>
+              )}
             </div>
           )}
         </div>
 
         {/* Financeiro & Fiscal Accordion */}
-        <div className="pt-1">
-          <button
-            onClick={() => setFinanceiroOpen(!financeiroOpen)}
-            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <DollarSign className="w-4 h-4 text-[#8fa3bf]" />
-              <span>Financeiro & Fiscal</span>
-            </div>
-            {financeiroOpen ? <ChevronDown className="w-4 h-4 text-[#8fa3bf]" /> : <ChevronRight className="w-4 h-4 text-[#8fa3bf]" />}
-          </button>
+        {perms.financeiro_fiscal !== false && (
+          <div className="pt-1">
+            <button
+              onClick={() => setFinanceiroOpen(!financeiroOpen)}
+              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <DollarSign className="w-4 h-4 text-[#8fa3bf]" />
+                <span>Financeiro & Fiscal</span>
+              </div>
+              {financeiroOpen ? <ChevronDown className="w-4 h-4 text-[#8fa3bf]" /> : <ChevronRight className="w-4 h-4 text-[#8fa3bf]" />}
+            </button>
 
-          {financeiroOpen && (
-            <div className="pl-6 pr-1 py-1 space-y-1">
-              <button
-                onClick={() => navigateTo('financial')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
-                  currentPage === 'financial' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-                }`}
-              >
-                <DollarSign className={`w-3.5 h-3.5 ${currentPage === 'financial' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-                <span>Contas e Fluxo</span>
-              </button>
-              <button
-                onClick={() => navigateTo('financial-funrural')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
-                  currentPage === 'financial-funrural' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-                }`}
-              >
-                <FileText className={`w-3.5 h-3.5 ${currentPage === 'financial-funrural' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-                <span>Apuração FUNRURAL</span>
-              </button>
-            </div>
-          )}
-        </div>
+            {financeiroOpen && (
+              <div className="pl-6 pr-1 py-1 space-y-1">
+                <button
+                  onClick={() => navigateTo('financial')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                    currentPage === 'financial' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+                  }`}
+                >
+                  <DollarSign className={`w-3.5 h-3.5 ${currentPage === 'financial' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+                  <span>Contas e Fluxo</span>
+                </button>
+                <button
+                  onClick={() => navigateTo('financial-funrural')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                    currentPage === 'financial-funrural' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+                  }`}
+                >
+                  <FileText className={`w-3.5 h-3.5 ${currentPage === 'financial-funrural' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+                  <span>Apuração FUNRURAL</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Cadastros Accordion */}
         <div className="pt-1">
@@ -223,42 +244,50 @@ export default function Sidebar({ currentPage, setCurrentPage, currentUser, onLo
 
           {cadastrosOpen && (
             <div className="pl-6 pr-1 py-1 space-y-1">
-              <button
-                onClick={() => navigateTo('cadastros-clients')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
-                  currentPage === 'cadastros-clients' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-                }`}
-              >
-                <Users className={`w-3.5 h-3.5 ${currentPage === 'cadastros-clients' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-                <span>Clientes & Produtores</span>
-              </button>
-              <button
-                onClick={() => navigateTo('cadastros-products')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
-                  currentPage === 'cadastros-products' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-                }`}
-              >
-                <Boxes className={`w-3.5 h-3.5 ${currentPage === 'cadastros-products' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-                <span>Produtos & Grãos</span>
-              </button>
-              <button
-                onClick={() => navigateTo('cadastros-users')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
-                  currentPage === 'cadastros-users' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-                }`}
-              >
-                <ShieldCheck className={`w-3.5 h-3.5 ${currentPage === 'cadastros-users' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-                <span>Usuários & Permissões</span>
-              </button>
-              <button
-                onClick={() => navigateTo('backup-restore')}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
-                  currentPage === 'backup-restore' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
-                }`}
-              >
-                <Database className={`w-3.5 h-3.5 ${currentPage === 'backup-restore' ? 'text-white' : 'text-[#8fa3bf]'}`} />
-                <span>Backup & Restauração</span>
-              </button>
+              {perms.cadastros_clients !== false && (
+                <button
+                  onClick={() => navigateTo('cadastros-clients')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                    currentPage === 'cadastros-clients' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+                  }`}
+                >
+                  <Users className={`w-3.5 h-3.5 ${currentPage === 'cadastros-clients' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+                  <span>Clientes & Produtores</span>
+                </button>
+              )}
+              {perms.cadastros_products !== false && (
+                <button
+                  onClick={() => navigateTo('cadastros-products')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                    currentPage === 'cadastros-products' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+                  }`}
+                >
+                  <Boxes className={`w-3.5 h-3.5 ${currentPage === 'cadastros-products' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+                  <span>Produtos & Grãos</span>
+                </button>
+              )}
+              {(isAdmin || perms.cadastros_users === true) && (
+                <button
+                  onClick={() => navigateTo('cadastros-users')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                    currentPage === 'cadastros-users' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+                  }`}
+                >
+                  <ShieldCheck className={`w-3.5 h-3.5 ${currentPage === 'cadastros-users' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+                  <span>Gestão de Usuários</span>
+                </button>
+              )}
+              {(isAdmin || perms.backup_sistema === true) && (
+                <button
+                  onClick={() => navigateTo('backup')}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-colors ${
+                    currentPage === 'backup' ? 'bg-[#df7b1b] text-white font-bold' : 'text-[#8fa3bf] hover:bg-[#132c4a] hover:text-white'
+                  }`}
+                >
+                  <Database className={`w-3.5 h-3.5 ${currentPage === 'backup' ? 'text-white' : 'text-[#8fa3bf]'}`} />
+                  <span>Backup & Restauração</span>
+                </button>
+              )}
             </div>
           )}
         </div>

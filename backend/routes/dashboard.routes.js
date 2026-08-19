@@ -58,8 +58,8 @@ router.get('/', async (req, res) => {
     const vencidos = finSummary.vencidos || 0.00;
 
     const lastTransactions = allSales.slice(0, 5).map(s => {
-      const parts = s.saleDate.split('-');
-      const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : s.saleDate;
+      const parts = (s.saleDate || '').split('-');
+      const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : (s.saleDate || '-');
       return {
         id: s.id,
         date: formattedDate,

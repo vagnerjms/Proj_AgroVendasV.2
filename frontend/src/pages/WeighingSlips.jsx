@@ -14,6 +14,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { formatNumber, formatDate } from '../utils/formatters';
+import { api } from '../services/api';
 
 export default function WeighingSlips({ initialStatus = 'all', setCurrentPage }) {
   const [slips, setSlips] = useState([]);
@@ -56,17 +57,13 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
   const fetchSlips = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') params.append('status', statusFilter);
-      if (search) params.append('search', search);
-
-      const res = await fetch(`/api/weighings?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSlips(data);
-      }
+      const data = await api.get('/api/weighings', {
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        search: search || undefined
+      });
+      setSlips(data || []);
     } catch (err) {
-      console.error(err);
+      console.error('Erro ao buscar romaneios:', err);
     } finally {
       setLoading(false);
     }
@@ -85,22 +82,15 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
     if (!resolvingSlip) return;
     setSubmittingResolution(true);
     try {
-      const res = await fetch(`/api/weighings/${resolvingSlip.id}/resolve`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: action,
-          resolutionNotes: resolutionNotes || `Divergência tratada e ${action.toLowerCase()} via auditoria comercial.`
-        })
+      await api.put(`/api/weighings/${resolvingSlip.id}/resolve`, {
+        action: action,
+        resolutionNotes: resolutionNotes || `Divergência tratada e ${action.toLowerCase()} via auditoria comercial.`
       });
-
-      if (res.ok) {
-        setResolvingSlip(null);
-        setResolutionNotes('');
-        fetchSlips();
-      }
+      setResolvingSlip(null);
+      setResolutionNotes('');
+      fetchSlips();
     } catch (err) {
-      console.error(err);
+      console.error('Erro ao resolver divergência:', err);
     } finally {
       setSubmittingResolution(false);
     }
@@ -143,22 +133,13 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
     if (!editingSlip || submittingSlip) return;
     setSubmittingSlip(true);
     try {
-      const res = await fetch(`/api/weighings/${editingSlip.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showNotification(`Romaneio ${editingSlip.id} atualizado com sucesso!`);
-        setEditingSlip(null);
-        fetchSlips();
-      } else {
-        showErrorNotification(data.error || 'Erro ao atualizar romaneio.');
-      }
+      await api.put(`/api/weighings/${editingSlip.id}`, editForm);
+      showNotification(`Romaneio ${editingSlip.id} atualizado com sucesso!`);
+      setEditingSlip(null);
+      fetchSlips();
     } catch (err) {
       console.error(err);
-      showErrorNotification('Erro de conexão ao salvar alterações.');
+      showErrorNotification(err.message || 'Erro ao atualizar romaneio.');
     } finally {
       setSubmittingSlip(false);
     }
@@ -167,17 +148,12 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
   const handleDeleteSlip = async (slip) => {
     if (!window.confirm(`Deseja excluir o romaneio ${slip.id} (${slip.truckPlate})?`)) return;
     try {
-      const res = await fetch(`/api/weighings/${slip.id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (res.ok) {
-        showNotification(`Romaneio ${slip.id} excluído.`);
-        fetchSlips();
-      } else {
-        showErrorNotification(data.error || 'Não foi possível excluir o romaneio.');
-      }
+      await api.delete(`/api/weighings/${slip.id}`);
+      showNotification(`Romaneio ${slip.id} excluído.`);
+      fetchSlips();
     } catch (err) {
       console.error(err);
-      showErrorNotification('Erro de rede ao tentar excluir romaneio.');
+      showErrorNotification(err.message || 'Não foi possível excluir o romaneio.');
     }
   };
 
@@ -186,22 +162,13 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
     if (submittingSlip) return;
     setSubmittingSlip(true);
     try {
-      const res = await fetch('/api/weighings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newForm)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showNotification(`Novo romaneio lançado com sucesso!`);
-        setShowNewModal(false);
-        fetchSlips();
-      } else {
-        showErrorNotification(data.error || 'Erro ao lançar romaneio.');
-      }
+      await api.post('/api/weighings', newForm);
+      showNotification(`Novo romaneio lançado com sucesso!`);
+      setShowNewModal(false);
+      fetchSlips();
     } catch (err) {
       console.error(err);
-      showErrorNotification('Erro de conexão ao lançar romaneio.');
+      showErrorNotification(err.message || 'Erro ao lançar romaneio.');
     } finally {
       setSubmittingSlip(false);
     }

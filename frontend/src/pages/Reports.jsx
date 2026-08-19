@@ -468,7 +468,7 @@ export default function Reports({ setCurrentPage }) {
                           <th className="py-2 px-3 text-right">FUNRURAL (1,63%)</th>
                           <th className="py-2 px-3 text-right">Cotação Dia</th>
                           <th className="py-2 px-3 text-right">Valor Total VP</th>
-                          <th className="py-2 px-3 text-right">Líquido a Receber</th>
+                          <th className="py-2 px-3 text-right">Líquido da NF</th>
                           <th className="py-2 px-3 text-center">Vencimento</th>
                           <th className="py-2 px-3 text-center">Status</th>
                         </tr>

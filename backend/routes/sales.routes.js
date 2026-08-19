@@ -40,8 +40,8 @@ router.get('/agenda-events', async (req, res) => {
   try {
     const sales = await Sale.find().sort({ saleDate: -1 });
     const events = sales.map(s => {
-      let dueDate = '';
-      if (s.notes) {
+      let dueDate = s.dueDate || '';
+      if (!dueDate && s.notes) {
         const match = s.notes.match(/Vencimento:\s*([^\s|]+)/i);
         if (match && match[1]) {
           const parts = match[1].split('/');
@@ -51,8 +51,9 @@ router.get('/agenda-events', async (req, res) => {
         }
       }
       if (!dueDate && s.saleDate) {
-        const d = new Date(s.saleDate);
-        d.setDate(d.getDate() + 30);
+        const days = Number(s.paymentTermDays) !== undefined && !isNaN(Number(s.paymentTermDays)) ? Number(s.paymentTermDays) : 30;
+        const d = new Date(s.saleDate + 'T12:00:00');
+        d.setDate(d.getDate() + days);
         dueDate = d.toISOString().split('T')[0];
       }
       if (!dueDate) dueDate = new Date().toISOString().split('T')[0];
@@ -151,6 +152,9 @@ router.post('/', async (req, res) => {
       senar: Number(body.senar) || senar,
       status: body.nfFile ? "Faturado" : "Pendente NF",
       paymentStatus: "A Receber",
+      paymentTerms: body.paymentTerms || (body.paymentTermDays !== undefined ? (Number(body.paymentTermDays) === 0 ? 'À Vista' : `${body.paymentTermDays} dias`) : '30 dias'),
+      paymentTermDays: body.paymentTermDays !== undefined ? Number(body.paymentTermDays) : 30,
+      dueDate: body.dueDate || '',
       isDivergent: false,
       nfPending: !body.nfFile
     });
@@ -220,7 +224,8 @@ router.put('/:id', async (req, res) => {
       'destUF', 'notes', 'nfFile', 'nfeKey', 'evidenceFile', 'freightType', 'carrierName',
       'truckPlate', 'driverName', 'driverCPF', 'items', 'feeType', 'feeValue',
       'totalVolumes', 'totalKg', 'totalOperation', 'totalCommission', 'status',
-      'paymentStatus', 'paidAmount', 'isDivergent', 'nfPending'
+      'paymentStatus', 'paymentTerms', 'paymentTermDays', 'dueDate', 'paidAmount',
+      'isDivergent', 'nfPending'
     ];
 
     let updateFields = {};

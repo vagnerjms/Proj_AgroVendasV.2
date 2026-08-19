@@ -16,7 +16,9 @@ import {
   Package, 
   UserCheck, 
   RotateCcw,
-  Edit3
+  Edit3,
+  Calendar,
+  Clock
 } from 'lucide-react';
 import { formatCurrency, formatKg, formatNumber } from '../utils/formatters';
 import { calculateSummary, calculateFunrural } from '../utils/calculations';
@@ -51,6 +53,11 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   const [feeType, setFeeType] = useState('Porcentagem (%)');
   const [feeValue, setFeeValue] = useState(3.0);
 
+  // Payment Terms & Due Date (Prazo de Recebimento)
+  const [paymentTermDays, setPaymentTermDays] = useState(30);
+  const [dueDate, setDueDate] = useState('');
+  const [customTermMode, setCustomTermMode] = useState(false);
+
   // Files & XML Data
   const [nfFile, setNfFile] = useState(null);
   const [nfeKey, setNfeKey] = useState('');
@@ -75,10 +82,43 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Calculate Due Date automatically when saleDate or paymentTermDays changes
+  useEffect(() => {
+    if (saleDate && paymentTermDays !== '' && paymentTermDays !== null && !isNaN(Number(paymentTermDays))) {
+      const d = new Date(saleDate + 'T12:00:00');
+      d.setDate(d.getDate() + Number(paymentTermDays));
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      setDueDate(`${yyyy}-${mm}-${dd}`);
+    }
+  }, [saleDate, paymentTermDays]);
+
+  const handleDueDateChange = (newDateStr) => {
+    setDueDate(newDateStr);
+    if (saleDate && newDateStr) {
+      const d1 = new Date(saleDate + 'T12:00:00');
+      const d2 = new Date(newDateStr + 'T12:00:00');
+      const diffTime = d2 - d1;
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays >= 0) {
+        setPaymentTermDays(diffDays);
+        const commonPresets = [0, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60];
+        setCustomTermMode(!commonPresets.includes(diffDays));
+      }
+    }
+  };
+
   // Reset form to blank state
   const resetForm = () => {
     setOperationType('Intermediação (Corretagem / Comissão)');
-    setSaleDate(new Date().toISOString().split('T')[0]);
+    const today = new Date().toISOString().split('T')[0];
+    setSaleDate(today);
+    setPaymentTermDays(30);
+    setCustomTermMode(false);
+    const defaultDue = new Date();
+    defaultDue.setDate(defaultDue.getDate() + 30);
+    setDueDate(defaultDue.toISOString().split('T')[0]);
     setSelectedClient('');
     setClientDocument('');
     setOrigin('');
@@ -105,6 +145,18 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     if (editingSale) {
       setOperationType(editingSale.operationType || 'Intermediação (Corretagem / Comissão)');
       setSaleDate(editingSale.saleDate || new Date().toISOString().split('T')[0]);
+      
+      if (editingSale.paymentTermDays !== undefined) {
+        setPaymentTermDays(editingSale.paymentTermDays);
+        const commonPresets = [0, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60];
+        if (!commonPresets.includes(Number(editingSale.paymentTermDays))) {
+          setCustomTermMode(true);
+        }
+      }
+      if (editingSale.dueDate) {
+        setDueDate(editingSale.dueDate);
+      }
+
       setSelectedClient(editingSale.client || '');
       setClientDocument(editingSale.clientDocument || '');
       setOrigin(editingSale.origin || '');
@@ -453,10 +505,13 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         origin: origin || 'Produtor Rural',
         destCity: destCity || 'São Paulo',
         destUF: destUF || 'SP',
-        notes: notes || `Venda de ${selectedProduct} | Pesagem: ${totalWeightKg} kg (${calculatedVolumes.toFixed(2)} ${getUnitShortLabel()}) | NF: R$ ${effectiveTotalNF.toFixed(2)} | Cotação: R$ ${dailyQuote}/${getUnitShortLabel()}`,
+        notes: notes || `Venda de ${selectedProduct} | Pesagem: ${totalWeightKg} kg (${calculatedVolumes.toFixed(2)} ${getUnitShortLabel()}) | NF: R$ ${effectiveTotalNF.toFixed(2)} | Cotação: R$ ${dailyQuote}/${getUnitShortLabel()} | Vencimento: ${dueDate ? dueDate.split('-').reverse().join('/') : ''} (${Number(paymentTermDays) === 0 ? 'À Vista' : `${paymentTermDays} dias`})`,
         nfFile,
         nfeKey,
         evidenceFile,
+        paymentTerms: Number(paymentTermDays) === 0 ? 'À Vista' : `${paymentTermDays} dias`,
+        paymentTermDays: Number(paymentTermDays) || 0,
+        dueDate,
         freightType,
         carrierName,
         truckPlate,
@@ -873,6 +928,83 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                   onChange={(e) => setSaleDate(e.target.value)}
                   className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#091b2e]"
                 />
+              </div>
+            </div>
+
+            {/* Prazo de Recebimento & Data Prevista de Vencimento */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-emerald-50/40 p-3.5 rounded-xl border border-emerald-100">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Prazo de Recebimento da Venda *</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setCustomTermMode(!customTermMode)}
+                    className="text-[11px] text-emerald-800 hover:underline font-semibold cursor-pointer"
+                  >
+                    {customTermMode ? 'Ver opções padrão' : 'Digitar dias livre'}
+                  </button>
+                </div>
+
+                {customTermMode ? (
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="365"
+                      placeholder="Ex: 30"
+                      value={paymentTermDays}
+                      onChange={(e) => setPaymentTermDays(e.target.value)}
+                      className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none font-bold focus:ring-2 focus:ring-[#091b2e]"
+                    />
+                    <span className="absolute right-3 top-2.5 text-xs text-gray-400 font-semibold">dias</span>
+                  </div>
+                ) : (
+                  <select
+                    value={paymentTermDays}
+                    onChange={(e) => {
+                      if (e.target.value === 'custom') {
+                        setCustomTermMode(true);
+                      } else {
+                        setPaymentTermDays(Number(e.target.value));
+                      }
+                    }}
+                    className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none font-bold focus:ring-2 focus:ring-[#091b2e] cursor-pointer"
+                  >
+                    <option value={0}>À Vista (0 dias)</option>
+                    <option value={10}>10 dias</option>
+                    <option value={15}>15 dias</option>
+                    <option value={20}>20 dias</option>
+                    <option value={25}>25 dias</option>
+                    <option value={30}>30 dias (Padrão Agro)</option>
+                    <option value={35}>35 dias</option>
+                    <option value={40}>40 dias</option>
+                    <option value={45}>45 dias</option>
+                    <option value={50}>50 dias</option>
+                    <option value={60}>60 dias</option>
+                    <option value="custom">Outro Prazo (Personalizado)...</option>
+                  </select>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-800 mb-1 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>Data Prevista de Vencimento</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => handleDueDateChange(e.target.value)}
+                    className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none font-bold focus:ring-2 focus:ring-[#091b2e]"
+                  />
+                  <div className="shrink-0 bg-emerald-100 text-emerald-950 px-2.5 py-2 rounded-lg text-[11px] font-bold text-center border border-emerald-300">
+                    {Number(paymentTermDays) === 0 ? 'À Vista' : `+${paymentTermDays} dias`}
+                  </div>
+                </div>
               </div>
             </div>
 

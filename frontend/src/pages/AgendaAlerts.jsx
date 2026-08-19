@@ -60,8 +60,17 @@ export default function AgendaAlerts({ setCurrentPage }) {
     }
   };
 
-  // Helper to extract due date from notes or saleDate + 30 days
+  // Helper to extract due date from sale.dueDate, notes or saleDate + paymentTermDays
   const parseDueDate = (sale) => {
+    if (sale.dueDate) {
+      const parts = sale.dueDate.split('-');
+      if (parts.length === 3) {
+        return {
+          formatted: `${parts[2]}/${parts[1]}/${parts[0]}`,
+          isoDate: sale.dueDate
+        };
+      }
+    }
     if (sale.notes) {
       const match = sale.notes.match(/Vencimento:\s*([^\s|]+)/i);
       if (match && match[1]) {
@@ -74,10 +83,11 @@ export default function AgendaAlerts({ setCurrentPage }) {
         }
       }
     }
-    // Default fallback
+    // Default fallback using paymentTermDays or 30 days
     if (sale.saleDate) {
-      const d = new Date(sale.saleDate);
-      d.setDate(d.getDate() + 30);
+      const days = Number(sale.paymentTermDays) !== undefined && !isNaN(Number(sale.paymentTermDays)) ? Number(sale.paymentTermDays) : 30;
+      const d = new Date(sale.saleDate + 'T12:00:00');
+      d.setDate(d.getDate() + days);
       const day = String(d.getDate()).padStart(2, '0');
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const year = d.getFullYear();

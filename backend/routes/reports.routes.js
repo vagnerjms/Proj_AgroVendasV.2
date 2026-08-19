@@ -15,7 +15,7 @@ router.get('/stores-summary', async (req, res) => {
       query.saleDate = { $lte: endDate };
     }
 
-    const allSales = await Sale.find(query).sort({ saleDate: 1 });
+    const allSales = await Sale.find(query).sort({ saleDate: 1 }).lean();
 
     const clientGroups = {};
     for (const s of allSales) {

@@ -6,6 +6,7 @@ const { Sale, WeighingSlip, getNextSequence } = require('../db');
 const { TAX_RATES } = require('../constants');
 const { uploadDir } = require('../middlewares/upload');
 const { sendSaleWebhook } = require('../services/webhook.service');
+const { escapeRegex } = require('../utils/security');
 
 // GET /api/sales
 router.get('/', async (req, res) => {
@@ -18,8 +19,9 @@ router.get('/', async (req, res) => {
     if (status && status !== 'all') {
       filter.status = status;
     }
-    if (search) {
-      const regex = new RegExp(search, 'i');
+    if (search && search.trim()) {
+      const escaped = escapeRegex(search);
+      const regex = new RegExp(escaped, 'i');
       filter.$or = [
         { id: regex },
         { client: regex },
@@ -28,7 +30,7 @@ router.get('/', async (req, res) => {
         { 'items.product': regex }
       ];
     }
-    const sales = await Sale.find(filter).sort({ saleDate: -1, createdAt: -1 });
+    const sales = await Sale.find(filter).sort({ saleDate: -1, createdAt: -1 }).lean();
     res.json(sales);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar vendas' });

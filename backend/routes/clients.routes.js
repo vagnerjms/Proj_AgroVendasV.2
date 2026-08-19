@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Client, Sale, getNextSequence } = require('../db');
+const { escapeRegex } = require('../utils/security');
 
 // GET /api/clients
 router.get('/', async (req, res) => {
@@ -10,15 +11,16 @@ router.get('/', async (req, res) => {
     if (type && type !== 'all') {
       filter.type = type;
     }
-    if (search) {
-      const regex = new RegExp(search, 'i');
+    if (search && search.trim()) {
+      const escaped = escapeRegex(search);
+      const regex = new RegExp(escaped, 'i');
       filter.$or = [
         { name: regex },
         { document: regex },
         { city: regex }
       ];
     }
-    const clients = await Client.find(filter).sort({ name: 1 });
+    const clients = await Client.find(filter).sort({ name: 1 }).lean();
     res.json(clients);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar clientes' });

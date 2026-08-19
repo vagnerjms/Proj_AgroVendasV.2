@@ -29,6 +29,24 @@ app.use('/api/purchases', require('./routes/purchases.routes'));
 app.use('/api/reports', require('./routes/reports.routes'));
 app.use('/api/backup', require('./routes/backup.routes'));
 
+// Health Check & Database Status Endpoint
+app.get('/api/health', async (req, res) => {
+  const mongoose = require('mongoose');
+  const dbState = mongoose.connection.readyState;
+  const states = { 0: 'Desconectado', 1: 'Conectado (Saudável)', 2: 'Conectando', 3: 'Desconectando' };
+  
+  res.json({
+    status: dbState === 1 ? 'OK' : 'DEGRADED',
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.floor(process.uptime()),
+    database: {
+      status: states[dbState] || 'Desconhecido',
+      host: mongoose.connection.host || 'localhost',
+      name: mongoose.connection.name || 'agrovenda'
+    }
+  });
+});
+
 // Static frontend serving in production
 const frontendDist = path.join(__dirname, '../frontend/dist');
 if (fs.existsSync(frontendDist)) {

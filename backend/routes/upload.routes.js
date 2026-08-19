@@ -38,4 +38,12 @@ router.post('/nfe/parse', upload.single('file'), async (req, res) => {
   }
 });
 
+const { cleanupOrphanUploads } = require('../services/cleanup.service');
+
+// POST /api/upload/cleanup (Limpar arquivos temporários órfãos que não foram salvos em nenhuma venda)
+router.post('/upload/cleanup', async (req, res) => {
+  const result = await cleanupOrphanUploads();
+  res.json(result);
+});
+
 module.exports = router;

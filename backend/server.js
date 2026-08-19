@@ -56,10 +56,13 @@ if (fs.existsSync(frontendDist)) {
   });
 }
 
+const { startCleanupScheduler } = require('./services/cleanup.service');
+
 // Start Server and MongoDB Connection
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🌾 [AgroVenda V2 Backend] Servidor rodando na porta ${PORT}`);
   await connectDB();
+  startCleanupScheduler();
 });
 
 module.exports = app;

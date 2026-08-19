@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
-const { Sale, Client, Product, Purchase, WeighingSlip, FinancialSummary, User } = require('../db');
+const { Sale, Client, Product, Purchase, WeighingSlip, FinancialSummary, User, recalibrateCounters } = require('../db');
 const { upload, uploadDir } = require('../middlewares/upload');
 
 // GET /api/backup/stats
@@ -185,6 +185,9 @@ router.post('/restore', upload.single('backupFile'), async (req, res) => {
         }
       });
     }
+
+    // 3. Recalibrate atomic sequence counters (Prevents E11000 duplicate key errors)
+    await recalibrateCounters();
 
     res.json({
       success: true,

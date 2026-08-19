@@ -219,6 +219,41 @@ async function getNextSequence(sequenceName, initModel = null, idPrefix = '') {
   return updated.seq;
 }
 
+/**
+ * Recalibrates all atomic sequence counters based on the max existing IDs in each collection.
+ * Prevents E11000 duplicate key errors after restores or manual database edits.
+ */
+async function recalibrateCounters() {
+  const domains = [
+    { name: 'sale_vp_id', model: Sale, prefix: 'VP' },
+    { name: 'purchase_id', model: Purchase, prefix: 'CMP-2026-' },
+    { name: 'client_id', model: Client, prefix: 'CLI-' },
+    { name: 'product_id', model: Product, prefix: 'PROD-' },
+    { name: 'user_id', model: User, prefix: 'USR-' }
+  ];
+
+  for (const d of domains) {
+    try {
+      const allDocs = await d.model.find({}, { id: 1 }).lean();
+      let maxId = 0;
+      for (const doc of allDocs) {
+        if (doc.id) {
+          const cleaned = doc.id.replace(d.prefix, '').replace(/^[^\d]+/, '');
+          const num = parseInt(cleaned, 10);
+          if (!isNaN(num) && num > maxId) maxId = num;
+        }
+      }
+      await Counter.findByIdAndUpdate(
+        d.name,
+        { seq: maxId },
+        { upsert: true, new: true }
+      );
+    } catch (e) {
+      console.warn(`Aviso ao recalibrar contador ${d.name}:`, e.message);
+    }
+  }
+}
+
 async function connectDB() {
   const options = {
     serverSelectionTimeoutMS: 5000,
@@ -274,6 +309,8 @@ async function connectDB() {
       await defaultAdmin.save();
       console.log('🌾 [MongoDB] Administrador padrão inicializado com sucesso (admin@agrovenda.com.br / admin)');
     }
+    // Auto-recalibrate atomic counters on startup to avoid collision
+    await recalibrateCounters();
   } catch (seedErr) {
     console.warn('Aviso: erro ao verificar administrador padrão:', seedErr.message);
   }
@@ -289,5 +326,6 @@ module.exports = {
   FinancialSummary,
   User,
   Counter,
-  getNextSequence
+  getNextSequence,
+  recalibrateCounters
 };

@@ -1,0 +1,125 @@
+{
+  "name": "AgroVenda V2 - Backup Automático para o Google Drive",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "triggerAtHour": 2,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "10000001-backup-4000-8000-000000000001",
+      "name": "Agendamento Diário (02:00h)"
+    },
+    {
+      "parameters": {
+        "url": "https://agrovendas.cloud/api/backup/export",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "10000002-backup-4000-8000-000000000002",
+      "name": "Exportar Banco e Arquivos AgroVenda"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst pad = (n) => String(n).padStart(2, '0');\nconst dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;\nconst fileName = `backup_agrovenda_${dateStr}.json`;\n\nconst contentStr = JSON.stringify($input.first().json, null, 2);\nconst binaryData = Buffer.from(contentStr, 'utf8').toString('base64');\n\nreturn [{\n  json: {\n    fileName,\n    exportedAt: now.toISOString(),\n    stats: $input.first().json.stats || {}\n  },\n  binary: {\n    data: {\n      data: binaryData,\n      mimeType: 'application/json',\n      fileName: fileName,\n      fileExtension: 'json'\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "10000003-backup-4000-8000-000000000003",
+      "name": "Gerar Pacote de Backup"
+    },
+    {
+      "parameters": {
+        "fileContent": "data",
+        "options": {
+          "fileName": "={{ $json.fileName }}",
+          "folderId": {
+            "__rl": true,
+            "value": "1eUU4Vhg325_NtF19i_4tCQwVVOXFefeq",
+            "mode": "id"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        720,
+        0
+      ],
+      "id": "10000004-backup-4000-8000-000000000004",
+      "name": "Enviar Backup para Google Drive",
+      "credentials": {
+        "googleDriveOAuth2": {
+          "id": "Google Drive account",
+          "name": "Google Drive account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Agendamento Diário (02:00h)": {
+      "main": [
+        [
+          {
+            "node": "Exportar Banco e Arquivos AgroVenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exportar Banco e Arquivos AgroVenda": {
+      "main": [
+        [
+          {
+            "node": "Gerar Pacote de Backup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gerar Pacote de Backup": {
+      "main": [
+        [
+          {
+            "node": "Enviar Backup para Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

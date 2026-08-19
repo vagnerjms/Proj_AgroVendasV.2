@@ -19,11 +19,12 @@ services:
     container_name: agrovenda-v2-app
     restart: always
     ports:
-      - "127.0.0.1:3000:3000"
+      - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
       - MONGO_URI=mongodb://mongodb:27017/agrovenda
+      - JWT_SECRET=${JWT_SECRET:-agrovenda_super_secure_jwt_secret_2026_agro_v2}
     depends_on:
       - mongodb
     volumes:
@@ -31,7 +32,7 @@ services:
     networks:
       - agrovenda_network
 
-  # Mongo Express (Painel Visual do MongoDB Web GUI)
+  # Mongo Express (Painel Visual do MongoDB Web GUI - Apenas Localhost + Auth)
   mongo-express:
     image: mongo-express:1
     container_name: agrovenda-v2-mongo-express
@@ -41,7 +42,9 @@ services:
     environment:
       - ME_CONFIG_MONGODB_SERVER=mongodb
       - ME_CONFIG_MONGODB_PORT=27017
-      - ME_CONFIG_BASICAUTH=false
+      - ME_CONFIG_BASICAUTH=true
+      - ME_CONFIG_BASICAUTH_USERNAME=${MONGO_EXPRESS_USER:-admin}
+      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASS:-AgroAdmin2026!}
     depends_on:
       - mongodb
     networks:

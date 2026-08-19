@@ -40,20 +40,25 @@ router.get('/stores-summary', async (req, res) => {
       const itens = sales.map(s => {
         const isFaturado = s.status === 'Faturado';
         
-        let itemPesoNF = s.totalKg || 0;
-        if (isFaturado) {
+        let itemPesoNF = Number(s.totalKg) || 0;
+        let itemValorNF = Number(s.totalOperation) || 0;
+        let itemFunrural = Number(s.funruralTotal) || 0;
+        let itemPrecoKg = itemPesoNF > 0 ? (itemValorNF / itemPesoNF) : 0;
+        let itemLiquido = itemValorNF - itemFunrural;
+
+        if (isFaturado || s.nfFile) {
           nfs++;
-          pesoNF += itemPesoNF;
-          valorTotalNF += s.totalOperation || 0;
-          funrural += s.funruralTotal || 0;
         } else {
           pedidosSemNF++;
         }
 
-        pesoColheita += s.totalKg || 0;
+        pesoNF += itemPesoNF;
+        valorTotalNF += itemValorNF;
+        funrural += itemFunrural;
+        pesoColheita += itemPesoNF;
         cxsVendidas += s.totalVolumes || 0;
 
-        const caixas = s.totalVolumes || (s.totalKg > 0 ? (s.totalKg / 29) : 0);
+        const caixas = s.totalVolumes || (itemPesoNF > 0 ? (itemPesoNF / 29) : 0);
         let cotacao = Number(s.dailyQuote) || 0;
         if (!cotacao && s.notes) {
           const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
@@ -77,15 +82,15 @@ router.get('/stores-summary', async (req, res) => {
           dataNF: s.saleDate ? s.saleDate.split('-').reverse().join('/') : '-',
           product: s.items?.[0]?.product || 'Cenoura (Caixa 29kg)',
           unit: s.items?.[0]?.unit || 'Caixas (29kg)',
-          pesoNF: isFaturado ? s.totalKg : 0,
-          pesoColheita: s.totalKg,
+          pesoNF: itemPesoNF,
+          pesoColheita: itemPesoNF,
           cxs: s.totalVolumes,
-          precoKg: (s.totalKg > 0 && isFaturado) ? (s.totalOperation / s.totalKg) : 0,
-          valorNF: isFaturado ? s.totalOperation : 0,
-          funrural: isFaturado ? s.funruralTotal : 0,
+          precoKg: itemPrecoKg,
+          valorNF: itemValorNF,
+          funrural: itemFunrural,
           cotacao: cotacao,
           valorVP: valorVP,
-          liquido: isFaturado ? (s.totalOperation - s.funruralTotal) : 0,
+          liquido: itemLiquido,
           taxaComissao: taxaComissao,
           comissao: comissao,
           liquidoProdutor: liquidoProdutor,

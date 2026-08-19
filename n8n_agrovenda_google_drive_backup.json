@@ -1,6 +1,17 @@
 {
-  "name": "AgroVenda V2 - Backup Google Drive (Anti-Duplicação / Sobrescrita Inteligente)",
+  "name": "AgroVenda V2 - Backup de Todas as Notas Fiscais e Arquivos no Google Drive",
   "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        0
+      ],
+      "id": "10000000-backup-4000-8000-000000000000",
+      "name": "Executar Backup Manualmente"
+    },
     {
       "parameters": {
         "rule": {
@@ -16,8 +27,8 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -100,
-        0
+        -200,
+        -160
       ],
       "id": "10000001-backup-4000-8000-000000000001",
       "name": "Agendamento Diário (02:00h)"
@@ -36,113 +47,32 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        120,
-        0
+        60,
+        -80
       ],
       "id": "10000002-backup-4000-8000-000000000002",
-      "name": "Exportar Banco e Arquivos AgroVenda"
+      "name": "Buscar NFs e Banco do AgroVenda"
     },
     {
       "parameters": {
-        "jsCode": "const now = new Date();\nconst pad = (n) => String(n).padStart(2, '0');\nconst dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;\nconst fileName = `backup_agrovenda_${dateStr}.json`;\n\nconst contentStr = JSON.stringify($input.first().json, null, 2);\nconst binaryData = Buffer.from(contentStr, 'utf8').toString('base64');\n\nreturn [{\n  json: {\n    fileName,\n    dateStr,\n    folderId: '1eUU4Vhg325_NtF19i_4tCQwVVOXFefeq',\n    stats: $input.first().json.stats || {}\n  },\n  binary: {\n    data: {\n      data: binaryData,\n      mimeType: 'application/json',\n      fileName: fileName,\n      fileExtension: 'json'\n    }\n  }\n}];"
+        "jsCode": "const exportData = $input.first().json;\nconst files = exportData.files || [];\nconst results = [];\n\n// 1. Adicionar cada Nota Fiscal / Arquivo PDF ou XML individual\nfor (const f of files) {\n  const mimeType = f.filename.endsWith('.pdf') ? 'application/pdf' :\n                   (f.filename.endsWith('.xml') ? 'application/xml' :\n                   (f.filename.endsWith('.png') ? 'image/png' :\n                   (f.filename.endsWith('.jpg') || f.filename.endsWith('.jpeg') ? 'image/jpeg' : 'application/octet-stream')));\n\n  results.push({\n    json: {\n      fileName: f.filename,\n      sizeBytes: f.sizeBytes,\n      tipo: 'Nota Fiscal / Documento'\n    },\n    binary: {\n      data: {\n        data: f.contentBase64,\n        mimeType: mimeType,\n        fileName: f.filename\n      }\n    }\n  });\n}\n\n// 2. Adicionar o arquivo consolidado de Dados das Vendas (.json)\nconst now = new Date();\nconst pad = (n) => String(n).padStart(2, '0');\nconst dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;\nconst dbFileName = `dados_completos_vendas_${dateStr}.json`;\nconst contentStr = JSON.stringify(exportData.database || {}, null, 2);\nconst dbBinary = Buffer.from(contentStr, 'utf8').toString('base64');\n\nresults.push({\n  json: {\n    fileName: dbFileName,\n    tipo: 'Banco de Dados'\n  },\n  binary: {\n    data: {\n      data: dbBinary,\n      mimeType: 'application/json',\n      fileName: dbFileName,\n      fileExtension: 'json'\n    }\n  }\n});\n\nreturn results;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        340,
-        0
+        300,
+        -80
       ],
       "id": "10000003-backup-4000-8000-000000000003",
-      "name": "Gerar Arquivo do Dia (1 por Dia)"
+      "name": "Extrair Todas as Notas Fiscais (PDFs)"
     },
     {
       "parameters": {
-        "operation": "search",
-        "options": {
-          "queryString": "='1eUU4Vhg325_NtF19i_4tCQwVVOXFefeq' in parents and name = '\" + $json.fileName + \"' and trashed = false"
-        }
-      },
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
-      "position": [
-        560,
-        0
-      ],
-      "id": "10000004-backup-4000-8000-000000000004",
-      "name": "Verificar se Backup de Hoje Já Existe",
-      "credentials": {
-        "googleDriveOAuth2": {
-          "id": "Google Drive account",
-          "name": "Google Drive account"
-        }
-      },
-      "alwaysOutputData": true
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 2
-          },
-          "conditions": [
-            {
-              "id": "check-file-exists",
-              "leftValue": "={{ $json.id }}",
-              "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "exists",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [
-        780,
-        0
-      ],
-      "id": "10000005-backup-4000-8000-000000000005",
-      "name": "Backup de Hoje Já Existe?"
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "fileId": {
-          "__rl": true,
-          "value": "={{ $json.id }}",
-          "mode": "id"
-        },
-        "fileContent": "data",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
-      "position": [
-        1020,
-        -100
-      ],
-      "id": "10000006-backup-4000-8000-000000000006",
-      "name": "Atualizar Arquivo Existente (Sem Duplicar)",
-      "credentials": {
-        "googleDriveOAuth2": {
-          "id": "Google Drive account",
-          "name": "Google Drive account"
-        }
-      }
-    },
-    {
-      "parameters": {
+        "resource": "file",
+        "operation": "upload",
         "fileContent": "data",
         "options": {
-          "fileName": "={{ $('Gerar Arquivo do Dia (1 por Dia)').item.json.fileName }}",
+          "fileName": "={{ $json.fileName }}",
           "folderId": {
             "__rl": true,
             "value": "1eUU4Vhg325_NtF19i_4tCQwVVOXFefeq",
@@ -153,11 +83,11 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        1020,
-        100
+        560,
+        -80
       ],
-      "id": "10000007-backup-4000-8000-000000000007",
-      "name": "Criar Novo Arquivo do Dia",
+      "id": "10000004-backup-4000-8000-000000000004",
+      "name": "Salvar Cada Arquivo PDF/XML no Google Drive",
       "credentials": {
         "googleDriveOAuth2": {
           "id": "Google Drive account",
@@ -167,62 +97,44 @@
     }
   ],
   "connections": {
+    "Executar Backup Manualmente": {
+      "main": [
+        [
+          {
+            "node": "Buscar NFs e Banco do AgroVenda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Agendamento Diário (02:00h)": {
       "main": [
         [
           {
-            "node": "Exportar Banco e Arquivos AgroVenda",
+            "node": "Buscar NFs e Banco do AgroVenda",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Exportar Banco e Arquivos AgroVenda": {
+    "Buscar NFs e Banco do AgroVenda": {
       "main": [
         [
           {
-            "node": "Gerar Arquivo do Dia (1 por Dia)",
+            "node": "Extrair Todas as Notas Fiscais (PDFs)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Gerar Arquivo do Dia (1 por Dia)": {
+    "Extrair Todas as Notas Fiscais (PDFs)": {
       "main": [
         [
           {
-            "node": "Verificar se Backup de Hoje Já Existe",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Verificar se Backup de Hoje Já Existe": {
-      "main": [
-        [
-          {
-            "node": "Backup de Hoje Já Existe?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Backup de Hoje Já Existe?": {
-      "main": [
-        [
-          {
-            "node": "Atualizar Arquivo Existente (Sem Duplicar)",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Criar Novo Arquivo do Dia",
+            "node": "Salvar Cada Arquivo PDF/XML no Google Drive",
             "type": "main",
             "index": 0
           }

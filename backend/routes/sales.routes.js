@@ -164,6 +164,8 @@ router.post('/', async (req, res) => {
       items: body.items || [],
       feeType: body.feeType || "Porcentagem (%)",
       feeValue: Number(body.feeValue) || 0,
+      dailyQuote: Number(body.dailyQuote) || 0,
+      valorTotalVP: Number(body.valorTotalVP) || 0,
       totalVolumes: Number(body.totalVolumes) || 0,
       totalKg: Number(body.totalKg) || 0,
       totalOperation: totalOp,
@@ -245,9 +247,9 @@ router.put('/:id', async (req, res) => {
       'operationType', 'saleDate', 'client', 'clientDocument', 'origin', 'destCity',
       'destUF', 'notes', 'nfFile', 'nfeKey', 'evidenceFile', 'freightType', 'carrierName',
       'truckPlate', 'driverName', 'driverCPF', 'items', 'feeType', 'feeValue',
-      'totalVolumes', 'totalKg', 'totalOperation', 'totalCommission', 'status',
-      'paymentStatus', 'paymentTerms', 'paymentTermDays', 'dueDate', 'paidAmount',
-      'isDivergent', 'nfPending'
+      'dailyQuote', 'valorTotalVP', 'totalVolumes', 'totalKg', 'totalOperation', 
+      'totalCommission', 'status', 'paymentStatus', 'paymentTerms', 'paymentTermDays', 
+      'dueDate', 'paidAmount', 'isDivergent', 'nfPending'
     ];
 
     let updateFields = {};

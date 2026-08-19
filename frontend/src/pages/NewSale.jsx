@@ -191,8 +191,10 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         }
       }
 
-      // Extract daily quote from notes or items
-      if (editingSale.notes) {
+      // Extract daily quote from field, notes or fallback
+      if (editingSale.dailyQuote) {
+        setDailyQuote(String(editingSale.dailyQuote));
+      } else if (editingSale.notes) {
         const m = editingSale.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
         if (m) setDailyQuote(m[1].replace(',', '.'));
       }
@@ -505,13 +507,15 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         origin: origin || 'Produtor Rural',
         destCity: destCity || 'São Paulo',
         destUF: destUF || 'SP',
-        notes: notes || `Venda de ${selectedProduct} | Pesagem: ${totalWeightKg} kg (${calculatedVolumes.toFixed(2)} ${getUnitShortLabel()}) | NF: R$ ${effectiveTotalNF.toFixed(2)} | Cotação: R$ ${dailyQuote}/${getUnitShortLabel()} | Vencimento: ${dueDate ? dueDate.split('-').reverse().join('/') : ''} (${Number(paymentTermDays) === 0 ? 'À Vista' : `${paymentTermDays} dias`})`,
+        notes: `Venda de ${selectedProduct} | Pesagem: ${totalWeightKg} kg (${calculatedVolumes.toFixed(2)} ${getUnitShortLabel()}) | NF: R$ ${effectiveTotalNF.toFixed(2)} | Cotação: R$ ${dailyQuote}/${getUnitShortLabel()} | Vencimento: ${dueDate ? dueDate.split('-').reverse().join('/') : ''} (${Number(paymentTermDays) === 0 ? 'À Vista' : `${paymentTermDays} dias`})`,
         nfFile,
         nfeKey,
         evidenceFile,
         paymentTerms: Number(paymentTermDays) === 0 ? 'À Vista' : `${paymentTermDays} dias`,
         paymentTermDays: Number(paymentTermDays) || 0,
         dueDate,
+        dailyQuote: Number(dailyQuote) || 0,
+        valorTotalVP: Number(valorTotalVP) || 0,
         freightType,
         carrierName,
         truckPlate,

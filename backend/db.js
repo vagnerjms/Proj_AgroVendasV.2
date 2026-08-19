@@ -40,6 +40,8 @@ const SaleSchema = new mongoose.Schema({
   ],
   feeType: { type: String, default: 'Porcentagem (%)' },
   feeValue: { type: Number, default: 3.0 },
+  dailyQuote: { type: Number, default: 0 },
+  valorTotalVP: { type: Number, default: 0 },
   totalVolumes: { type: Number, default: 0 },
   totalKg: { type: Number, default: 0 },
   totalOperation: { type: Number, default: 0 },

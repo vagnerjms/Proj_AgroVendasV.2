@@ -23,12 +23,14 @@ router.get('/', async (req, res) => {
     const pendingNfs = allSales.filter(s => s.nfPending || !s.nfFile).length;
 
     const getSaleCommercialValue = (s) => {
+      if (Number(s.valorTotalVP) > 0) return Number(s.valorTotalVP);
       const caixas = s.totalVolumes || (s.totalKg > 0 ? (s.totalKg / 29) : 0);
-      let cotacao = 45.0;
-      if (s.notes) {
+      let cotacao = Number(s.dailyQuote) || 0;
+      if (!cotacao && s.notes) {
         const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
         if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
       }
+      if (!cotacao) cotacao = 45.0;
       const valorVP = caixas * cotacao;
       return valorVP > 0 ? valorVP : (Number(s.totalOperation) || 0);
     };

@@ -54,12 +54,14 @@ router.get('/stores-summary', async (req, res) => {
         cxsVendidas += s.totalVolumes || 0;
 
         const caixas = s.totalVolumes || (s.totalKg > 0 ? (s.totalKg / 29) : 0);
-        let cotacao = 45.0;
-        if (s.notes) {
+        let cotacao = Number(s.dailyQuote) || 0;
+        if (!cotacao && s.notes) {
           const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
           if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
         }
-        const valorVP = caixas * cotacao;
+        if (!cotacao) cotacao = 45.0;
+
+        const valorVP = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : (caixas * cotacao);
         totalVendaAReceber += valorVP;
 
         const nfNumber = s.nfFile ? s.nfFile.replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');

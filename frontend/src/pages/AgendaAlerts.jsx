@@ -105,13 +105,15 @@ export default function AgendaAlerts({ setCurrentPage }) {
     const nfNumber = s.nfFile ? s.nfFile.replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
     
     // Extract Cotação and VP Value
-    let cotacao = 45.0;
-    if (s.notes) {
+    let cotacao = Number(s.dailyQuote) || 0;
+    if (!cotacao && s.notes) {
       const m = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
       if (m) cotacao = parseFloat(m[1].replace(',', '.'));
     }
+    if (!cotacao) cotacao = 45.0;
+
     const caixas = s.totalVolumes || (s.totalKg > 0 ? (s.totalKg / 29) : 0);
-    const valorVP = caixas * cotacao;
+    const valorVP = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : (caixas * cotacao);
     const valorLiquidoNF = Math.max(0, (s.totalOperation || 0) - (s.funruralTotal || 0));
 
     return {

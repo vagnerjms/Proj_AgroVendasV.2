@@ -1,5 +1,5 @@
 {
-  "name": "AgroVenda V2 - Backup Automático para o Google Drive",
+  "name": "AgroVenda V2 - Backup Google Drive (Anti-Duplicação / Sobrescrita Inteligente)",
   "nodes": [
     {
       "parameters": {
@@ -16,7 +16,7 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        0,
+        -100,
         0
       ],
       "id": "10000001-backup-4000-8000-000000000001",
@@ -36,7 +36,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        240,
+        120,
         0
       ],
       "id": "10000002-backup-4000-8000-000000000002",
@@ -44,22 +44,105 @@
     },
     {
       "parameters": {
-        "jsCode": "const now = new Date();\nconst pad = (n) => String(n).padStart(2, '0');\nconst dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}`;\nconst fileName = `backup_agrovenda_${dateStr}.json`;\n\nconst contentStr = JSON.stringify($input.first().json, null, 2);\nconst binaryData = Buffer.from(contentStr, 'utf8').toString('base64');\n\nreturn [{\n  json: {\n    fileName,\n    exportedAt: now.toISOString(),\n    stats: $input.first().json.stats || {}\n  },\n  binary: {\n    data: {\n      data: binaryData,\n      mimeType: 'application/json',\n      fileName: fileName,\n      fileExtension: 'json'\n    }\n  }\n}];"
+        "jsCode": "const now = new Date();\nconst pad = (n) => String(n).padStart(2, '0');\nconst dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;\nconst fileName = `backup_agrovenda_${dateStr}.json`;\n\nconst contentStr = JSON.stringify($input.first().json, null, 2);\nconst binaryData = Buffer.from(contentStr, 'utf8').toString('base64');\n\nreturn [{\n  json: {\n    fileName,\n    dateStr,\n    folderId: '1eUU4Vhg325_NtF19i_4tCQwVVOXFefeq',\n    stats: $input.first().json.stats || {}\n  },\n  binary: {\n    data: {\n      data: binaryData,\n      mimeType: 'application/json',\n      fileName: fileName,\n      fileExtension: 'json'\n    }\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        480,
+        340,
         0
       ],
       "id": "10000003-backup-4000-8000-000000000003",
-      "name": "Gerar Pacote de Backup"
+      "name": "Gerar Arquivo do Dia (1 por Dia)"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "options": {
+          "queryString": "='1eUU4Vhg325_NtF19i_4tCQwVVOXFefeq' in parents and name = '\" + $json.fileName + \"' and trashed = false"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        560,
+        0
+      ],
+      "id": "10000004-backup-4000-8000-000000000004",
+      "name": "Verificar se Backup de Hoje Já Existe",
+      "credentials": {
+        "googleDriveOAuth2": {
+          "id": "Google Drive account",
+          "name": "Google Drive account"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-file-exists",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        780,
+        0
+      ],
+      "id": "10000005-backup-4000-8000-000000000005",
+      "name": "Backup de Hoje Já Existe?"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "fileContent": "data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1020,
+        -100
+      ],
+      "id": "10000006-backup-4000-8000-000000000006",
+      "name": "Atualizar Arquivo Existente (Sem Duplicar)",
+      "credentials": {
+        "googleDriveOAuth2": {
+          "id": "Google Drive account",
+          "name": "Google Drive account"
+        }
+      }
     },
     {
       "parameters": {
         "fileContent": "data",
         "options": {
-          "fileName": "={{ $json.fileName }}",
+          "fileName": "={{ $('Gerar Arquivo do Dia (1 por Dia)').item.json.fileName }}",
           "folderId": {
             "__rl": true,
             "value": "1eUU4Vhg325_NtF19i_4tCQwVVOXFefeq",
@@ -70,11 +153,11 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        720,
-        0
+        1020,
+        100
       ],
-      "id": "10000004-backup-4000-8000-000000000004",
-      "name": "Enviar Backup para Google Drive",
+      "id": "10000007-backup-4000-8000-000000000007",
+      "name": "Criar Novo Arquivo do Dia",
       "credentials": {
         "googleDriveOAuth2": {
           "id": "Google Drive account",
@@ -99,18 +182,47 @@
       "main": [
         [
           {
-            "node": "Gerar Pacote de Backup",
+            "node": "Gerar Arquivo do Dia (1 por Dia)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Gerar Pacote de Backup": {
+    "Gerar Arquivo do Dia (1 por Dia)": {
       "main": [
         [
           {
-            "node": "Enviar Backup para Google Drive",
+            "node": "Verificar se Backup de Hoje Já Existe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar se Backup de Hoje Já Existe": {
+      "main": [
+        [
+          {
+            "node": "Backup de Hoje Já Existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backup de Hoje Já Existe?": {
+      "main": [
+        [
+          {
+            "node": "Atualizar Arquivo Existente (Sem Duplicar)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Criar Novo Arquivo do Dia",
             "type": "main",
             "index": 0
           }

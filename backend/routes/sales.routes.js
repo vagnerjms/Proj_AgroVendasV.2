@@ -114,6 +114,16 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   const body = req.body;
   try {
+    // 1. Prevent duplicate XML/SEFAZ import by 44-digit nfeKey
+    if (body.nfeKey && body.nfeKey.trim().length >= 10) {
+      const existingKey = await Sale.findOne({ nfeKey: body.nfeKey.trim() }).lean();
+      if (existingKey) {
+        return res.status(409).json({ 
+          error: `Esta NF-e (Chave SEFAZ: ${body.nfeKey}) já foi importada e está vinculada à Venda ${existingKey.id} (${existingKey.client}).` 
+        });
+      }
+    }
+
     const seq = await getNextSequence('sale_vp_id', Sale, 'VP');
     const newId = `VP${String(seq).padStart(3, '0')}`;
 
@@ -253,8 +263,32 @@ router.put('/:id', async (req, res) => {
       { new: true }
     );
 
-    // Disparar Webhook para o n8n
+    // Cascade update to matching Weighing Slip (ROM-VPXXX)
     if (updated) {
+      try {
+        const slipUpdate = {};
+        if (body.client) slipUpdate.client = body.client;
+        if (body.truckPlate) slipUpdate.truckPlate = body.truckPlate;
+        if (body.driverName || body.origin) slipUpdate.driverName = body.driverName || body.origin;
+        if (body.saleDate) slipUpdate.date = body.saleDate;
+        if (body.items?.[0]?.product) slipUpdate.product = body.items[0].product;
+        if (body.totalKg !== undefined) {
+          const kg = Number(body.totalKg) || 0;
+          slipUpdate.originWeightKg = kg;
+          slipUpdate.destWeightKg = kg;
+          slipUpdate.netWeightKg = kg;
+        }
+        if (Object.keys(slipUpdate).length > 0) {
+          await WeighingSlip.findOneAndUpdate(
+            { $or: [{ saleId: updated.id }, { id: `ROM-${updated.id}` }] },
+            slipUpdate
+          );
+        }
+      } catch (slipSyncErr) {
+        console.warn('Aviso: erro ao sincronizar edição no romaneio vinculado:', slipSyncErr.message);
+      }
+
+      // Disparar Webhook para o n8n
       sendSaleWebhook('sale.updated', updated);
     }
 

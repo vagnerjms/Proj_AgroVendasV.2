@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { WeighingSlip } = require('../db');
+const { WeighingSlip, Sale } = require('../db');
+const { escapeRegex } = require('../utils/security');
 
 // GET /api/weighings
 router.get('/', async (req, res) => {
@@ -10,16 +11,18 @@ router.get('/', async (req, res) => {
     if (status && status !== 'all') {
       filter.status = status;
     }
-    if (search) {
-      const regex = new RegExp(search, 'i');
+    if (search && search.trim()) {
+      const escaped = escapeRegex(search);
+      const regex = new RegExp(escaped, 'i');
       filter.$or = [
         { id: regex },
+        { saleId: regex },
         { client: regex },
         { truckPlate: regex },
         { driverName: regex }
       ];
     }
-    const slips = await WeighingSlip.find(filter).sort({ date: -1 });
+    const slips = await WeighingSlip.find(filter).sort({ date: -1 }).lean();
     res.json(slips);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar romaneios' });
@@ -141,6 +144,18 @@ router.put('/:id/resolve', async (req, res) => {
     slip.resolutionNotes = resolutionNotes || 'Divergência tratada e compensada financeiramente.';
     slip.resolvedAt = new Date();
     await slip.save();
+
+    // Reconcile linked Sale isDivergent flag if resolved
+    if (slip.saleId) {
+      try {
+        await Sale.findOneAndUpdate(
+          { $or: [{ id: slip.saleId }, { id: slip.id.replace('ROM-', '') }] },
+          { isDivergent: false }
+        );
+      } catch (saleSyncErr) {
+        console.warn('Aviso: erro ao sincronizar reconciliação na venda:', saleSyncErr.message);
+      }
+    }
 
     res.json({ success: true, slip });
   } catch (err) {

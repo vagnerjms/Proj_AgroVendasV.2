@@ -53,23 +53,32 @@ router.get('/export', async (req, res) => {
       User.find().lean()
     ]);
 
+    // Identificar apenas arquivos vinculados a vendas reais cadastradas no banco
+    const activeFilenames = new Set();
+    sales.forEach(s => {
+      if (s.nfFile) activeFilenames.add(s.nfFile);
+      if (s.evidenceFile) activeFilenames.add(s.evidenceFile);
+    });
+
     const files = [];
     if (fs.existsSync(uploadDir)) {
       const fileList = fs.readdirSync(uploadDir);
       fileList.forEach(filename => {
-        try {
-          const filePath = path.join(uploadDir, filename);
-          const stat = fs.statSync(filePath);
-          if (stat.isFile()) {
-            const dataBuffer = fs.readFileSync(filePath);
-            files.push({
-              filename: filename,
-              sizeBytes: stat.size,
-              contentBase64: dataBuffer.toString('base64')
-            });
+        if (activeFilenames.has(filename)) {
+          try {
+            const filePath = path.join(uploadDir, filename);
+            const stat = fs.statSync(filePath);
+            if (stat.isFile()) {
+              const dataBuffer = fs.readFileSync(filePath);
+              files.push({
+                filename: filename,
+                sizeBytes: stat.size,
+                contentBase64: dataBuffer.toString('base64')
+              });
+            }
+          } catch (e) {
+            console.error(`Erro ao ler arquivo ${filename} para backup:`, e);
           }
-        } catch (e) {
-          console.error(`Erro ao ler arquivo ${filename} para backup:`, e);
         }
       });
     }

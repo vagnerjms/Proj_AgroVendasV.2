@@ -23,8 +23,17 @@ function parseDueDate(sale) {
 async function sendSaleWebhook(event, sale) {
   try {
     const dueDate = parseDueDate(sale);
-    const totalOp = Number(sale.totalOperation) || 0;
     const clientName = sale.client || 'Cliente Geral';
+
+    const caixas = sale.totalVolumes || (sale.totalKg > 0 ? (sale.totalKg / 29) : 0);
+    let cotacao = 45.0;
+    if (sale.notes) {
+      const matchCot = sale.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
+      if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
+    }
+    const valorVP = caixas * cotacao;
+    const valorFinal = valorVP > 0 ? valorVP : (Number(sale.totalOperation) || 0);
+    const volumesInt = Math.round(caixas);
 
     const payload = {
       event, // 'sale.created', 'sale.updated', 'sale.settled'
@@ -32,18 +41,19 @@ async function sendSaleWebhook(event, sale) {
       client: clientName,
       saleDate: sale.saleDate,
       dueDate: dueDate,
-      totalOperation: totalOp,
-      totalVolumes: sale.totalVolumes || 0,
+      totalOperation: Number(sale.totalOperation) || 0,
+      valorVP: valorFinal,
+      totalVolumes: volumesInt,
       totalKg: sale.totalKg || 0,
       status: sale.status || 'Pendente',
       paymentStatus: sale.paymentStatus || 'A Receber',
       origin: sale.origin || '',
       nfNumber: sale.nfFile ? sale.nfFile.replace('NF-', '').replace('.pdf', '') : (sale.nfeKey ? sale.nfeKey.slice(-8) : 'Pendente'),
       calendar: {
-        summary: `💰 ${clientName.split(' ')[0]} · R$ ${totalOp.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${sale.id})`,
+        summary: `💰 ${clientName.split(' ')[0]} · R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${sale.id})`,
         start: `${dueDate}T09:00:00-03:00`,
         end: `${dueDate}T10:00:00-03:00`,
-        description: `🏪 Comprador: ${clientName}\n💰 Valor Comercial: R$ ${totalOp.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📦 Volumes: ${sale.totalVolumes || 0} cx\n📄 Nota Fiscal: ${sale.nfFile || 'Pendente'}\n📌 Status: ${sale.status}\n🌱 Origem: ${sale.origin || 'AgroVenda'}`
+        description: `🏪 Comprador: ${clientName}\n📅 Vencimento: ${dueDate.split('-').reverse().join('/')}\n💰 Valor a Receber: R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📦 Volumes: ${volumesInt} cx\n📄 Nota Fiscal: ${sale.nfFile || 'Pendente'}\n📌 Status: ${sale.status}\n🌱 Origem: ${sale.origin || 'AgroVenda'}`
       }
     };
 

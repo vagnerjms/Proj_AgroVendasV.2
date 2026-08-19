@@ -60,21 +60,31 @@ router.get('/agenda-events', async (req, res) => {
       }
       if (!dueDate) dueDate = new Date().toISOString().split('T')[0];
 
+      const caixas = s.totalVolumes || (s.totalKg > 0 ? (s.totalKg / 29) : 0);
+      let cotacao = 45.0;
+      if (s.notes) {
+        const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
+        if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
+      }
+      const valorVP = caixas * cotacao;
+      const valorFinal = valorVP > 0 ? valorVP : (Number(s.totalOperation) || 0);
+
       const clientShort = s.client ? s.client.split(' ')[0] : 'Cliente';
-      const totalOp = Number(s.totalOperation) || 0;
+      const volumesInt = Math.round(caixas);
 
       return {
         id: s.id,
         client: s.client,
         saleDate: s.saleDate,
         dueDate: dueDate,
-        totalOperation: totalOp,
+        totalOperation: Number(s.totalOperation) || 0,
+        valorVP: valorFinal,
         status: s.status,
         paymentStatus: s.paymentStatus,
-        summary: `💰 ${clientShort} · R$ ${totalOp.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${s.id})`,
+        summary: `💰 ${clientShort} · R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${s.id})`,
         start: `${dueDate}T09:00:00-03:00`,
         end: `${dueDate}T10:00:00-03:00`,
-        description: `🏪 Comprador: ${s.client}\n📅 Vencimento: ${dueDate.split('-').reverse().join('/')}\n💰 Valor a Receber: R$ ${totalOp.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📦 Volumes: ${s.totalVolumes || 0} cx\n📄 Nota Fiscal: ${s.nfFile || 'Pendente'}\n📌 Status: ${s.paymentStatus || 'A Receber'}`
+        description: `🏪 Comprador: ${s.client}\n📅 Vencimento: ${dueDate.split('-').reverse().join('/')}\n💰 Valor a Receber: R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📦 Volumes: ${volumesInt} cx\n📄 Nota Fiscal: ${s.nfFile || 'Pendente'}\n📌 Status: ${s.paymentStatus || 'A Receber'}`
       };
     });
 

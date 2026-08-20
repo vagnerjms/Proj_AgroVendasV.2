@@ -1,5 +1,5 @@
 {
-  "name": "AgroVenda V2 - Backup de Todas as Notas Fiscais e Arquivos no Google Drive",
+  "name": "AgroVenda V2 - Backup Google Drive Oficial (Sem Duplicação e PDFs Válidos)",
   "nodes": [
     {
       "parameters": {},
@@ -51,11 +51,11 @@
         -80
       ],
       "id": "10000002-backup-4000-8000-000000000002",
-      "name": "Buscar NFs e Banco do AgroVenda"
+      "name": "Buscar Dados AgroVenda"
     },
     {
       "parameters": {
-        "jsCode": "const exportData = $input.first().json;\nconst files = exportData.files || [];\nconst results = [];\n\n// 1. Adicionar cada Nota Fiscal / Arquivo PDF ou XML individual\nfor (const f of files) {\n  const mimeType = f.filename.endsWith('.pdf') ? 'application/pdf' :\n                   (f.filename.endsWith('.xml') ? 'application/xml' :\n                   (f.filename.endsWith('.png') ? 'image/png' :\n                   (f.filename.endsWith('.jpg') || f.filename.endsWith('.jpeg') ? 'image/jpeg' : 'application/octet-stream')));\n\n  results.push({\n    json: {\n      fileName: f.filename,\n      sizeBytes: f.sizeBytes,\n      tipo: 'Nota Fiscal / Documento'\n    },\n    binary: {\n      data: {\n        data: f.contentBase64,\n        mimeType: mimeType,\n        fileName: f.filename\n      }\n    }\n  });\n}\n\n// 2. Adicionar o arquivo consolidado de Dados das Vendas (.json)\nconst now = new Date();\nconst pad = (n) => String(n).padStart(2, '0');\nconst dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;\nconst dbFileName = `dados_completos_vendas_${dateStr}.json`;\nconst contentStr = JSON.stringify(exportData.database || {}, null, 2);\nconst dbBinary = Buffer.from(contentStr, 'utf8').toString('base64');\n\nresults.push({\n  json: {\n    fileName: dbFileName,\n    tipo: 'Banco de Dados'\n  },\n  binary: {\n    data: {\n      data: dbBinary,\n      mimeType: 'application/json',\n      fileName: dbFileName,\n      fileExtension: 'json'\n    }\n  }\n});\n\nreturn results;"
+        "jsCode": "const exportData = $input.first().json;\nconst files = exportData.files || [];\nconst results = [];\n\n// 1. Arquivo de Dados e Vendas Consolidado (JSON formatado)\nconst now = new Date();\nconst pad = (n) => String(n).padStart(2, '0');\nconst dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;\nconst dbFileName = `agrovenda_backup_vendas_${dateStr}.json`;\nconst dbContent = JSON.stringify(exportData.database || {}, null, 2);\n\nresults.push({\n  json: {\n    fileName: dbFileName,\n    tipo: 'Banco de Dados'\n  },\n  binary: {\n    data: await this.helpers.prepareBinaryData(\n      Buffer.from(dbContent, 'utf8'),\n      dbFileName,\n      'application/json'\n    )\n  }\n});\n\n// 2. Apenas se houver arquivos de Notas Fiscais reais (com conteúdo válido)\nfor (const f of files) {\n  if (f.contentBase64 && f.sizeBytes > 100) {\n    const mimeType = f.filename.toLowerCase().endsWith('.pdf') ? 'application/pdf' :\n                     (f.filename.toLowerCase().endsWith('.xml') ? 'application/xml' :\n                     (f.filename.toLowerCase().endsWith('.png') ? 'image/png' :\n                     (f.filename.toLowerCase().endsWith('.jpg') || f.filename.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' : 'application/octet-stream')));\n\n    const fileBuffer = Buffer.from(f.contentBase64, 'base64');\n    \n    results.push({\n      json: {\n        fileName: f.filename,\n        sizeBytes: f.sizeBytes,\n        tipo: 'Nota Fiscal / Documento'\n      },\n      binary: {\n        data: await this.helpers.prepareBinaryData(\n          fileBuffer,\n          f.filename,\n          mimeType\n        )\n      }\n    });\n  }\n}\n\nreturn results;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -64,7 +64,7 @@
         -80
       ],
       "id": "10000003-backup-4000-8000-000000000003",
-      "name": "Extrair Todas as Notas Fiscais (PDFs)"
+      "name": "Preparar Arquivos Binários Válidos"
     },
     {
       "parameters": {
@@ -87,7 +87,7 @@
         -80
       ],
       "id": "10000004-backup-4000-8000-000000000004",
-      "name": "Salvar Cada Arquivo PDF/XML no Google Drive",
+      "name": "Enviar para o Google Drive",
       "credentials": {
         "googleDriveOAuth2": {
           "id": "Google Drive account",
@@ -101,7 +101,7 @@
       "main": [
         [
           {
-            "node": "Buscar NFs e Banco do AgroVenda",
+            "node": "Buscar Dados AgroVenda",
             "type": "main",
             "index": 0
           }
@@ -112,29 +112,29 @@
       "main": [
         [
           {
-            "node": "Buscar NFs e Banco do AgroVenda",
+            "node": "Buscar Dados AgroVenda",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Buscar NFs e Banco do AgroVenda": {
+    "Buscar Dados AgroVenda": {
       "main": [
         [
           {
-            "node": "Extrair Todas as Notas Fiscais (PDFs)",
+            "node": "Preparar Arquivos Binários Válidos",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Extrair Todas as Notas Fiscais (PDFs)": {
+    "Preparar Arquivos Binários Válidos": {
       "main": [
         [
           {
-            "node": "Salvar Cada Arquivo PDF/XML no Google Drive",
+            "node": "Enviar para o Google Drive",
             "type": "main",
             "index": 0
           }

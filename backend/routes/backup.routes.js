@@ -76,14 +76,21 @@ router.get('/export', async (req, res) => {
               if (stat.isFile() && stat.size > 0) {
                 const dataBuffer = fs.readFileSync(filePath);
                 
-                // Nome amigável e limpo para o Google Drive
+                // Nome amigável e padronizado: "VP008 - 28130423 - HANG.pdf"
                 let cleanFileName = diskMatch;
                 if (/^\d+-\d+-/.test(diskMatch)) {
                   cleanFileName = diskMatch.replace(/^\d+-\d+-/, '');
                 }
 
+                // Adicionar o prefixo da VP se ainda não estiver presente
+                let driveFileName = cleanFileName;
+                if (!driveFileName.toUpperCase().startsWith(s.id.toUpperCase())) {
+                  driveFileName = `${s.id} - ${cleanFileName}`;
+                }
+
                 files.push({
-                  filename: cleanFileName,
+                  filename: driveFileName,
+                  saleId: s.id,
                   sizeBytes: stat.size,
                   contentBase64: dataBuffer.toString('base64')
                 });

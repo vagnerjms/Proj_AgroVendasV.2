@@ -102,6 +102,30 @@ router.get('/export', async (req, res) => {
           }
         }
       }
+
+      // Loop 2: Exportar qualquer arquivo adicional existente no disco para garantir 100% de cobertura
+      for (const df of diskFiles) {
+        if (!addedDiskFiles.has(df)) {
+          try {
+            const filePath = path.join(uploadDir, df);
+            const stat = fs.statSync(filePath);
+            if (stat.isFile() && stat.size > 0) {
+              const dataBuffer = fs.readFileSync(filePath);
+              let cleanFileName = df;
+              if (/^\d+-\d+-/.test(df)) {
+                cleanFileName = df.replace(/^\d+-\d+-/, '');
+              }
+              files.push({
+                filename: cleanFileName,
+                saleId: '',
+                sizeBytes: stat.size,
+                contentBase64: dataBuffer.toString('base64')
+              });
+              addedDiskFiles.add(df);
+            }
+          } catch (e) {}
+        }
+      }
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

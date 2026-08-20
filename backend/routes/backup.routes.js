@@ -16,14 +16,24 @@ router.get('/stats', async (req, res) => {
 
     let totalUploadsSize = 0;
     let filesCount = 0;
+    let diskFiles = [];
     if (fs.existsSync(uploadDir)) {
-      const files = fs.readdirSync(uploadDir);
-      filesCount = files.length;
-      files.forEach(f => {
-        const stat = fs.statSync(path.join(uploadDir, f));
-        totalUploadsSize += stat.size;
+      diskFiles = fs.readdirSync(uploadDir);
+      filesCount = diskFiles.length;
+      diskFiles.forEach(f => {
+        try {
+          const stat = fs.statSync(path.join(uploadDir, f));
+          totalUploadsSize += stat.size;
+        } catch (e) {}
       });
     }
+
+    const salesWithFiles = await Sale.find({
+      $or: [
+        { nfFile: { $exists: true, $ne: null, $ne: '' } },
+        { evidenceFile: { $exists: true, $ne: null, $ne: '' } }
+      ]
+    }, { id: 1, client: 1, nfFile: 1, evidenceFile: 1 }).lean();
 
     res.json({
       salesCount,
@@ -33,7 +43,9 @@ router.get('/stats', async (req, res) => {
       slipsCount,
       filesCount,
       totalUploadsSizeBytes: totalUploadsSize,
-      totalUploadsSizeMB: (totalUploadsSize / (1024 * 1024)).toFixed(2)
+      totalUploadsSizeMB: (totalUploadsSize / (1024 * 1024)).toFixed(2),
+      diskFiles,
+      salesWithFiles
     });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao obter estatísticas de backup' });

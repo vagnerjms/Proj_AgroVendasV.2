@@ -53,34 +53,48 @@ router.get('/export', async (req, res) => {
       User.find().lean()
     ]);
 
-    // Identificar apenas arquivos vinculados a vendas reais cadastradas no banco
-    const activeFilenames = new Set();
-    sales.forEach(s => {
-      if (s.nfFile) activeFilenames.add(s.nfFile);
-      if (s.evidenceFile) activeFilenames.add(s.evidenceFile);
-    });
-
     const files = [];
     if (fs.existsSync(uploadDir)) {
-      const fileList = fs.readdirSync(uploadDir);
-      fileList.forEach(filename => {
-        if (activeFilenames.has(filename)) {
-          try {
-            const filePath = path.join(uploadDir, filename);
-            const stat = fs.statSync(filePath);
-            if (stat.isFile()) {
-              const dataBuffer = fs.readFileSync(filePath);
-              files.push({
-                filename: filename,
-                sizeBytes: stat.size,
-                contentBase64: dataBuffer.toString('base64')
-              });
+      const diskFiles = fs.readdirSync(uploadDir);
+      const addedDiskFiles = new Set();
+
+      for (const s of sales) {
+        const targets = [s.nfFile, s.evidenceFile].filter(Boolean);
+        for (const target of targets) {
+          // Localizar arquivo no disco por correspondência exata, sufixo ou nome original
+          const diskMatch = diskFiles.find(df => 
+            df === target || 
+            df.endsWith(target) || 
+            (target.includes('.') && df.includes(target)) ||
+            (target.replace('NF-', '') && df.includes(target.replace('NF-', '').replace('.pdf', '')))
+          );
+
+          if (diskMatch && !addedDiskFiles.has(diskMatch)) {
+            try {
+              const filePath = path.join(uploadDir, diskMatch);
+              const stat = fs.statSync(filePath);
+              if (stat.isFile() && stat.size > 0) {
+                const dataBuffer = fs.readFileSync(filePath);
+                
+                // Nome amigável e limpo para o Google Drive
+                let cleanFileName = diskMatch;
+                if (/^\d+-\d+-/.test(diskMatch)) {
+                  cleanFileName = diskMatch.replace(/^\d+-\d+-/, '');
+                }
+
+                files.push({
+                  filename: cleanFileName,
+                  sizeBytes: stat.size,
+                  contentBase64: dataBuffer.toString('base64')
+                });
+                addedDiskFiles.add(diskMatch);
+              }
+            } catch (e) {
+              console.error(`Erro ao ler arquivo ${diskMatch} para backup:`, e);
             }
-          } catch (e) {
-            console.error(`Erro ao ler arquivo ${filename} para backup:`, e);
           }
         }
-      });
+      }
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

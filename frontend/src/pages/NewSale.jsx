@@ -377,11 +377,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
 
       const data = await res.json();
       setNfeKey(data.nfeKey || '');
-      if (data.nfeNumber) {
-        setNfFile(`NF-${data.nfeNumber}.pdf`);
-      } else {
-        setNfFile(file.name);
-      }
+      setNfFile(data.filename || file.name);
       if (data.saleDate) setSaleDate(data.saleDate);
 
       if (data.dest?.name) {

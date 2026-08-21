@@ -16,9 +16,14 @@ import {
   Wallet,
   Calendar,
   Filter,
-  X
+  X,
+  CloudUpload,
+  FileDown,
+  Settings,
+  AlertTriangle
 } from 'lucide-react';
 import { formatCurrency, formatNumber } from '../utils/formatters';
+import { api } from '../services/api';
 
 export default function Reports({ setCurrentPage }) {
   const [activeTab, setActiveTab] = useState('geral'); // 'geral' | 'comissoes'
@@ -29,6 +34,223 @@ export default function Reports({ setCurrentPage }) {
   const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState({ stores: [], totalGeral: {} });
   const [expandedLojas, setExpandedLojas] = useState({});
+
+  // Integração com Google Drive / n8n Webhook
+  const [savingDrive, setSavingDrive] = useState(false);
+  const [driveNotification, setDriveNotification] = useState('');
+  const [driveError, setDriveError] = useState('');
+  const [showWebhookModal, setShowWebhookModal] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState(() => localStorage.getItem('agrovenda_n8n_drive_webhook') || '');
+
+  const saveWebhookConfig = (e) => {
+    e.preventDefault();
+    localStorage.setItem('agrovenda_n8n_drive_webhook', webhookUrl);
+    setShowWebhookModal(false);
+    setDriveNotification('URL do Webhook do n8n salva com sucesso!');
+    setTimeout(() => setDriveNotification(''), 4000);
+  };
+
+  const handleTriggerDrive = async () => {
+    const activeUrl = webhookUrl || localStorage.getItem('agrovenda_n8n_drive_webhook');
+    if (!activeUrl) {
+      setShowWebhookModal(true);
+      return;
+    }
+
+    setSavingDrive(true);
+    setDriveNotification('');
+    setDriveError('');
+    try {
+      const res = await api.post('/api/reports/trigger-n8n', {
+        webhookUrl: activeUrl,
+        startDate: startDate || null,
+        endDate: endDate || null,
+        selectedLoja: selectedLoja,
+        activeTab: activeTab
+      });
+
+      if (res.success) {
+        setDriveNotification('✅ Relatório enviado e processado com sucesso pelo n8n no Google Drive!');
+      } else {
+        setDriveError(res.message || 'Erro ao processar no n8n.');
+      }
+    } catch (err) {
+      console.error(err);
+      setDriveError(err.message || 'Falha ao conectar com o n8n. Verifique se o n8n está rodando.');
+    } finally {
+      setSavingDrive(false);
+      setTimeout(() => {
+        setDriveNotification('');
+        setDriveError('');
+      }, 6000);
+    }
+  };
+
+  // Download direto do Excel no navegador
+  const handleDownloadExcelDirect = () => {
+    const stores = filteredStores;
+    const total = currentTotal;
+    const hojeFormatado = new Date().toLocaleDateString('pt-BR');
+    const formatMoeda = (v) => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatNum = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    let excelContent = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #000; }
+          .titulo { font-size: 16pt; font-weight: bold; color: #091b2e; }
+          .card-label { font-size: 9pt; font-weight: bold; color: #555; background-color: #f1f5f9; text-align: center; border: 1px solid #cbd5e1; }
+          .card-valor { font-size: 13pt; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; }
+          table { border-collapse: collapse; width: 100%; margin-top: 15px; }
+          th { background-color: #091b2e; color: #ffffff; font-weight: bold; border: 1px solid #091b2e; padding: 6px 10px; text-align: center; }
+          td { border: 1px solid #e2e8f0; padding: 5px 8px; font-size: 10pt; }
+          .texto-loja { font-weight: bold; text-align: left; }
+          .num-centro { text-align: center; }
+          .num-direita { text-align: right; }
+          .funrural { text-align: right; color: #b91c1c; font-weight: 500; }
+          .destaque-vp { font-weight: bold; color: #1e3a8a; background-color: #f0f9ff; text-align: right; }
+          .linha-total { background-color: #bfe2a5; font-weight: bold; border-top: 2px solid #166534; }
+          .loja-header { background-color: #173e27; color: #ffffff; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <tr><td colspan="11" class="titulo">🌾 AGROVENDA — RELATÓRIOS E FECHAMENTOS CONSOLIDADOS</td></tr>
+          <tr><td colspan="11" style="color: #555;">Gerado em: ${hojeFormatado} | Período: ${startDate || 'Início'} até ${endDate || 'Atual'}</td></tr>
+        </table>
+        <br/>
+        <table>
+          <tr>
+            <td colspan="2" class="card-label">TOTAL FATURADO (NF)</td>
+            <td colspan="3" class="card-label">TOTAL COMERCIAL (VP)</td>
+            <td colspan="3" class="card-label">(-) FUNRURAL (1,63%)</td>
+            <td colspan="3" class="card-label">(=) LÍQUIDO PRODUTOR</td>
+          </tr>
+          <tr>
+            <td colspan="2" class="card-valor" style="color: #091b2e;">${formatMoeda(total.valorTotalNF)}</td>
+            <td colspan="3" class="card-valor" style="color: #1e3a8a;">${formatMoeda(total.totalVendaAReceber)}</td>
+            <td colspan="3" class="card-valor" style="color: #dc2626;">-${formatMoeda(total.funrural)}</td>
+            <td colspan="3" class="card-valor" style="color: #15803d;">${formatMoeda(total.totalLiquidoProdutor)}</td>
+          </tr>
+        </table>
+        <br/>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 250px;">Loja / Comprador</th>
+              <th>NFs</th>
+              <th>Pedidos Venda</th>
+              <th>Sem NF</th>
+              <th>Peso NF (kg)</th>
+              <th>Peso Colheita (kg)</th>
+              <th>CXS (29kg)</th>
+              <th>Valor Total NF (R$)</th>
+              <th>FUNRURAL (R$)</th>
+              <th style="background-color: #1e40af;">Total Comercial VP (R$)</th>
+              <th style="background-color: #14532d;">Líquido NF (R$)</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    for (const s of stores) {
+      excelContent += `
+        <tr>
+          <td class="texto-loja">${s.loja}</td>
+          <td class="num-centro">${s.nfs}</td>
+          <td class="num-centro"><b>${s.pedidosVenda}</b></td>
+          <td class="num-centro">${s.pedidosSemNF || 0}</td>
+          <td class="num-direita">${formatNum(s.pesoNF)}</td>
+          <td class="num-direita">${formatNum(s.pesoColheita || s.pesoNF)}</td>
+          <td class="num-direita">${formatNum(s.cxsVendidas)}</td>
+          <td class="num-direita"><b>${formatMoeda(s.valorTotalNF)}</b></td>
+          <td class="funrural">-${formatMoeda(s.funrural)}</td>
+          <td class="destaque-vp">${formatMoeda(s.totalVendaAReceber)}</td>
+          <td class="num-direita">${formatMoeda(s.liquidoNF || (s.valorTotalNF - s.funrural))}</td>
+        </tr>
+      `;
+    }
+
+    excelContent += `
+        <tr class="linha-total">
+          <td class="texto-loja">TOTAL GERAL</td>
+          <td class="num-centro">${total.nfs}</td>
+          <td class="num-centro">${total.pedidosVenda}</td>
+          <td class="num-centro">${total.pedidosSemNF || 0}</td>
+          <td class="num-direita">${formatNum(total.pesoNF)}</td>
+          <td class="num-direita">${formatNum(total.pesoColheita || total.pesoNF)}</td>
+          <td class="num-direita">${formatNum(total.cxsVendidas)}</td>
+          <td class="num-direita">${formatMoeda(total.valorTotalNF)}</td>
+          <td class="funrural" style="font-weight: bold;">-${formatMoeda(total.funrural)}</td>
+          <td class="destaque-vp" style="background-color: #83c457;">${formatMoeda(total.totalVendaAReceber)}</td>
+          <td class="num-direita" style="background-color: #aedb8e; font-weight: bold;">${formatMoeda(total.liquidoNF || (total.valorTotalNF - total.funrural))}</td>
+        </tr>
+        </tbody>
+      </table>
+      <br/><br/>
+      <table>
+        <tr><td colspan="11" style="font-size: 12pt; font-weight: bold; background-color: #e2e8f0;">DETALHAMENTO INDIVIDUAL DAS VENDAS POR LOJA (VPs)</td></tr>
+      </table>
+    `;
+
+    for (const s of stores) {
+      excelContent += `
+        <br/>
+        <table>
+          <tr class="loja-header">
+            <td colspan="5">Loja: ${s.loja} (${s.pedidosVenda} VPs)</td>
+            <td colspan="3" style="text-align: right;">Total NF: ${formatMoeda(s.valorTotalNF)}</td>
+            <td colspan="3" style="text-align: right;">Total VP: ${formatMoeda(s.totalVendaAReceber)}</td>
+          </tr>
+          <tr style="background-color: #f8fafc; font-weight: bold; font-size: 9pt; text-align: center;">
+            <td>Nº VP</td>
+            <td>Data</td>
+            <td>Nº NF</td>
+            <td>Peso NF (kg)</td>
+            <td>Caixas</td>
+            <td>Preço/Kg</td>
+            <td>Valor NF</td>
+            <td>FUNRURAL</td>
+            <td>Cotação</td>
+            <td>Valor VP</td>
+            <td>Vencimento</td>
+          </tr>
+      `;
+
+      for (const item of (s.itens || [])) {
+        excelContent += `
+          <tr>
+            <td class="num-centro"><b>${item.vp}</b></td>
+            <td class="num-centro">${item.dataVP || '-'}</td>
+            <td class="num-centro">${item.nf || 'Pendente'}</td>
+            <td class="num-direita">${formatNum(item.pesoNF)} kg</td>
+            <td class="num-direita">${formatNum(item.cxs)} cx</td>
+            <td class="num-direita">${formatMoeda(item.precoKg)}</td>
+            <td class="num-direita">${formatMoeda(item.valorNF)}</td>
+            <td class="funrural">-${formatMoeda(item.funrural)}</td>
+            <td class="num-centro">${formatMoeda(item.cotacao)}</td>
+            <td class="destaque-vp">${formatMoeda(item.valorVP)}</td>
+            <td class="num-centro">${item.venc || '-'}</td>
+          </tr>
+        `;
+      }
+      excelContent += `</table>`;
+    }
+
+    excelContent += `</body></html>`;
+
+    const blob = new Blob([excelContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Relatorio_AgroVenda_Fechamento_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   const fetchLiveReport = async (sDate = startDate, eDate = endDate) => {
     const finalStart = (typeof sDate === 'string') ? sDate : (typeof startDate === 'string' ? startDate : '');
@@ -188,7 +410,7 @@ export default function Reports({ setCurrentPage }) {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
           <select
             value={selectedLoja}
             onChange={(e) => setSelectedLoja(e.target.value)}
@@ -209,6 +431,36 @@ export default function Reports({ setCurrentPage }) {
             Atualizar
           </button>
 
+          {/* Botão Baixar Excel Direto */}
+          <button
+            onClick={handleDownloadExcelDirect}
+            className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Baixar planilha formatada para Excel (.xls)"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+            <span>Baixar Excel</span>
+          </button>
+
+          {/* Botão Salvar no Google Drive via n8n */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleTriggerDrive}
+              disabled={savingDrive}
+              className="bg-[#0e3b5e] hover:bg-[#134d7a] disabled:opacity-50 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Disparar fluxo do n8n para salvar planilha formatada no Google Drive"
+            >
+              <CloudUpload className={`w-3.5 h-3.5 ${savingDrive ? 'animate-bounce' : ''}`} />
+              <span>{savingDrive ? 'Enviando ao Drive...' : 'Salvar no Drive'}</span>
+            </button>
+            <button
+              onClick={() => setShowWebhookModal(true)}
+              className="p-2 border border-gray-300 bg-white hover:bg-gray-100 text-gray-600 rounded-lg shadow-sm cursor-pointer"
+              title="Configurar Webhook do n8n"
+            >
+              <Settings className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           <button
             onClick={() => window.print()}
             className="hidden sm:flex bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm items-center gap-2 transition-colors cursor-pointer"
@@ -218,6 +470,89 @@ export default function Reports({ setCurrentPage }) {
           </button>
         </div>
       </div>
+
+      {/* Notificações do Google Drive / n8n */}
+      {driveNotification && (
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 px-4 py-3 rounded-xl flex items-center justify-between text-xs font-bold shadow-xs animate-fadeIn print:hidden">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{driveNotification}</span>
+          </div>
+          <button onClick={() => setDriveNotification('')} className="text-emerald-700 hover:text-emerald-900 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {driveError && (
+        <div className="bg-red-50 border border-red-300 text-red-900 px-4 py-3 rounded-xl flex items-center justify-between text-xs font-bold shadow-xs animate-fadeIn print:hidden">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+            <span>{driveError}</span>
+          </div>
+          <button onClick={() => setDriveError('')} className="text-red-700 hover:text-red-900 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Modal de Configuração do Webhook do n8n */}
+      {showWebhookModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 print:hidden">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2 text-gray-900">
+                <Settings className="w-5 h-5 text-[#df7b1b]" />
+                <h3 className="text-base font-bold">Configurar Webhook do n8n</h3>
+              </div>
+              <button onClick={() => setShowWebhookModal(false)} className="text-gray-400 hover:text-gray-600 p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={saveWebhookConfig} className="space-y-3">
+              <p className="text-xs text-gray-600">
+                Insira a URL do Webhook do seu n8n para que o botão <b>"Salvar no Drive"</b> envie os relatórios automaticamente:
+              </p>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  URL do Webhook do n8n (POST):
+                </label>
+                <input
+                  type="url"
+                  required
+                  placeholder="https://n8n.seusite.com/webhook/salvar-relatorio-drive"
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e] font-mono"
+                />
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-[11px] text-blue-900 space-y-1">
+                <span className="font-bold block">💡 Dica de Integração:</span>
+                <span>O sistema enviará para o n8n o período filtrado, a loja e o usuário solicitante em formato JSON via POST.</span>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowWebhookModal(false)}
+                  className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer transition-all"
+                >
+                  Salvar Configuração
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Barra de Filtro de Período (Oculta na Impressão) */}
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4 print:hidden">

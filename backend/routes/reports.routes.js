@@ -150,4 +150,47 @@ router.get('/stores-summary', async (req, res) => {
   }
 });
 
+// POST /api/reports/trigger-n8n - Dispara webhook do n8n para gerar e salvar no Google Drive
+router.post('/trigger-n8n', requireAuth, async (req, res) => {
+  try {
+    const { webhookUrl, startDate, endDate, selectedLoja, activeTab } = req.body;
+    if (!webhookUrl) {
+      return res.status(400).json({ error: 'URL do Webhook do n8n não informada' });
+    }
+
+    const payload = {
+      triggeredAt: new Date().toISOString(),
+      user: req.user ? req.user.name : 'Administrador',
+      startDate: startDate || null,
+      endDate: endDate || null,
+      selectedLoja: selectedLoja || 'ALL',
+      activeTab: activeTab || 'geral'
+    };
+
+    const fetchModule = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+    // Se global fetch estiver disponível no Node 20+, usa global fetch
+    const fetchFunc = typeof fetch === 'function' ? fetch : fetchModule;
+
+    const response = await fetchFunc(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const resultText = await response.text();
+    let resultJson;
+    try { resultJson = JSON.parse(resultText); } catch(e) { resultJson = { raw: resultText }; }
+
+    res.json({
+      success: response.ok,
+      status: response.status,
+      message: response.ok ? 'Webhook do n8n disparado com sucesso!' : 'Falha na resposta do n8n',
+      response: resultJson
+    });
+  } catch (err) {
+    console.error('Erro ao disparar webhook do n8n:', err);
+    res.status(500).json({ error: `Erro ao conectar com o n8n: ${err.message}` });
+  }
+});
+
 module.exports = router;

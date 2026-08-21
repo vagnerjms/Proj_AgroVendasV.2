@@ -164,27 +164,8 @@ const UserSchema = new mongoose.Schema({
   },
   createdAt: { type: Date, default: Date.now }
 });
-UserSchema.index({ email: 1 });
 
-// --- SCHEMA INDEXES FOR PERFORMANCE & FAST REPORTING ---
-SaleSchema.index({ saleDate: -1 });
-SaleSchema.index({ client: 1 });
-SaleSchema.index({ status: 1 });
-SaleSchema.index({ nfeKey: 1 });
-SaleSchema.index({ dueDate: 1 });
-SaleSchema.index({ paymentStatus: 1 });
-
-WeighingSlipSchema.index({ date: -1 });
-WeighingSlipSchema.index({ saleId: 1 });
-WeighingSlipSchema.index({ client: 1 });
-
-PurchaseSchema.index({ date: -1 });
-PurchaseSchema.index({ producer: 1 });
-
-ClientSchema.index({ name: 1 });
 ClientSchema.index({ document: 1 });
-
-ProductSchema.index({ name: 1 });
 
 const Sale = mongoose.model('Sale', SaleSchema);
 const WeighingSlip = mongoose.model('WeighingSlip', WeighingSlipSchema);

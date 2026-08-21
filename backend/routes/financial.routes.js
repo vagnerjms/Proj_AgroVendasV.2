@@ -31,7 +31,13 @@ router.get('/', async (req, res) => {
     for (const s of sales) {
       const valorNF = roundMoney(s.totalOperation);
       const caixas = Number(s.totalVolumes) || (Number(s.totalKg) > 0 ? (Number(s.totalKg) / 29) : 0);
-      let cotacao = Number(s.dailyQuote) || 45.0;
+      let cotacao = Number(s.dailyQuote) || 0;
+      if (!cotacao && s.notes) {
+        const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
+        if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
+      }
+      if (!cotacao) cotacao = 45.0;
+
       const valorVP = Number(s.valorTotalVP) > 0 ? roundMoney(s.valorTotalVP) : roundMoney(caixas * cotacao);
       const isAReceber = s.paymentStatus === 'A Receber' || !s.paymentStatus;
 

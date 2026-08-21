@@ -27,6 +27,7 @@ app.use('/api/clients', require('./routes/clients.routes'));
 app.use('/api/products', require('./routes/products.routes'));
 app.use('/api/purchases', require('./routes/purchases.routes'));
 app.use('/api/reports', require('./routes/reports.routes'));
+app.use('/api/financial', require('./routes/financial.routes'));
 app.use('/api/backup', require('./routes/backup.routes'));
 
 // Health Check & Database Status Endpoint

@@ -82,14 +82,19 @@ router.get('/', async (req, res) => {
       }
     }
 
+    const liquidoNF = roundMoney(totalAReceberNF - totalFunrural);
+
     res.json({
-      totalAReceber: totalAReceberNF, // R$ 1.054.406,28
+      totalAReceber: totalAReceberNF, // R$ 1.054.406,28 (Bruto)
       totalAReceberNF,
-      totalAReceberVP,               // R$ 1.186.046,72
+      totalFaturadoNF: totalAReceberNF,
+      liquidoNF,                      // R$ 1.037.219,46 (Líquido após FUNRURAL)
+      totalAReceberVP,                // R$ 1.186.046,73 (Base Comercial VP)
+      totalComercialVP: totalAReceberVP,
       totalAPagar,
       totalRecebido,
       vencidos: totalVencido,
-      totalFunrural,                 // R$ 17.186,82
+      totalFunrural,                  // R$ 17.186,82
       totalPrevidencia,
       totalRat,
       totalSenar,

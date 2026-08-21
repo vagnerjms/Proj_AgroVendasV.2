@@ -55,27 +55,49 @@ export default function Financial({ view = 'overview' }) {
       </div>
 
       {/* Financial Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-1">
           <div className="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
-            <span>Total a Receber (NF)</span>
+            <span>Total Faturado (NF)</span>
             <ArrowUpRight className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-2xl font-extrabold text-gray-900">
-            {formatCurrency(financial.totalAReceberNF || financial.totalAReceber)}
+            {formatCurrency(financial.totalFaturadoNF || financial.totalAReceberNF)}
           </div>
-          <span className="text-[11px] text-gray-400 block font-medium">Faturamento bruto faturado</span>
+          <span className="text-[11px] text-gray-400 block font-medium">Valor Bruto Faturado</span>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-1">
-          <div className="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
+        <div className="bg-white rounded-xl border border-emerald-200 bg-emerald-50/20 p-5 shadow-sm space-y-1">
+          <div className="flex items-center justify-between text-emerald-800 text-xs font-bold uppercase">
+            <span>Líquido da NF</span>
+            <ShieldCheck className="w-4 h-4 text-emerald-700" />
+          </div>
+          <div className="text-2xl font-black text-emerald-950">
+            {formatCurrency(financial.liquidoNF || (financial.totalAReceberNF - financial.totalFunrural))}
+          </div>
+          <span className="text-[11px] text-emerald-700 block font-semibold">Após dedução FUNRURAL</span>
+        </div>
+
+        <div className="bg-white rounded-xl border border-blue-200 bg-blue-50/20 p-5 shadow-sm space-y-1">
+          <div className="flex items-center justify-between text-blue-800 text-xs font-bold uppercase">
             <span>Total Comercial (VP)</span>
             <ArrowUpRight className="w-4 h-4 text-[#df7b1b]" />
           </div>
           <div className="text-2xl font-extrabold text-blue-950">
-            {formatCurrency(financial.totalAReceberVP)}
+            {formatCurrency(financial.totalComercialVP || financial.totalAReceberVP)}
           </div>
-          <span className="text-[11px] text-gray-400 block font-medium">Base de cotação / caixas</span>
+          <span className="text-[11px] text-blue-600 block font-medium">Base de cotação / caixas</span>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-1">
+          <div className="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
+            <span>(-) FUNRURAL (1,63%)</span>
+            <ShieldCheck className="w-4 h-4 text-red-600" />
+          </div>
+          <div className="text-2xl font-extrabold text-red-600">
+            -{formatCurrency(financial.totalFunrural)}
+          </div>
+          <span className="text-[11px] text-gray-400 block font-medium">Dedução tributária</span>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-1">
@@ -86,18 +108,7 @@ export default function Financial({ view = 'overview' }) {
           <div className="text-2xl font-extrabold text-gray-900">
             {formatCurrency(financial.totalAPagar)}
           </div>
-          <span className="text-[11px] text-gray-400 block font-medium">Compras e produtores</span>
-        </div>
-
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-1">
-          <div className="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
-            <span>FUNRURAL Total Retido (1,63%)</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-700" />
-          </div>
-          <div className="text-2xl font-extrabold text-[#091b2e]">
-            {formatCurrency(financial.totalFunrural)}
-          </div>
-          <span className="text-[11px] text-emerald-700 block font-medium">Dedução fiscal consolidada</span>
+          <span className="text-[11px] text-gray-400 block font-medium">Compras de produtores</span>
         </div>
       </div>
 

@@ -61,6 +61,13 @@ const SaleSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Database Performance Indexes (B-Tree)
+SaleSchema.index({ client: 1, saleDate: -1 });
+SaleSchema.index({ nfeKey: 1 });
+SaleSchema.index({ status: 1 });
+SaleSchema.index({ paymentStatus: 1 });
+SaleSchema.index({ dueDate: 1 });
+
 const WeighingSlipSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   saleId: { type: String, default: '' },
@@ -82,6 +89,9 @@ const WeighingSlipSchema = new mongoose.Schema({
   resolutionNotes: { type: String, default: '' },
   resolvedAt: { type: Date, default: null }
 });
+WeighingSlipSchema.index({ saleId: 1 });
+WeighingSlipSchema.index({ client: 1, date: -1 });
+WeighingSlipSchema.index({ status: 1 });
 
 const PurchaseSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
@@ -97,6 +107,7 @@ const PurchaseSchema = new mongoose.Schema({
   paidAmount: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 });
+PurchaseSchema.index({ producer: 1, date: -1 });
 
 const ClientSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
@@ -109,6 +120,7 @@ const ClientSchema = new mongoose.Schema({
   email: { type: String, default: '' },
   phone: { type: String, default: '' }
 });
+ClientSchema.index({ name: 1 });
 
 const ProductSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
@@ -119,6 +131,7 @@ const ProductSchema = new mongoose.Schema({
   currentStock: { type: Number, default: 0 },
   averageCost: { type: Number, default: 0 }
 });
+ProductSchema.index({ name: 1 });
 
 const FinancialSummarySchema = new mongoose.Schema({
   totalAReceber: { type: Number, default: 1111058.01 },
@@ -132,7 +145,7 @@ const UserSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  password: { type: String, default: '' },
+  password: { type: String, required: true },
   role: { type: String, default: 'Operador Comercial' },
   phone: { type: String, default: '' },
   status: { type: String, default: 'Ativo' },
@@ -146,11 +159,12 @@ const UserSchema = new mongoose.Schema({
     financeiro_fiscal: { type: Boolean, default: true },
     cadastros_clients: { type: Boolean, default: true },
     cadastros_products: { type: Boolean, default: true },
-    cadastros_users: { type: Boolean, default: true },
-    backup_sistema: { type: Boolean, default: true }
+    cadastros_users: { type: Boolean, default: false },
+    backup_sistema: { type: Boolean, default: false }
   },
   createdAt: { type: Date, default: Date.now }
 });
+UserSchema.index({ email: 1 });
 
 // --- SCHEMA INDEXES FOR PERFORMANCE & FAST REPORTING ---
 SaleSchema.index({ saleDate: -1 });

@@ -7,10 +7,10 @@ const { requireAuth } = require('../middlewares/auth');
 // Protect all weighings endpoints with JWT authentication
 router.use(requireAuth);
 
-// GET /api/weighings
+// GET /api/weighings (Supports optional page/limit pagination with X-Total-Count)
 router.get('/', async (req, res) => {
   try {
-    const { status, search } = req.query;
+    const { status, search, page, limit } = req.query;
     let filter = {};
     if (status && status !== 'all') {
       filter.status = status;
@@ -26,7 +26,17 @@ router.get('/', async (req, res) => {
         { driverName: regex }
       ];
     }
-    const slips = await WeighingSlip.find(filter).sort({ date: -1 }).lean();
+
+    const total = await WeighingSlip.countDocuments(filter);
+    res.setHeader('X-Total-Count', total);
+
+    let query = WeighingSlip.find(filter).sort({ date: -1 });
+    if (page && limit) {
+      const pageNum = Math.max(1, parseInt(page, 10) || 1);
+      const limitNum = Math.max(1, Math.min(500, parseInt(limit, 10) || 50));
+      query = query.skip((pageNum - 1) * limitNum).limit(limitNum);
+    }
+    const slips = await query.lean();
     res.json(slips);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar romaneios' });

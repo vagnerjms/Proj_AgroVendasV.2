@@ -75,6 +75,10 @@ router.get('/export', async (req, res) => {
       const diskFiles = fs.readdirSync(uploadDir);
       const addedDiskFiles = new Set();
 
+      const MAX_SINGLE_FILE_BYTES = 25 * 1024 * 1024; // 25MB per file limit
+      let currentTotalBytes = 0;
+      const MAX_TOTAL_BACKUP_BYTES = 200 * 1024 * 1024; // 200MB total backup limit to prevent heap OOM
+
       for (const s of sales) {
         const targets = [s.nfFile, s.evidenceFile].filter(Boolean);
         for (const target of targets) {
@@ -90,7 +94,7 @@ router.get('/export', async (req, res) => {
             try {
               const filePath = path.join(uploadDir, diskMatch);
               const stat = fs.statSync(filePath);
-              if (stat.isFile() && stat.size > 0) {
+              if (stat.isFile() && stat.size > 0 && stat.size <= MAX_SINGLE_FILE_BYTES && (currentTotalBytes + stat.size) <= MAX_TOTAL_BACKUP_BYTES) {
                 const dataBuffer = fs.readFileSync(filePath);
                 
                 // Nome amigável e padronizado: "VP008 - 28130423 - HANG.pdf"
@@ -111,6 +115,7 @@ router.get('/export', async (req, res) => {
                   sizeBytes: stat.size,
                   contentBase64: dataBuffer.toString('base64')
                 });
+                currentTotalBytes += stat.size;
                 addedDiskFiles.add(diskMatch);
               }
             } catch (e) {
@@ -122,11 +127,11 @@ router.get('/export', async (req, res) => {
 
       // Loop 2: Exportar qualquer arquivo adicional existente no disco para garantir 100% de cobertura
       for (const df of diskFiles) {
-        if (!addedDiskFiles.has(df)) {
+        if (!addedDiskFiles.has(df) && (currentTotalBytes <= MAX_TOTAL_BACKUP_BYTES)) {
           try {
             const filePath = path.join(uploadDir, df);
             const stat = fs.statSync(filePath);
-            if (stat.isFile() && stat.size > 0) {
+            if (stat.isFile() && stat.size > 0 && stat.size <= MAX_SINGLE_FILE_BYTES && (currentTotalBytes + stat.size) <= MAX_TOTAL_BACKUP_BYTES) {
               const dataBuffer = fs.readFileSync(filePath);
               let cleanFileName = df;
               if (/^\d+-\d+-/.test(df)) {
@@ -138,6 +143,7 @@ router.get('/export', async (req, res) => {
                 sizeBytes: stat.size,
                 contentBase64: dataBuffer.toString('base64')
               });
+              currentTotalBytes += stat.size;
               addedDiskFiles.add(df);
             }
           } catch (e) {}

@@ -12,10 +12,10 @@ const { requireAuth, requirePermission } = require('../middlewares/auth');
 // Protect all sales endpoints with JWT authentication
 router.use(requireAuth);
 
-// GET /api/sales
+// GET /api/sales (Supports optional page/limit pagination with X-Total-Count)
 router.get('/', async (req, res) => {
   try {
-    const { operationType, status, search } = req.query;
+    const { operationType, status, search, page, limit } = req.query;
     let filter = {};
     if (operationType && operationType !== 'all') {
       filter.operationType = operationType;
@@ -34,7 +34,17 @@ router.get('/', async (req, res) => {
         { 'items.product': regex }
       ];
     }
-    const sales = await Sale.find(filter).sort({ saleDate: -1, createdAt: -1 }).lean();
+
+    const total = await Sale.countDocuments(filter);
+    res.setHeader('X-Total-Count', total);
+
+    let query = Sale.find(filter).sort({ saleDate: -1, createdAt: -1 });
+    if (page && limit) {
+      const pageNum = Math.max(1, parseInt(page, 10) || 1);
+      const limitNum = Math.max(1, Math.min(500, parseInt(limit, 10) || 50));
+      query = query.skip((pageNum - 1) * limitNum).limit(limitNum);
+    }
+    const sales = await query.lean();
     res.json(sales);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar vendas' });

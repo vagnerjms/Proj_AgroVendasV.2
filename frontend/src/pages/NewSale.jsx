@@ -18,7 +18,8 @@ import {
   RotateCcw,
   Edit3,
   Calendar,
-  Clock
+  Clock,
+  Store
 } from 'lucide-react';
 import { formatCurrency, formatKg, formatNumber } from '../utils/formatters';
 import { calculateSummary, calculateFunrural } from '../utils/calculations';
@@ -32,9 +33,16 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     'Venda de Estoque Próprio'
   ];
 
-  // Form states - INITIALIZED CLEAN AND BLANK
+  // Form states (Editable)
   const [operationType, setOperationType] = useState('Intermediação (Corretagem / Comissão)');
-  const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0]);
+  const [saleDate, setSaleDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [paymentTermDays, setPaymentTermDays] = useState(30);
+  const [dueDate, setDueDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [customTermMode, setCustomTermMode] = useState(false);
   const [selectedClient, setSelectedClient] = useState('');
   const [clientDocument, setClientDocument] = useState('');
   const [origin, setOrigin] = useState('');
@@ -42,21 +50,16 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   const [destUF, setDestUF] = useState('');
   const [notes, setNotes] = useState('');
   
-  // Logistics
+  // Freight & Transport
   const [freightType, setFreightType] = useState('FOB (Retira na Origem)');
   const [carrierName, setCarrierName] = useState('');
   const [truckPlate, setTruckPlate] = useState('');
   const [driverName, setDriverName] = useState('');
   const [driverCPF, setDriverCPF] = useState('');
 
-  // Commission states
+  // Brokerage Fee
   const [feeType, setFeeType] = useState('Porcentagem (%)');
   const [feeValue, setFeeValue] = useState(3.0);
-
-  // Payment Terms & Due Date (Prazo de Recebimento)
-  const [paymentTermDays, setPaymentTermDays] = useState(30);
-  const [dueDate, setDueDate] = useState('');
-  const [customTermMode, setCustomTermMode] = useState(false);
 
   // Files & XML Data
   const [nfFile, setNfFile] = useState(null);
@@ -71,6 +74,12 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   const [unmatchedProducer, setUnmatchedProducer] = useState(null);
   const [registeringProducer, setRegisteringProducer] = useState(false);
   const [producerRegisteredNotice, setProducerRegisteredNotice] = useState('');
+
+  // Vínculo Inteligente de Clientes / Compradores (Destinatário da NF-e)
+  const [matchedClient, setMatchedClient] = useState(null);
+  const [unmatchedClient, setUnmatchedClient] = useState(null);
+  const [registeringClient, setRegisteringClient] = useState(false);
+  const [clientRegisteredNotice, setClientRegisteredNotice] = useState('');
 
   // Product Selection, Unit Type & Dynamic Pricings (INITIALIZED BLANK)
   const [selectedProduct, setSelectedProduct] = useState('');
@@ -145,6 +154,9 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     setMatchedProducer(null);
     setUnmatchedProducer(null);
     setProducerRegisteredNotice('');
+    setMatchedClient(null);
+    setUnmatchedClient(null);
+    setClientRegisteredNotice('');
     setErrorMessage('');
     setSuccessMessage('');
   };
@@ -389,11 +401,43 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       setNfFile(data.filename || file.name);
       if (data.saleDate) setSaleDate(data.saleDate);
 
-      if (data.dest?.name) {
-        setSelectedClient(data.dest.name);
-        setClientDocument(data.dest.document || '');
-        setDestCity(data.dest.city || '');
-        setDestUF(data.dest.uf || '');
+      // 🏪 VÍNCULO INTELIGENTE DO CLIENTE / COMPRADOR (DESTINATÁRIO DA NOTA FISCAL)
+      if (data.dest?.name || data.dest?.document) {
+        const rawDestDoc = (data.dest.document || '').replace(/\D/g, '');
+        const destNameClean = (data.dest.name || '').trim().toLowerCase();
+
+        const foundCli = clients.find(c => {
+          const cDoc = (c.document || '').replace(/\D/g, '');
+          const cName = (c.name || '').trim().toLowerCase();
+          const docMatch = rawDestDoc && cDoc && rawDestDoc === cDoc;
+          const nameMatch = destNameClean && cName && (cName === destNameClean || cName.includes(destNameClean) || destNameClean.includes(cName));
+          return docMatch || nameMatch;
+        });
+
+        if (foundCli) {
+          setMatchedClient(foundCli);
+          setUnmatchedClient(null);
+          setClientRegisteredNotice('');
+          setSelectedClient(foundCli.name);
+          setClientDocument(foundCli.document || data.dest.document || '');
+          setDestCity(foundCli.city || data.dest.city || '');
+          setDestUF(foundCli.uf || foundCli.state || data.dest.uf || '');
+        } else {
+          setMatchedClient(null);
+          setUnmatchedClient({
+            name: data.dest.name || 'Cliente Comprador',
+            document: data.dest.document || '',
+            ie: data.dest.ie || '',
+            city: data.dest.city || '',
+            uf: data.dest.uf || '',
+            address: data.dest.address || ''
+          });
+          setClientRegisteredNotice('');
+          setSelectedClient(data.dest.name || '');
+          setClientDocument(data.dest.document || '');
+          setDestCity(data.dest.city || '');
+          setDestUF(data.dest.uf || '');
+        }
       }
 
       if (data.emit?.originText) {
@@ -520,6 +564,46 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       setErrorMessage(`Erro ao cadastrar produtor: ${err.message}`);
     } finally {
       setRegisteringProducer(false);
+    }
+  };
+
+  const handleQuickRegisterClient = async () => {
+    if (!unmatchedClient) return;
+    setRegisteringClient(true);
+    setErrorMessage('');
+    try {
+      const res = await fetch('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: unmatchedClient.name,
+          document: unmatchedClient.document,
+          ie: unmatchedClient.ie,
+          type: 'Comprador',
+          city: unmatchedClient.city,
+          uf: unmatchedClient.uf,
+          address: unmatchedClient.address
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error('Erro ao salvar cliente no banco de dados');
+      }
+
+      const newCli = await res.json();
+      setClients(prev => [...prev, newCli]);
+      setMatchedClient(newCli);
+      setUnmatchedClient(null);
+      setClientRegisteredNotice(`Cliente Comprador "${newCli.name}" cadastrado e vinculado com sucesso!`);
+      setSelectedClient(newCli.name);
+      setClientDocument(newCli.document || '');
+      setDestCity(newCli.city || '');
+      setDestUF(newCli.uf || '');
+    } catch (err) {
+      console.error(err);
+      setErrorMessage(`Erro ao cadastrar cliente comprador: ${err.message}`);
+    } finally {
+      setRegisteringClient(false);
     }
   };
 
@@ -710,6 +794,102 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         <div className="bg-emerald-100 border border-emerald-400 text-emerald-950 px-4 py-3 rounded-lg flex items-center gap-2 text-xs font-bold shadow-sm">
           <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
           <span>{producerRegisteredNotice}</span>
+        </div>
+      )}
+
+      {/* Confirmação de Cadastro Rápido do Cliente Comprador */}
+      {clientRegisteredNotice && (
+        <div className="bg-emerald-100 border border-emerald-400 text-emerald-950 px-4 py-3 rounded-lg flex items-center gap-2 text-xs font-bold shadow-sm">
+          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+          <span>{clientRegisteredNotice}</span>
+        </div>
+      )}
+
+      {/* 🏪 CARD DE VÍNCULO INTELIGENTE DO CLIENTE / COMPRADOR */}
+      {matchedClient && (
+        <div className="bg-blue-50/90 border-2 border-blue-400 p-4 rounded-xl shadow-sm space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Store className="w-5 h-5 text-blue-700 shrink-0" />
+              <span className="text-xs font-extrabold text-blue-950 uppercase tracking-wider">
+                Cliente / Comprador Vinculado com Sucesso (Cadastro Ativo)
+              </span>
+            </div>
+            <span className="text-[11px] font-extrabold bg-blue-200 text-blue-950 px-2.5 py-0.5 rounded-full border border-blue-300 w-fit">
+              {matchedClient.type || 'Comprador'}
+            </span>
+          </div>
+          
+          <div className="text-sm font-black text-gray-900 flex flex-wrap items-center gap-2">
+            <span>🏪 {matchedClient.name}</span>
+            {matchedClient.document && (
+              <span className="text-xs font-bold text-gray-600 bg-white px-2 py-0.5 rounded border border-blue-200">
+                CNPJ/CPF: {matchedClient.document}
+              </span>
+            )}
+            {matchedClient.ie && (
+              <span className="text-xs font-bold text-gray-600 bg-white px-2 py-0.5 rounded border border-blue-200">
+                IE: {matchedClient.ie}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
+            <div className="bg-white p-2.5 rounded-lg border border-blue-200 shadow-2xs">
+              <span className="block text-[10px] font-bold text-gray-500 uppercase">Município / Estado</span>
+              <span className="font-bold text-gray-900">{matchedClient.city || 'São Paulo'}/{matchedClient.uf || matchedClient.state || 'SP'}</span>
+            </div>
+
+            <div className="bg-white p-2.5 rounded-lg border border-blue-200 shadow-2xs">
+              <span className="block text-[10px] font-bold text-gray-500 uppercase">Endereço Comercial</span>
+              <span className="font-bold text-gray-900 truncate block" title={matchedClient.address || 'Loja / Galpão Principal'}>
+                {matchedClient.address || 'Loja / Galpão Principal'}
+              </span>
+            </div>
+
+            <div className="bg-white p-2.5 rounded-lg border border-blue-200 shadow-2xs">
+              <span className="block text-[10px] font-bold text-gray-500 uppercase">Contato / Telefone</span>
+              <span className="font-bold text-gray-900 truncate block" title={matchedClient.phone || matchedClient.email || 'Cadastrado'}>
+                {matchedClient.phone ? `📞 ${matchedClient.phone}` : (matchedClient.email ? `✉️ ${matchedClient.email}` : 'ℹ️ Cadastro Regular')}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⚠️ AVISO DE NOVO CLIENTE DETECTADO NA NF-E */}
+      {unmatchedClient && !matchedClient && (
+        <div className="bg-amber-50/95 border-2 border-amber-400 p-4 rounded-xl shadow-sm space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+              <span className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                Novo Cliente / Destinatário Identificado na NF-e
+              </span>
+            </div>
+            <span className="text-[11px] font-bold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300 w-fit">
+              Não Cadastrado na Base
+            </span>
+          </div>
+
+          <div className="text-xs text-amber-950">
+            O destinatário comprador identificado na nota fiscal <strong className="text-gray-950 font-black text-sm">"{unmatchedClient.name}"</strong> (CNPJ/CPF: <strong>{unmatchedClient.document || 'Não informado'}</strong> {unmatchedClient.ie ? `· IE: ${unmatchedClient.ie}` : ''} · {unmatchedClient.city}/{unmatchedClient.uf}) ainda não possui cadastro no sistema.
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-1">
+            <button
+              type="button"
+              disabled={registeringClient}
+              onClick={handleQuickRegisterClient}
+              className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-extrabold px-4 py-2.5 rounded-lg shadow flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Plus className="w-4 h-4" />
+              {registeringClient ? 'Salvando Cliente no Banco...' : 'Cadastrar Cliente Comprador no Sistema (1 clique)'}
+            </button>
+            <span className="text-[11px] text-amber-900 font-medium">
+              ✨ Salva automaticamente na tabela de Clientes & Produtores como Comprador.
+            </span>
+          </div>
         </div>
       )}
 

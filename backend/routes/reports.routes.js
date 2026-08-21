@@ -7,12 +7,16 @@ router.get('/stores-summary', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     let query = {};
-    if (startDate && endDate) {
-      query.saleDate = { $gte: startDate, $lte: endDate };
-    } else if (startDate) {
-      query.saleDate = { $gte: startDate };
-    } else if (endDate) {
-      query.saleDate = { $lte: endDate };
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    const validStart = (typeof startDate === 'string' && dateRegex.test(startDate.trim())) ? startDate.trim() : null;
+    const validEnd = (typeof endDate === 'string' && dateRegex.test(endDate.trim())) ? endDate.trim() : null;
+
+    if (validStart && validEnd) {
+      query.saleDate = { $gte: validStart, $lte: validEnd };
+    } else if (validStart) {
+      query.saleDate = { $gte: validStart };
+    } else if (validEnd) {
+      query.saleDate = { $lte: validEnd };
     }
 
     const allSales = await Sale.find(query).sort({ saleDate: 1 }).lean();

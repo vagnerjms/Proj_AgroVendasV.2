@@ -31,11 +31,13 @@ export default function Reports({ setCurrentPage }) {
   const [expandedLojas, setExpandedLojas] = useState({});
 
   const fetchLiveReport = async (sDate = startDate, eDate = endDate) => {
+    const finalStart = (typeof sDate === 'string') ? sDate : (typeof startDate === 'string' ? startDate : '');
+    const finalEnd = (typeof eDate === 'string') ? eDate : (typeof endDate === 'string' ? endDate : '');
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (sDate) params.append('startDate', sDate);
-      if (eDate) params.append('endDate', eDate);
+      if (finalStart) params.append('startDate', finalStart);
+      if (finalEnd) params.append('endDate', finalEnd);
       const url = `/api/reports/stores-summary${params.toString() ? `?${params.toString()}` : ''}`;
       
       const res = await fetch(url);
@@ -44,7 +46,7 @@ export default function Reports({ setCurrentPage }) {
         setReportData(data);
         // Expand all stores by default
         const initExpand = {};
-        data.stores.forEach(s => {
+        (data.stores || []).forEach(s => {
           initExpand[s.loja] = true;
         });
         setExpandedLojas(initExpand);
@@ -115,7 +117,7 @@ export default function Reports({ setCurrentPage }) {
   };
 
   const stores = reportData.stores || [];
-  const totalGeral = reportData.totalGeral || {
+  const rawTotalGeral = reportData.totalGeral || {
     nfs: 0,
     pedidosVenda: 0,
     pedidosSemNF: 0,
@@ -134,6 +136,35 @@ export default function Reports({ setCurrentPage }) {
     l => selectedLoja === 'ALL' || l.loja === selectedLoja
   );
 
+  // Dynamic totals: if ALL, uses rawTotalGeral; if a specific store is selected, recalculates from filteredLojas
+  const currentTotal = selectedLoja === 'ALL' ? rawTotalGeral : filteredLojas.reduce((acc, row) => ({
+    nfs: acc.nfs + (row.nfs || 0),
+    pedidosVenda: acc.pedidosVenda + (row.pedidosVenda || 0),
+    pedidosSemNF: acc.pedidosSemNF + (row.pedidosSemNF || 0),
+    pesoNF: acc.pesoNF + (row.pesoNF || 0),
+    pesoColheita: acc.pesoColheita + (row.pesoColheita || 0),
+    cxsVendidas: acc.cxsVendidas + (row.cxsVendidas || 0),
+    valorTotalNF: acc.valorTotalNF + (row.valorTotalNF || 0),
+    funrural: acc.funrural + (row.funrural || 0),
+    totalVendaAReceber: acc.totalVendaAReceber + (row.totalVendaAReceber || 0),
+    liquidoNF: acc.liquidoNF + (row.liquidoNF || 0),
+    totalComissao: acc.totalComissao + (row.totalComissao || 0),
+    totalLiquidoProdutor: acc.totalLiquidoProdutor + (row.totalLiquidoProdutor || 0)
+  }), {
+    nfs: 0,
+    pedidosVenda: 0,
+    pedidosSemNF: 0,
+    pesoNF: 0,
+    pesoColheita: 0,
+    cxsVendidas: 0,
+    valorTotalNF: 0,
+    funrural: 0,
+    totalVendaAReceber: 0,
+    liquidoNF: 0,
+    totalComissao: 0,
+    totalLiquidoProdutor: 0
+  });
+
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1700px] mx-auto space-y-6">
       
@@ -148,7 +179,7 @@ export default function Reports({ setCurrentPage }) {
             {activeTab === 'geral' ? 'Relatório Geral — NFs e VPs por Loja' : 'Relatório Completo — Fechamento com Comissões'}
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Agregação dinâmica em tempo real das {totalGeral.pedidosVenda || 34} vendas cadastradas no banco de dados.
+            Agregação dinâmica em tempo real das {currentTotal.pedidosVenda || 0} vendas {selectedLoja !== 'ALL' ? `de ${selectedLoja}` : 'cadastradas no banco de dados'}.
           </p>
           {(startDate || endDate) && (
             <div className="hidden print:block text-xs font-bold text-gray-800 mt-1">
@@ -163,14 +194,14 @@ export default function Reports({ setCurrentPage }) {
             onChange={(e) => setSelectedLoja(e.target.value)}
             className="bg-white border border-gray-300 text-xs rounded-lg px-3 py-2 outline-none font-semibold text-gray-800 shadow-sm"
           >
-            <option value="ALL">Todas as {stores.length} Lojas ({totalGeral.pedidosVenda} Pedidos)</option>
+            <option value="ALL">Todas as {stores.length} Lojas ({rawTotalGeral.pedidosVenda || 0} Pedidos)</option>
             {stores.map(l => (
-              <option key={l.loja} value={l.loja}>{l.loja}</option>
+              <option key={l.loja} value={l.loja}>{l.loja} ({l.pedidosVenda} Pedidos)</option>
             ))}
           </select>
 
           <button
-            onClick={fetchLiveReport}
+            onClick={() => fetchLiveReport(startDate, endDate)}
             className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
             title="Atualizar dados do MongoDB"
           >
@@ -391,20 +422,22 @@ export default function Reports({ setCurrentPage }) {
                 </tbody>
                 <tfoot className="bg-[#bfe2a5] font-black text-xs text-gray-950 border-t-2 border-emerald-800">
                   <tr>
-                    <td className="py-3 px-3 uppercase font-black text-gray-950">TOTAL GERAL</td>
-                    <td className="py-3 px-2 text-center font-black">{totalGeral.nfs}</td>
-                    <td className="py-3 px-2 text-center font-black">{totalGeral.pedidosVenda}</td>
-                    <td className="py-3 px-2 text-center font-black text-amber-950">{totalGeral.pedidosSemNF}</td>
-                    <td className="py-3 px-3 text-right font-black">{formatNumber(totalGeral.pesoNF, 2)}</td>
-                    <td className="py-3 px-3 text-right font-black bg-[#9dd07b]">{formatNumber(totalGeral.pesoColheita, 2)}</td>
-                    <td className="py-3 px-3 text-right font-black">{formatNumber(totalGeral.cxsVendidas, 2)}</td>
-                    <td className="py-3 px-3 text-right font-black">{formatCurrency(totalGeral.valorTotalNF)}</td>
-                    <td className="py-3 px-3 text-right font-black text-red-900">-{formatCurrency(totalGeral.funrural)}</td>
+                    <td className="py-3 px-3 uppercase font-black text-gray-950">
+                      {selectedLoja === 'ALL' ? 'TOTAL GERAL' : `TOTAL (${selectedLoja})`}
+                    </td>
+                    <td className="py-3 px-2 text-center font-black">{currentTotal.nfs}</td>
+                    <td className="py-3 px-2 text-center font-black">{currentTotal.pedidosVenda}</td>
+                    <td className="py-3 px-2 text-center font-black text-amber-950">{currentTotal.pedidosSemNF}</td>
+                    <td className="py-3 px-3 text-right font-black">{formatNumber(currentTotal.pesoNF, 2)}</td>
+                    <td className="py-3 px-3 text-right font-black bg-[#9dd07b]">{formatNumber(currentTotal.pesoColheita, 2)}</td>
+                    <td className="py-3 px-3 text-right font-black">{formatNumber(currentTotal.cxsVendidas, 2)}</td>
+                    <td className="py-3 px-3 text-right font-black">{formatCurrency(currentTotal.valorTotalNF)}</td>
+                    <td className="py-3 px-3 text-right font-black text-red-900">-{formatCurrency(currentTotal.funrural)}</td>
                     <td className="py-3 px-3 text-right font-black text-green-950 bg-[#83c457]">
-                      {formatCurrency(totalGeral.totalVendaAReceber)}
+                      {formatCurrency(currentTotal.totalVendaAReceber)}
                     </td>
                     <td className="py-3 px-3 text-right font-black text-emerald-950 bg-[#aedb8e]">
-                      {formatCurrency(totalGeral.liquidoNF)}
+                      {formatCurrency(currentTotal.liquidoNF)}
                     </td>
                   </tr>
                 </tfoot>
@@ -546,31 +579,31 @@ export default function Reports({ setCurrentPage }) {
             
             <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
               <span className="text-gray-500 text-xs font-bold uppercase block">Total Comercial (VP)</span>
-              <span className="text-2xl font-black text-blue-950">{formatCurrency(totalGeral.totalVendaAReceber)}</span>
-              <span className="text-[11px] text-gray-400 block">34 Pedidos de Venda</span>
+              <span className="text-2xl font-black text-blue-950">{formatCurrency(currentTotal.totalVendaAReceber)}</span>
+              <span className="text-[11px] text-gray-400 block">{currentTotal.pedidosVenda} Pedidos de Venda</span>
             </div>
 
             <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
               <span className="text-gray-500 text-xs font-bold uppercase block">Total Faturado NF</span>
-              <span className="text-2xl font-black text-gray-900">{formatCurrency(totalGeral.valorTotalNF)}</span>
-              <span className="text-[11px] text-gray-400 block">31 Notas Emitidas</span>
+              <span className="text-2xl font-black text-gray-900">{formatCurrency(currentTotal.valorTotalNF)}</span>
+              <span className="text-[11px] text-gray-400 block">{currentTotal.nfs} Notas Emitidas</span>
             </div>
 
             <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
               <span className="text-gray-500 text-xs font-bold uppercase block">(-) FUNRURAL (1,63%)</span>
-              <span className="text-2xl font-black text-red-600">-{formatCurrency(totalGeral.funrural)}</span>
+              <span className="text-2xl font-black text-red-600">-{formatCurrency(currentTotal.funrural)}</span>
               <span className="text-[11px] text-gray-400 block">Dedução tributária</span>
             </div>
 
             <div className="bg-white p-5 rounded-xl border border-blue-200 bg-blue-50/20 shadow-sm space-y-1">
               <span className="text-blue-800 text-xs font-bold uppercase block">Comissão AgroVenda (3%)</span>
-              <span className="text-2xl font-black text-blue-900">{formatCurrency(totalGeral.totalComissao)}</span>
+              <span className="text-2xl font-black text-blue-900">{formatCurrency(currentTotal.totalComissao)}</span>
               <span className="text-[11px] text-blue-600 block font-semibold">Taxa média 3,0%</span>
             </div>
 
             <div className="bg-white p-5 rounded-xl border border-emerald-200 bg-emerald-50/30 shadow-sm space-y-1">
               <span className="text-emerald-800 text-xs font-bold uppercase block">(=) Líquido Produtor</span>
-              <span className="text-2xl font-black text-emerald-950">{formatCurrency(totalGeral.totalLiquidoProdutor)}</span>
+              <span className="text-2xl font-black text-emerald-950">{formatCurrency(currentTotal.totalLiquidoProdutor)}</span>
               <span className="text-[11px] text-emerald-700 block font-semibold">Saldo a repassar</span>
             </div>
 
@@ -633,21 +666,23 @@ export default function Reports({ setCurrentPage }) {
                 </tbody>
                 <tfoot className="bg-[#bfe2a5] font-black text-xs text-gray-950 border-t-2 border-emerald-800">
                   <tr>
-                    <td className="py-3 px-3 uppercase font-black text-gray-950">TOTAL GERAL</td>
-                    <td className="py-3 px-2 text-center font-black">{totalGeral.nfs}</td>
-                    <td className="py-3 px-2 text-center font-black">{totalGeral.pedidosVenda}</td>
-                    <td className="py-3 px-3 text-right font-black">{formatNumber(totalGeral.cxsVendidas, 2)}</td>
-                    <td className="py-3 px-3 text-right font-black">{formatCurrency(totalGeral.valorTotalNF)}</td>
-                    <td className="py-3 px-3 text-right font-black text-red-900">-{formatCurrency(totalGeral.funrural)}</td>
+                    <td className="py-3 px-3 uppercase font-black text-gray-950">
+                      {selectedLoja === 'ALL' ? 'TOTAL GERAL' : `TOTAL (${selectedLoja})`}
+                    </td>
+                    <td className="py-3 px-2 text-center font-black">{currentTotal.nfs}</td>
+                    <td className="py-3 px-2 text-center font-black">{currentTotal.pedidosVenda}</td>
+                    <td className="py-3 px-3 text-right font-black">{formatNumber(currentTotal.cxsVendidas, 2)}</td>
+                    <td className="py-3 px-3 text-right font-black">{formatCurrency(currentTotal.valorTotalNF)}</td>
+                    <td className="py-3 px-3 text-right font-black text-red-900">-{formatCurrency(currentTotal.funrural)}</td>
                     <td className="py-3 px-3 text-right font-black text-blue-950 bg-sky-200">
-                      {formatCurrency(totalGeral.totalVendaAReceber)}
+                      {formatCurrency(currentTotal.totalVendaAReceber)}
                     </td>
                     <td className="py-3 px-2 text-center font-black">3,0%</td>
                     <td className="py-3 px-3 text-right font-black text-blue-950 bg-blue-200">
-                      {formatCurrency(totalGeral.totalComissao)}
+                      {formatCurrency(currentTotal.totalComissao)}
                     </td>
                     <td className="py-3 px-3 text-right font-black text-emerald-950 bg-emerald-200">
-                      {formatCurrency(totalGeral.totalLiquidoProdutor)}
+                      {formatCurrency(currentTotal.totalLiquidoProdutor)}
                     </td>
                   </tr>
                 </tfoot>

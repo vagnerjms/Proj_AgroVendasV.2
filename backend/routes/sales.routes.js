@@ -3,7 +3,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const { Sale, WeighingSlip, getNextSequence } = require('../db');
-const { TAX_RATES } = require('../constants');
+const { TAX_RATES, calculateFiscalDeductions, roundMoney, calculateCommission } = require('../utils/money');
 const { uploadDir } = require('../middlewares/upload');
 const { sendSaleWebhook } = require('../services/webhook.service');
 const { escapeRegex } = require('../utils/security');
@@ -141,11 +141,11 @@ router.post('/', async (req, res) => {
     const seq = await getNextSequence('sale_vp_id', Sale, 'VP');
     const newId = `VP${String(seq).padStart(3, '0')}`;
 
-    const totalOp = Number(body.totalOperation) || 0;
-    const previdenciaSocial = totalOp * TAX_RATES.PREVIDENCIA;
-    const rat = totalOp * TAX_RATES.RAT;
-    const senar = totalOp * TAX_RATES.SENAR;
-    const funruralTotal = totalOp * TAX_RATES.FUNRURAL_TOTAL;
+    const totalOp = roundMoney(body.totalOperation);
+    const fiscal = calculateFiscalDeductions(totalOp);
+
+    const valorVP = roundMoney(body.valorTotalVP);
+    const commission = calculateCommission(valorVP, body.feeValue);
 
     const newSale = new Sale({
       id: newId,
@@ -167,17 +167,17 @@ router.post('/', async (req, res) => {
       driverCPF: body.driverCPF || '',
       items: body.items || [],
       feeType: body.feeType || "Porcentagem (%)",
-      feeValue: Number(body.feeValue) || 0,
-      dailyQuote: Number(body.dailyQuote) || 0,
-      valorTotalVP: Number(body.valorTotalVP) || 0,
+      feeValue: Number(body.feeValue) || 3.0,
+      dailyQuote: roundMoney(body.dailyQuote),
+      valorTotalVP: valorVP,
       totalVolumes: Number(body.totalVolumes) || 0,
       totalKg: Number(body.totalKg) || 0,
       totalOperation: totalOp,
-      totalCommission: Number(body.totalCommission) || 0,
-      funruralTotal: Number(body.funruralTotal) || funruralTotal,
-      previdenciaSocial: Number(body.previdenciaSocial) || previdenciaSocial,
-      rat: Number(body.rat) || rat,
-      senar: Number(body.senar) || senar,
+      totalCommission: commission.comissao,
+      funruralTotal: fiscal.funruralTotal,
+      previdenciaSocial: fiscal.previdencia,
+      rat: fiscal.rat,
+      senar: fiscal.senar,
       status: body.nfFile ? "Faturado" : "Pendente NF",
       paymentStatus: "A Receber",
       paymentTerms: body.paymentTerms || (body.paymentTermDays !== undefined ? (Number(body.paymentTermDays) === 0 ? 'À Vista' : `${body.paymentTermDays} dias`) : '30 dias'),
@@ -265,12 +265,13 @@ router.put('/:id', async (req, res) => {
 
     // Recalculate FUNRURAL only if totalOperation is explicitly updated
     if (body.totalOperation !== undefined) {
-      const totalOp = Number(body.totalOperation) || 0;
+      const totalOp = roundMoney(body.totalOperation);
+      const fiscal = calculateFiscalDeductions(totalOp);
       updateFields.totalOperation = totalOp;
-      updateFields.previdenciaSocial = totalOp * TAX_RATES.PREVIDENCIA;
-      updateFields.rat = totalOp * TAX_RATES.RAT;
-      updateFields.senar = totalOp * TAX_RATES.SENAR;
-      updateFields.funruralTotal = totalOp * TAX_RATES.FUNRURAL_TOTAL;
+      updateFields.previdenciaSocial = fiscal.previdencia;
+      updateFields.rat = fiscal.rat;
+      updateFields.senar = fiscal.senar;
+      updateFields.funruralTotal = fiscal.funruralTotal;
     }
 
     const updated = await Sale.findOneAndUpdate(

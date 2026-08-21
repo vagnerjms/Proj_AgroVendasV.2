@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { Sale } = require('../db');
 const { requireAuth } = require('../middlewares/auth');
+const { roundMoney, calculateFiscalDeductions, calculateCommission } = require('../utils/money');
 
 // Protect all reports endpoints with JWT authentication
 router.use(requireAuth);
@@ -49,10 +50,11 @@ router.get('/stores-summary', async (req, res) => {
         const isFaturado = s.status === 'Faturado';
         
         let itemPesoNF = Number(s.totalKg) || 0;
-        let itemValorNF = Number(s.totalOperation) || 0;
-        let itemFunrural = Number(s.funruralTotal) || 0;
-        let itemPrecoKg = itemPesoNF > 0 ? (itemValorNF / itemPesoNF) : 0;
-        let itemLiquido = itemValorNF - itemFunrural;
+        let itemValorNF = roundMoney(s.totalOperation);
+        const fiscal = calculateFiscalDeductions(itemValorNF);
+        let itemFunrural = fiscal.funruralTotal;
+        let itemPrecoKg = itemPesoNF > 0 ? roundMoney(itemValorNF / itemPesoNF) : 0;
+        let itemLiquido = fiscal.liquidoNF;
 
         if (isFaturado || s.nfFile) {
           nfs++;
@@ -61,12 +63,12 @@ router.get('/stores-summary', async (req, res) => {
         }
 
         pesoNF += itemPesoNF;
-        valorTotalNF += itemValorNF;
-        funrural += itemFunrural;
+        valorTotalNF = roundMoney(valorTotalNF + itemValorNF);
+        funrural = roundMoney(funrural + itemFunrural);
         pesoColheita += itemPesoNF;
-        cxsVendidas += s.totalVolumes || 0;
+        cxsVendidas += (Number(s.totalVolumes) || 0);
 
-        const caixas = s.totalVolumes || (itemPesoNF > 0 ? (itemPesoNF / 29) : 0);
+        const caixas = Number(s.totalVolumes) || (itemPesoNF > 0 ? (itemPesoNF / 29) : 0);
         let cotacao = Number(s.dailyQuote) || 0;
         if (!cotacao && s.notes) {
           const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
@@ -74,14 +76,12 @@ router.get('/stores-summary', async (req, res) => {
         }
         if (!cotacao) cotacao = 45.0;
 
-        const valorVP = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : (caixas * cotacao);
-        totalVendaAReceber += valorVP;
+        const valorVP = Number(s.valorTotalVP) > 0 ? roundMoney(s.valorTotalVP) : roundMoney(caixas * cotacao);
+        totalVendaAReceber = roundMoney(totalVendaAReceber + valorVP);
 
         const nfNumber = s.nfFile ? s.nfFile.replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
 
-        const taxaComissao = Number(s.feeValue) || 3.0;
-        const comissao = valorVP * (taxaComissao / 100);
-        const liquidoProdutor = valorVP - comissao;
+        const comm = calculateCommission(valorVP, s.feeValue);
 
         return {
           vp: s.id,
@@ -99,16 +99,16 @@ router.get('/stores-summary', async (req, res) => {
           cotacao: cotacao,
           valorVP: valorVP,
           liquido: itemLiquido,
-          taxaComissao: taxaComissao,
-          comissao: comissao,
-          liquidoProdutor: liquidoProdutor,
+          taxaComissao: comm.taxaPercentual,
+          comissao: comm.comissao,
+          liquidoProdutor: comm.liquidoProdutor,
           venc: s.notes?.match(/Vencimento:\s*([^\s|]+)/i)?.[1] || 'Em aberto',
           status: s.status
         };
       });
 
-      const totalComissaoLoja = itens.reduce((a, b) => a + b.comissao, 0);
-      const totalLiquidoProdutorLoja = itens.reduce((a, b) => a + b.liquidoProdutor, 0);
+      const totalComissaoLoja = roundMoney(itens.reduce((a, b) => a + b.comissao, 0));
+      const totalLiquidoProdutorLoja = roundMoney(itens.reduce((a, b) => a + b.liquidoProdutor, 0));
 
       return {
         loja: clientName,
@@ -118,10 +118,10 @@ router.get('/stores-summary', async (req, res) => {
         pesoNF,
         pesoColheita,
         cxsVendidas,
-        valorTotalNF,
-        funrural,
-        totalVendaAReceber,
-        liquidoNF: valorTotalNF - funrural,
+        valorTotalNF: roundMoney(valorTotalNF),
+        funrural: roundMoney(funrural),
+        totalVendaAReceber: roundMoney(totalVendaAReceber),
+        liquidoNF: roundMoney(valorTotalNF - funrural),
         totalComissao: totalComissaoLoja,
         totalLiquidoProdutor: totalLiquidoProdutorLoja,
         itens
@@ -135,12 +135,12 @@ router.get('/stores-summary', async (req, res) => {
       pesoNF: stores.reduce((a, b) => a + b.pesoNF, 0),
       pesoColheita: stores.reduce((a, b) => a + b.pesoColheita, 0),
       cxsVendidas: stores.reduce((a, b) => a + b.cxsVendidas, 0),
-      valorTotalNF: stores.reduce((a, b) => a + b.valorTotalNF, 0),
-      funrural: stores.reduce((a, b) => a + b.funrural, 0),
-      totalVendaAReceber: stores.reduce((a, b) => a + b.totalVendaAReceber, 0),
-      liquidoNF: stores.reduce((a, b) => a + b.liquidoNF, 0),
-      totalComissao: stores.reduce((a, b) => a + b.totalComissao, 0),
-      totalLiquidoProdutor: stores.reduce((a, b) => a + b.totalLiquidoProdutor, 0)
+      valorTotalNF: roundMoney(stores.reduce((a, b) => a + b.valorTotalNF, 0)),
+      funrural: roundMoney(stores.reduce((a, b) => a + b.funrural, 0)),
+      totalVendaAReceber: roundMoney(stores.reduce((a, b) => a + b.totalVendaAReceber, 0)),
+      liquidoNF: roundMoney(stores.reduce((a, b) => a + b.liquidoNF, 0)),
+      totalComissao: roundMoney(stores.reduce((a, b) => a + b.totalComissao, 0)),
+      totalLiquidoProdutor: roundMoney(stores.reduce((a, b) => a + b.totalLiquidoProdutor, 0))
     };
 
     res.json({ stores, totalGeral });

@@ -179,6 +179,7 @@ export default function App() {
         return <Cadastros tab="products" setCurrentPage={setCurrentPage} />;
       case 'cadastros-users':
         return <UserManagement setCurrentPage={setCurrentPage} />;
+      case 'backup':
       case 'backup-restore':
         return <BackupRestore setCurrentPage={setCurrentPage} />;
       default:

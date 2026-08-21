@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { Sale } = require('../db');
+const { requireAuth } = require('../middlewares/auth');
+
+// Protect all reports endpoints with JWT authentication
+router.use(requireAuth);
 
 // GET /api/reports/stores-summary
 router.get('/stores-summary', async (req, res) => {

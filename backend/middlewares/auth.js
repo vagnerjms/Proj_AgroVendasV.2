@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const JWT_SECRET = process.env.JWT_SECRET || 'agrovenda_super_secure_jwt_secret_2026_agro_v2';
 
 /**
- * Generates a signed JWT for an authenticated user.
+ * Generates a signed JWT for an authenticated user (valid for 7 days).
  */
 function generateToken(user) {
   const payload = {
@@ -41,27 +41,60 @@ function comparePassword(plainPassword, storedPassword) {
 }
 
 /**
- * Middleware to authenticate requests via JWT Bearer Token.
- * Allows graceful fallback for internal scripts or open dev requests.
+ * Middleware: Enforces strict JWT Bearer authentication on protected endpoints.
+ * Returns 401 if missing, 403 if invalid or expired.
  */
-function authenticateToken(req, res, next) {
+function requireAuth(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = (authHeader && authHeader.startsWith('Bearer ')) 
     ? authHeader.split(' ')[1] 
     : req.query.token;
 
   if (!token) {
-    // In dev / transition mode, allow request if internal or flag is set
-    return next();
+    return res.status(401).json({ error: 'Acesso não autorizado. Faça login para continuar.' });
   }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
-      return res.status(403).json({ error: 'Token de acesso inválido ou expirado.' });
+      return res.status(403).json({ error: 'Sessão expirada ou token inválido. Por favor, faça login novamente.' });
     }
     req.user = user;
     next();
   });
+}
+
+// Backward-compatible alias
+const authenticateToken = requireAuth;
+
+/**
+ * Middleware: Enforces Granular Role-Based Access Control (RBAC).
+ */
+function requirePermission(permissionKey) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Usuário não autenticado.' });
+    }
+    // Administrador Geral has unrestricted access
+    if (req.user.role === 'Administrador Geral') {
+      return next();
+    }
+    if (req.user.permissions && req.user.permissions[permissionKey] === true) {
+      return next();
+    }
+    return res.status(403).json({ 
+      error: `Acesso negado. Seu perfil de usuário não possui autorização para o módulo: ${permissionKey}` 
+    });
+  };
+}
+
+/**
+ * Middleware: Enforces strictly Administrador Geral role.
+ */
+function requireAdmin(req, res, next) {
+  if (!req.user || req.user.role !== 'Administrador Geral') {
+    return res.status(403).json({ error: 'Acesso negado. Ação restrita ao Administrador Geral.' });
+  }
+  next();
 }
 
 module.exports = {
@@ -69,5 +102,8 @@ module.exports = {
   generateToken,
   hashPassword,
   comparePassword,
-  authenticateToken
+  requireAuth,
+  authenticateToken,
+  requirePermission,
+  requireAdmin
 };

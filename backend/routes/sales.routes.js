@@ -7,6 +7,10 @@ const { TAX_RATES } = require('../constants');
 const { uploadDir } = require('../middlewares/upload');
 const { sendSaleWebhook } = require('../services/webhook.service');
 const { escapeRegex } = require('../utils/security');
+const { requireAuth, requirePermission } = require('../middlewares/auth');
+
+// Protect all sales endpoints with JWT authentication
+router.use(requireAuth);
 
 // GET /api/sales
 router.get('/', async (req, res) => {

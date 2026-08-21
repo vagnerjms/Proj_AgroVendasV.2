@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const { Product, Sale, getNextSequence } = require('../db');
 const { escapeRegex } = require('../utils/security');
+const { requireAuth } = require('../middlewares/auth');
+
+// Protect all products endpoints with JWT authentication
+router.use(requireAuth);
 
 // GET /api/products
 router.get('/', async (req, res) => {

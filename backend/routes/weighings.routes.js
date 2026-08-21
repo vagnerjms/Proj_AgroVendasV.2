@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const { WeighingSlip, Sale } = require('../db');
 const { escapeRegex } = require('../utils/security');
+const { requireAuth } = require('../middlewares/auth');
+
+// Protect all weighings endpoints with JWT authentication
+router.use(requireAuth);
 
 // GET /api/weighings
 router.get('/', async (req, res) => {

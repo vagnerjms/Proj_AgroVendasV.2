@@ -1,7 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { User, getNextSequence } = require('../db');
-const { hashPassword } = require('../middlewares/auth');
+const { hashPassword, requireAuth, requirePermission } = require('../middlewares/auth');
+
+// Protect all user management endpoints with authentication and RBAC
+router.use(requireAuth);
+router.use(requirePermission('cadastros_users'));
 
 // GET /api/users
 router.get('/', async (req, res) => {

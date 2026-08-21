@@ -38,25 +38,33 @@ router.post('/', async (req, res) => {
     const newClient = new Client({
       id: `CLI-${seq}`,
       name: req.body.name,
-      document: req.body.document,
+      document: req.body.document || '',
       ie: req.body.ie || '',
       type: req.body.type || 'Comprador',
-      city: req.body.city,
-      uf: req.body.uf,
-      email: req.body.email,
-      phone: req.body.phone
+      city: req.body.city || '',
+      uf: req.body.uf || '',
+      address: req.body.address || '',
+      email: req.body.email || '',
+      phone: req.body.phone || '',
+      bankName: req.body.bankName || '',
+      agency: req.body.agency || '',
+      account: req.body.account || '',
+      pixKey: req.body.pixKey || ''
     });
     await newClient.save();
     res.status(201).json(newClient);
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao cadastrar cliente' });
+    res.status(500).json({ error: 'Erro ao cadastrar cliente/produtor' });
   }
 });
 
 // PUT /api/clients/:id
 router.put('/:id', async (req, res) => {
   try {
-    const allowed = ['name', 'document', 'ie', 'type', 'city', 'uf', 'email', 'phone'];
+    const allowed = [
+      'name', 'document', 'ie', 'type', 'city', 'uf', 'address', 'email', 'phone',
+      'bankName', 'agency', 'account', 'pixKey'
+    ];
     const updateData = {};
     for (const key of allowed) {
       if (req.body[key] !== undefined) updateData[key] = req.body[key];

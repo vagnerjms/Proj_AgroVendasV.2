@@ -168,14 +168,18 @@ class NfeParserService {
     const emit = infNFe.emit || {};
     const emitName = emit.xNome || '';
     const emitDoc = emit.CNPJ || emit.CPF || '';
+    const emitIE = emit.IE || '';
     const emitCity = emit.enderEmit?.xMun || '';
     const emitUF = emit.enderEmit?.UF || '';
+    const emitAddress = [emit.enderEmit?.xLgr, emit.enderEmit?.nro, emit.enderEmit?.xBairro].filter(Boolean).join(', ');
 
     const dest = infNFe.dest || {};
     const destName = dest.xNome || '';
     const destDoc = dest.CNPJ || dest.CPF || '';
+    const destIE = dest.IE || '';
     const destCity = dest.enderDest?.xMun || '';
     const destUF = dest.enderDest?.UF || '';
+    const destAddress = [dest.enderDest?.xLgr, dest.enderDest?.nro, dest.enderDest?.xBairro].filter(Boolean).join(', ');
 
     const ide = infNFe.ide || {};
     const nNF = ide.nNF || '';
@@ -233,15 +237,19 @@ class NfeParserService {
       emit: {
         name: emitName,
         document: emitDoc,
+        ie: emitIE,
         city: emitCity,
         uf: emitUF,
-        originText: emitCity ? `Fazenda / Silo - ${emitCity}/${emitUF}` : ''
+        address: emitAddress,
+        originText: emitName ? (emitCity ? `${emitName} (${emitCity}/${emitUF})` : emitName) : (emitCity ? `Fazenda / Silo - ${emitCity}/${emitUF}` : '')
       },
       dest: {
         name: destName,
         document: destDoc,
+        ie: destIE,
         city: destCity,
-        uf: destUF
+        uf: destUF,
+        address: destAddress
       },
       totalOperation: vNF,
       totalVolumes: qVol,

@@ -66,6 +66,12 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   const [xmlParsing, setXmlParsing] = useState(false);
   const [xmlSuccess, setXmlSuccess] = useState(false);
 
+  // Vínculo Inteligente de Produtores (Emitente da NF-e)
+  const [matchedProducer, setMatchedProducer] = useState(null);
+  const [unmatchedProducer, setUnmatchedProducer] = useState(null);
+  const [registeringProducer, setRegisteringProducer] = useState(false);
+  const [producerRegisteredNotice, setProducerRegisteredNotice] = useState('');
+
   // Product Selection, Unit Type & Dynamic Pricings (INITIALIZED BLANK)
   const [selectedProduct, setSelectedProduct] = useState('');
   const [unitType, setUnitType] = useState('Caixas (29kg)');
@@ -136,6 +142,9 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     setNfeKey('');
     setEvidenceFile(null);
     setXmlSuccess(false);
+    setMatchedProducer(null);
+    setUnmatchedProducer(null);
+    setProducerRegisteredNotice('');
     setErrorMessage('');
     setSuccessMessage('');
   };
@@ -391,6 +400,40 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         setOrigin(data.emit.originText);
       }
 
+      // 🌾 VÍNCULO INTELIGENTE DO PRODUTOR (EMITENTE DA NOTA FISCAL)
+      if (data.emit?.name || data.emit?.document) {
+        const rawDoc = (data.emit.document || '').replace(/\D/g, '');
+        const emitNameClean = (data.emit.name || '').trim().toLowerCase();
+
+        const foundProd = clients.find(c => {
+          const cDoc = (c.document || '').replace(/\D/g, '');
+          const cName = (c.name || '').trim().toLowerCase();
+          const docMatch = rawDoc && cDoc && rawDoc === cDoc;
+          const nameMatch = emitNameClean && cName && (cName === emitNameClean || cName.includes(emitNameClean) || emitNameClean.includes(cName));
+          return docMatch || nameMatch;
+        });
+
+        if (foundProd) {
+          setMatchedProducer(foundProd);
+          setUnmatchedProducer(null);
+          setProducerRegisteredNotice('');
+          if (!origin || origin.toLowerCase().includes('fazenda') || origin.toLowerCase().includes('silo')) {
+            setOrigin(foundProd.name + (foundProd.city ? ` (${foundProd.city}/${foundProd.uf || foundProd.state || 'GO'})` : ''));
+          }
+        } else {
+          setMatchedProducer(null);
+          setUnmatchedProducer({
+            name: data.emit.name || 'Produtor Rural',
+            document: data.emit.document || '',
+            ie: data.emit.ie || '',
+            city: data.emit.city || '',
+            uf: data.emit.uf || '',
+            address: data.emit.address || ''
+          });
+          setProducerRegisteredNotice('');
+        }
+      }
+
       if (data.totalKg && data.totalKg > 0) {
         setTotalWeightKg(String(data.totalKg));
         if (data.totalOperation && data.totalOperation > 0) {
@@ -440,6 +483,43 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       setErrorMessage(`Erro ao importar NF-e XML: ${err.message}`);
     } finally {
       setXmlParsing(false);
+    }
+  };
+
+  const handleQuickRegisterProducer = async () => {
+    if (!unmatchedProducer) return;
+    setRegisteringProducer(true);
+    setErrorMessage('');
+    try {
+      const res = await fetch('/api/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: unmatchedProducer.name,
+          document: unmatchedProducer.document,
+          ie: unmatchedProducer.ie,
+          type: 'Produtor',
+          city: unmatchedProducer.city,
+          uf: unmatchedProducer.uf,
+          address: unmatchedProducer.address
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error('Erro ao salvar produtor no banco de dados');
+      }
+
+      const newProd = await res.json();
+      setClients(prev => [...prev, newProd]);
+      setMatchedProducer(newProd);
+      setUnmatchedProducer(null);
+      setProducerRegisteredNotice(`Produtor "${newProd.name}" cadastrado e vinculado com sucesso!`);
+      setOrigin(newProd.name + (newProd.city ? ` (${newProd.city}/${newProd.uf})` : ''));
+    } catch (err) {
+      console.error(err);
+      setErrorMessage(`Erro ao cadastrar produtor: ${err.message}`);
+    } finally {
+      setRegisteringProducer(false);
     }
   };
 
@@ -617,10 +697,106 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
 
       {/* XML Alert */}
       {xmlSuccess && (
-        <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 px-4 py-3 rounded-lg flex items-center justify-between text-xs">
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 px-4 py-3 rounded-lg flex items-center justify-between text-xs shadow-sm">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
             <span><strong>Parser de NF-e concluído!</strong> Pesos, valores da NF e destinatário importados com sucesso.</span>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmação de Cadastro Rápido do Produtor */}
+      {producerRegisteredNotice && (
+        <div className="bg-emerald-100 border border-emerald-400 text-emerald-950 px-4 py-3 rounded-lg flex items-center gap-2 text-xs font-bold shadow-sm">
+          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+          <span>{producerRegisteredNotice}</span>
+        </div>
+      )}
+
+      {/* 🌾 CARD DE VÍNCULO INTELIGENTE DO PRODUTOR */}
+      {matchedProducer && (
+        <div className="bg-emerald-50/90 border-2 border-emerald-400 p-4 rounded-xl shadow-sm space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-emerald-700 shrink-0" />
+              <span className="text-xs font-extrabold text-emerald-950 uppercase tracking-wider">
+                Produtor Vinculado com Sucesso (Cadastro Ativo)
+              </span>
+            </div>
+            <span className="text-[11px] font-extrabold bg-emerald-200 text-emerald-950 px-2.5 py-0.5 rounded-full border border-emerald-300 w-fit">
+              {matchedProducer.type || 'Produtor'}
+            </span>
+          </div>
+          
+          <div className="text-sm font-black text-gray-900 flex flex-wrap items-center gap-2">
+            <span>🌾 {matchedProducer.name}</span>
+            {matchedProducer.document && (
+              <span className="text-xs font-bold text-gray-600 bg-white px-2 py-0.5 rounded border border-emerald-200">
+                Doc: {matchedProducer.document}
+              </span>
+            )}
+            {matchedProducer.ie && (
+              <span className="text-xs font-bold text-gray-600 bg-white px-2 py-0.5 rounded border border-emerald-200">
+                IE: {matchedProducer.ie}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
+            <div className="bg-white p-2.5 rounded-lg border border-emerald-200 shadow-2xs">
+              <span className="block text-[10px] font-bold text-gray-500 uppercase">Município / Estado</span>
+              <span className="font-bold text-gray-900">{matchedProducer.city || 'Campo Alegre'}/{matchedProducer.uf || matchedProducer.state || 'GO'}</span>
+            </div>
+
+            <div className="bg-white p-2.5 rounded-lg border border-emerald-200 shadow-2xs">
+              <span className="block text-[10px] font-bold text-gray-500 uppercase">Endereço / Fazenda</span>
+              <span className="font-bold text-gray-900 truncate block" title={matchedProducer.address || 'Fazenda Principal'}>
+                {matchedProducer.address || 'Fazenda / Sede Principal'}
+              </span>
+            </div>
+
+            <div className="bg-white p-2.5 rounded-lg border border-emerald-200 shadow-2xs">
+              <span className="block text-[10px] font-bold text-gray-500 uppercase">Dados Bancários / Pix</span>
+              <span className="font-bold text-gray-900 truncate block" title={matchedProducer.pixKey || matchedProducer.bankName || 'Pendente de preenchimento'}>
+                {matchedProducer.pixKey ? `🔑 Pix: ${matchedProducer.pixKey}` : (matchedProducer.bankName ? `🏦 ${matchedProducer.bankName} Ag:${matchedProducer.agency || '-'}` : 'ℹ️ Pendente no cadastro')}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⚠️ AVISO DE NOVO PRODUTOR DETECTADO NA NF-E */}
+      {unmatchedProducer && !matchedProducer && (
+        <div className="bg-amber-50/95 border-2 border-amber-400 p-4 rounded-xl shadow-sm space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+              <span className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                Novo Produtor Identificado na NF-e
+              </span>
+            </div>
+            <span className="text-[11px] font-bold bg-amber-200 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300 w-fit">
+              Não Cadastrado na Base
+            </span>
+          </div>
+
+          <div className="text-xs text-amber-950">
+            O emitente identificado na nota fiscal <strong className="text-gray-950 font-black text-sm">"{unmatchedProducer.name}"</strong> (CPF/CNPJ: <strong>{unmatchedProducer.document || 'Não informado'}</strong> {unmatchedProducer.ie ? `· IE: ${unmatchedProducer.ie}` : ''} · {unmatchedProducer.city}/{unmatchedProducer.uf}) ainda não possui cadastro no sistema.
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-1">
+            <button
+              type="button"
+              disabled={registeringProducer}
+              onClick={handleQuickRegisterProducer}
+              className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-extrabold px-4 py-2.5 rounded-lg shadow flex items-center justify-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Plus className="w-4 h-4" />
+              {registeringProducer ? 'Salvando Produtor no Banco...' : 'Cadastrar Produtor no Sistema (1 clique)'}
+            </button>
+            <span className="text-[11px] text-amber-900 font-medium">
+              ✨ Salva automaticamente na tabela de Clientes & Produtores com todos os dados fiscais da nota.
+            </span>
           </div>
         </div>
       )}

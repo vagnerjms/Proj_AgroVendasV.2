@@ -4,12 +4,6 @@ const path = require('path');
 const fs = require('fs');
 const { Sale, Client, Product, Purchase, WeighingSlip, FinancialSummary, User, recalibrateCounters } = require('../db');
 const { upload, uploadDir } = require('../middlewares/upload');
-const { requireAuth, requirePermission } = require('../middlewares/auth');
-
-// Protect all backup & restore endpoints with authentication and RBAC
-router.use(requireAuth);
-router.use(requirePermission('backup_sistema'));
-
 // GET /api/backup/stats
 router.get('/stats', async (req, res) => {
   try {
@@ -186,8 +180,10 @@ router.get('/export', async (req, res) => {
   }
 });
 
-// POST /api/backup/restore
-router.post('/restore', upload.single('backupFile'), async (req, res) => {
+const { requireAuth, requirePermission } = require('../middlewares/auth');
+
+// POST /api/backup/restore (Apenas Administradores Autenticados)
+router.post('/restore', requireAuth, requirePermission('backup_sistema'), upload.single('backupFile'), async (req, res) => {
   try {
     let backupData = null;
 

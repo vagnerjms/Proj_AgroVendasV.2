@@ -160,30 +160,30 @@ export default function App() {
       case 'sales-history':
         return <SalesHistory setCurrentPage={handleNavigate} onEditSale={handleEditSale} />;
       case 'weighing-slips':
-        return <WeighingSlips initialStatus="all" setCurrentPage={setCurrentPage} />;
+        return <WeighingSlips initialStatus="all" setCurrentPage={handleNavigate} />;
       case 'new-purchase':
-        return <Purchases mode="new" setCurrentPage={setCurrentPage} />;
+        return <Purchases mode="new" setCurrentPage={handleNavigate} />;
       case 'purchases-history':
-        return <Purchases mode="history" setCurrentPage={setCurrentPage} />;
+        return <Purchases mode="history" setCurrentPage={handleNavigate} />;
       case 'alerts':
-        return <AgendaAlerts setCurrentPage={setCurrentPage} />;
+        return <AgendaAlerts setCurrentPage={handleNavigate} />;
       case 'reports':
-        return <Reports view="reports" setCurrentPage={setCurrentPage} />;
+        return <Reports view="reports" setCurrentPage={handleNavigate} />;
       case 'financial':
-        return <Financial view="overview" setCurrentPage={setCurrentPage} />;
+        return <Financial view="overview" setCurrentPage={handleNavigate} />;
       case 'financial-funrural':
-        return <Financial view="funrural" setCurrentPage={setCurrentPage} />;
+        return <Financial view="funrural" setCurrentPage={handleNavigate} />;
       case 'cadastros-clients':
-        return <Cadastros tab="clients" setCurrentPage={setCurrentPage} />;
+        return <Cadastros tab="clients" setCurrentPage={handleNavigate} />;
       case 'cadastros-products':
-        return <Cadastros tab="products" setCurrentPage={setCurrentPage} />;
+        return <Cadastros tab="products" setCurrentPage={handleNavigate} />;
       case 'cadastros-users':
-        return <UserManagement setCurrentPage={setCurrentPage} />;
+        return <UserManagement setCurrentPage={handleNavigate} />;
       case 'backup':
       case 'backup-restore':
-        return <BackupRestore setCurrentPage={setCurrentPage} />;
+        return <BackupRestore setCurrentPage={handleNavigate} />;
       default:
-        return <Dashboard setCurrentPage={setCurrentPage} />;
+        return <Dashboard setCurrentPage={handleNavigate} />;
     }
   };
 

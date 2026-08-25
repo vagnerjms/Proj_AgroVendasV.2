@@ -13,17 +13,25 @@ import {
   X, 
   CheckCircle2, 
   AlertTriangle,
+  AlertCircle,
   Layers,
   DollarSign
 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 
-export default function Cadastros({ tab = 'clients' }) {
+export default function Cadastros({ tab = 'clients', setCurrentPage }) {
   const [clients, setClients] = useState([]);
   const [products, setProducts] = useState([]);
   const [activeTab, setActiveTab] = useState(tab);
   const [search, setSearch] = useState('');
   const [clientTypeFilter, setClientTypeFilter] = useState('all');
+
+  // Sync activeTab whenever the tab prop changes from sidebar navigation
+  useEffect(() => {
+    if (tab) {
+      setActiveTab(tab);
+    }
+  }, [tab]);
 
   // Client Modal States
   const [clientModalOpen, setClientModalOpen] = useState(false);
@@ -306,14 +314,20 @@ export default function Cadastros({ tab = 'clients' }) {
       {/* Tabs */}
       <div className="flex border-b border-gray-200 gap-6 text-sm font-semibold">
         <button
-          onClick={() => setActiveTab('clients')}
+          onClick={() => {
+            setActiveTab('clients');
+            if (setCurrentPage) setCurrentPage('cadastros-clients');
+          }}
           className={`pb-3 flex items-center gap-2 cursor-pointer transition-colors ${activeTab === 'clients' ? 'border-b-2 border-[#df7b1b] text-[#df7b1b]' : 'text-gray-400 hover:text-gray-600'}`}
         >
           <Users className="w-4 h-4" />
           Clientes & Produtores ({clients.length})
         </button>
         <button
-          onClick={() => setActiveTab('products')}
+          onClick={() => {
+            setActiveTab('products');
+            if (setCurrentPage) setCurrentPage('cadastros-products');
+          }}
           className={`pb-3 flex items-center gap-2 cursor-pointer transition-colors ${activeTab === 'products' ? 'border-b-2 border-[#df7b1b] text-[#df7b1b]' : 'text-gray-400 hover:text-gray-600'}`}
         >
           <Boxes className="w-4 h-4" />

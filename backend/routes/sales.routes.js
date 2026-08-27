@@ -9,49 +9,7 @@ const { sendSaleWebhook } = require('../services/webhook.service');
 const { escapeRegex } = require('../utils/security');
 const { requireAuth, requirePermission } = require('../middlewares/auth');
 
-// Protect all sales endpoints with JWT authentication
-router.use(requireAuth);
-
-// GET /api/sales (Supports optional page/limit pagination with X-Total-Count)
-router.get('/', async (req, res) => {
-  try {
-    const { operationType, status, search, page, limit } = req.query;
-    let filter = {};
-    if (operationType && operationType !== 'all') {
-      filter.operationType = operationType;
-    }
-    if (status && status !== 'all') {
-      filter.status = status;
-    }
-    if (search && search.trim()) {
-      const escaped = escapeRegex(search);
-      const regex = new RegExp(escaped, 'i');
-      filter.$or = [
-        { id: regex },
-        { client: regex },
-        { nfeKey: regex },
-        { destCity: regex },
-        { 'items.product': regex }
-      ];
-    }
-
-    const total = await Sale.countDocuments(filter);
-    res.setHeader('X-Total-Count', total);
-
-    let query = Sale.find(filter).sort({ saleDate: -1, createdAt: -1 });
-    if (page && limit) {
-      const pageNum = Math.max(1, parseInt(page, 10) || 1);
-      const limitNum = Math.max(1, Math.min(500, parseInt(limit, 10) || 50));
-      query = query.skip((pageNum - 1) * limitNum).limit(limitNum);
-    }
-    const sales = await query.lean();
-    res.json(sales);
-  } catch (err) {
-    res.status(500).json({ error: 'Erro ao buscar vendas' });
-  }
-});
-
-// GET /api/sales/agenda-events (Recebíveis formatados por Data de Vencimento para Google Calendar)
+// GET /api/sales/agenda-events (Recebíveis formatados por Data de Vencimento para n8n & Google Calendar - Endpoint Público de Feed)
 router.get('/agenda-events', async (req, res) => {
   try {
     const sales = await Sale.find().sort({ saleDate: -1 });
@@ -105,6 +63,48 @@ router.get('/agenda-events', async (req, res) => {
     res.json(events);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao listar agenda de eventos' });
+  }
+});
+
+// Protect internal sales endpoints with JWT authentication
+router.use(requireAuth);
+
+// GET /api/sales (Supports optional page/limit pagination with X-Total-Count)
+router.get('/', async (req, res) => {
+  try {
+    const { operationType, status, search, page, limit } = req.query;
+    let filter = {};
+    if (operationType && operationType !== 'all') {
+      filter.operationType = operationType;
+    }
+    if (status && status !== 'all') {
+      filter.status = status;
+    }
+    if (search && search.trim()) {
+      const escaped = escapeRegex(search);
+      const regex = new RegExp(escaped, 'i');
+      filter.$or = [
+        { id: regex },
+        { client: regex },
+        { nfeKey: regex },
+        { destCity: regex },
+        { 'items.product': regex }
+      ];
+    }
+
+    const total = await Sale.countDocuments(filter);
+    res.setHeader('X-Total-Count', total);
+
+    let query = Sale.find(filter).sort({ saleDate: -1, createdAt: -1 });
+    if (page && limit) {
+      const pageNum = Math.max(1, parseInt(page, 10) || 1);
+      const limitNum = Math.max(1, Math.min(500, parseInt(limit, 10) || 50));
+      query = query.skip((pageNum - 1) * limitNum).limit(limitNum);
+    }
+    const sales = await query.lean();
+    res.json(sales);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar vendas' });
   }
 });
 

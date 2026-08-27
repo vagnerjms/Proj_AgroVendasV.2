@@ -33,6 +33,7 @@ const DEFAULT_COLUMNS = {
   saleDate: true,
   client: true,
   totalKg: true,
+  valorTotalVP: true,
   totalOperation: true,
   funrural: true,
   net: true,
@@ -46,6 +47,7 @@ const COLUMN_DEFINITIONS = [
   { id: 'saleDate', label: 'Data VP / NF' },
   { id: 'client', label: 'Destinatário (Cliente)' },
   { id: 'totalKg', label: 'Peso (kg) / Caixas' },
+  { id: 'valorTotalVP', label: 'Valor Total de VP' },
   { id: 'totalOperation', label: 'Valor Total da NF' },
   { id: 'funrural', label: '(-) FUNRURAL (1,63%)' },
   { id: 'net', label: '(=) Líquido a Receber' },
@@ -85,7 +87,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
     if (sortField === field) {
       nextDir = sortDirection === 'asc' ? 'desc' : 'asc';
     } else {
-      if (['saleDate', 'totalOperation', 'net', 'feeValue'].includes(field)) {
+      if (['saleDate', 'valorTotalVP', 'totalOperation', 'net', 'feeValue'].includes(field)) {
         nextDir = 'desc';
       } else {
         nextDir = 'asc';
@@ -302,6 +304,19 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
     }
   };
 
+  // Helper calculation for Valor Total de VP (Comercial)
+  const getValorTotalVP = (sale) => {
+    if (Number(sale.valorTotalVP) > 0) return Number(sale.valorTotalVP);
+    const caixas = Number(sale.totalVolumes) || (Number(sale.totalKg) > 0 ? (Number(sale.totalKg) / 29) : 0);
+    let cotacao = Number(sale.dailyQuote) || 0;
+    if (!cotacao && sale.notes) {
+      const matchCot = sale.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
+      if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
+    }
+    if (!cotacao) cotacao = 45.0;
+    return caixas * cotacao;
+  };
+
   // Helper calculation for Líquido a Receber (Valor NF - Funrural)
   const getNetReceivable = (sale) => {
     const nfTotal = Number(sale.totalOperation) || 0;
@@ -333,6 +348,12 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
       const kgA = Number(a.totalKg) || 0;
       const kgB = Number(b.totalKg) || 0;
       return sortDirection === 'asc' ? kgA - kgB : kgB - kgA;
+    }
+
+    if (sortField === 'valorTotalVP') {
+      const vpA = getValorTotalVP(a);
+      const vpB = getValorTotalVP(b);
+      return sortDirection === 'asc' ? vpA - vpB : vpB - vpA;
     }
 
     if (sortField === 'totalOperation') {
@@ -452,6 +473,8 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
               <option value="saleDate_asc">Data (Mais Antiga Primeiro)</option>
               <option value="client_asc">Cliente (A → Z)</option>
               <option value="client_desc">Cliente (Z → A)</option>
+              <option value="valorTotalVP_desc">Valor Total de VP (Maior → Menor)</option>
+              <option value="valorTotalVP_asc">Valor Total de VP (Menor → Maior)</option>
               <option value="totalOperation_desc">Valor Total NF (Maior → Menor)</option>
               <option value="totalOperation_asc">Valor Total NF (Menor → Maior)</option>
               <option value="net_desc">Líquido a Receber (Maior → Menor)</option>
@@ -607,6 +630,19 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                   </th>
                 )}
 
+                {visibleColumns.valorTotalVP && (
+                  <th 
+                    onClick={() => handleSortChange('valorTotalVP')}
+                    className="py-3.5 px-4 text-right cursor-pointer select-none hover:bg-gray-100/80 group transition-colors text-blue-950 font-bold bg-blue-50/30"
+                    title="Clique para ordenar por Valor Total de VP"
+                  >
+                    <div className="flex items-center justify-end">
+                      <span>Valor Total de VP</span>
+                      {renderSortIndicator('valorTotalVP')}
+                    </div>
+                  </th>
+                )}
+
                 {visibleColumns.totalOperation && (
                   <th 
                     onClick={() => handleSortChange('totalOperation')}
@@ -723,6 +759,14 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                           <div className="text-gray-500 text-[11px]">
                             {formatNumber(sale.totalVolumes, 2)} cx (29kg)
                           </div>
+                        </td>
+                      )}
+
+                      {/* Valor Total de VP */}
+                      {visibleColumns.valorTotalVP && (
+                        <td className="py-3 px-4 text-right font-extrabold text-blue-950 bg-blue-50/10">
+                          {formatCurrency(getValorTotalVP(sale))}
+                          <span className="block text-[10px] text-gray-400 font-normal">Base Comercial</span>
                         </td>
                       )}
 

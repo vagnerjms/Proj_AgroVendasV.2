@@ -169,6 +169,7 @@ router.post('/', async (req, res) => {
       notes: body.notes || "",
       nfFile: body.nfFile || null,
       nfeKey: body.nfeKey || "",
+      nfeDate: body.nfeDate || (body.nfFile ? body.saleDate : ""),
       evidenceFile: body.evidenceFile || null,
       freightType: body.freightType || 'FOB (Retira na Origem)',
       carrierName: body.carrierName || '',

@@ -16,6 +16,7 @@ const SaleSchema = new mongoose.Schema({
   notes: { type: String, default: '' },
   nfFile: { type: String, default: null },
   nfeKey: { type: String, default: '' },
+  nfeDate: { type: String, default: '' },
   evidenceFile: { type: String, default: null },
   freightType: { type: String, default: 'FOB (Retira na Origem)' },
   carrierName: { type: String, default: '' },

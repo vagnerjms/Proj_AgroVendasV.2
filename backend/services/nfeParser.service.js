@@ -101,6 +101,7 @@ class NfeParserService {
       nfeNumber: nNF,
       nfeKey: nfeKey,
       saleDate: dhEmi,
+      nfeDate: dhEmi,
       emit: {
         name: 'BRUNO PERES ROMEIRO',
         document: '037.582.631-90',
@@ -234,6 +235,7 @@ class NfeParserService {
       nfeNumber: nNF,
       nfeKey: nfeKey,
       saleDate: dhEmi,
+      nfeDate: dhEmi,
       emit: {
         name: emitName,
         document: emitDoc,

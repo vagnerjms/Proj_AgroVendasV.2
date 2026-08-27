@@ -31,6 +31,7 @@ import ContractModal from '../components/ContractModal';
 const DEFAULT_COLUMNS = {
   id: true,
   saleDate: true,
+  nfeDate: true,
   client: true,
   totalKg: true,
   valorTotalVP: true,
@@ -44,7 +45,8 @@ const DEFAULT_COLUMNS = {
 
 const COLUMN_DEFINITIONS = [
   { id: 'id', label: 'Cód VP / NF' },
-  { id: 'saleDate', label: 'Data VP / NF' },
+  { id: 'saleDate', label: 'Data da VP' },
+  { id: 'nfeDate', label: 'Data da NF' },
   { id: 'client', label: 'Destinatário (Cliente)' },
   { id: 'totalKg', label: 'Peso (kg) / Caixas' },
   { id: 'valorTotalVP', label: 'Valor Total de VP' },
@@ -87,7 +89,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
     if (sortField === field) {
       nextDir = sortDirection === 'asc' ? 'desc' : 'asc';
     } else {
-      if (['saleDate', 'valorTotalVP', 'totalOperation', 'net', 'feeValue'].includes(field)) {
+      if (['saleDate', 'nfeDate', 'valorTotalVP', 'totalOperation', 'net', 'feeValue'].includes(field)) {
         nextDir = 'desc';
       } else {
         nextDir = 'asc';
@@ -338,6 +340,12 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
       return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
     }
 
+    if (sortField === 'nfeDate') {
+      const dateA = new Date(a.nfeDate || a.saleDate || 0).getTime();
+      const dateB = new Date(b.nfeDate || b.saleDate || 0).getTime();
+      return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
+    }
+
     if (sortField === 'client') {
       const nameA = (a.client || '').toLowerCase();
       const nameB = (b.client || '').toLowerCase();
@@ -469,8 +477,10 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
             >
               <option value="id_asc">Código VP (Crescente: VP001 → VP034)</option>
               <option value="id_desc">Código VP (Decrescente: VP034 → VP001)</option>
-              <option value="saleDate_desc">Data (Mais Recente Primeiro)</option>
-              <option value="saleDate_asc">Data (Mais Antiga Primeiro)</option>
+              <option value="saleDate_desc">Data da VP (Mais Recente Primeiro)</option>
+              <option value="saleDate_asc">Data da VP (Mais Antiga Primeiro)</option>
+              <option value="nfeDate_desc">Data da NF (Mais Recente Primeiro)</option>
+              <option value="nfeDate_asc">Data da NF (Mais Antiga Primeiro)</option>
               <option value="client_asc">Cliente (A → Z)</option>
               <option value="client_desc">Cliente (Z → A)</option>
               <option value="valorTotalVP_desc">Valor Total de VP (Maior → Menor)</option>
@@ -595,11 +605,24 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                   <th 
                     onClick={() => handleSortChange('saleDate')}
                     className="py-3.5 px-4 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
-                    title="Clique para ordenar por Data"
+                    title="Clique para ordenar por Data da VP"
                   >
                     <div className="flex items-center">
-                      <span>Data VP / NF</span>
+                      <span>Data da VP</span>
                       {renderSortIndicator('saleDate')}
+                    </div>
+                  </th>
+                )}
+
+                {visibleColumns.nfeDate && (
+                  <th 
+                    onClick={() => handleSortChange('nfeDate')}
+                    className="py-3.5 px-4 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
+                    title="Clique para ordenar por Data da NF"
+                  >
+                    <div className="flex items-center">
+                      <span>Data da NF</span>
+                      {renderSortIndicator('nfeDate')}
                     </div>
                   </th>
                 )}
@@ -737,8 +760,25 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                         <td className="py-3 px-4">
                           <div className="font-semibold text-gray-800">{formatDate(sale.saleDate)}</div>
                           <div className="text-gray-400 text-[10px]">
-                            {sale.notes?.includes('Vencimento') ? sale.notes.split('Vencimento:')[1]?.split('.')[0] : ''}
+                            {sale.dueDate ? `Venc: ${formatDate(sale.dueDate)}` : (sale.notes?.includes('Vencimento') ? sale.notes.split('Vencimento:')[1]?.split('.')[0] : '')}
                           </div>
+                        </td>
+                      )}
+
+                      {visibleColumns.nfeDate && (
+                        <td className="py-3 px-4">
+                          {sale.nfFile || sale.nfeKey || sale.nfeDate ? (
+                            <>
+                              <div className="font-semibold text-gray-800">
+                                {formatDate(sale.nfeDate || sale.saleDate)}
+                              </div>
+                              <div className="text-emerald-700 font-mono text-[10px]">
+                                {sale.nfFile ? sale.nfFile.replace('.pdf', '') : (sale.nfeKey ? `...${sale.nfeKey.slice(-6)}` : 'Emitida')}
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 text-[11px] font-medium">Pendente NF</span>
+                          )}
                         </td>
                       )}
 

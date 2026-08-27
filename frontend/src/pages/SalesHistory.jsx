@@ -22,7 +22,8 @@ import {
   ArrowDown,
   Settings,
   RotateCcw,
-  Check
+  Check,
+  Paperclip
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatKg, formatNumber } from '../utils/formatters';
 import ContractModal from '../components/ContractModal';

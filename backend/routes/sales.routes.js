@@ -404,4 +404,19 @@ router.post('/:id/sync-calendar', async (req, res) => {
   }
 });
 
+// POST /api/sales/sync-all-webhooks (Dispara webhook para todas as vendas no banco de dados)
+router.post('/sync-all-webhooks', async (req, res) => {
+  try {
+    const sales = await Sale.find().sort({ saleDate: 1 });
+    let count = 0;
+    for (const sale of sales) {
+      sendSaleWebhook('sale.batch_sync', sale);
+      count++;
+    }
+    res.json({ success: true, count, message: `${count} eventos de vendas foram disparados para o webhook do n8n / Google Calendar!` });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao sincronizar todas as vendas via webhook' });
+  }
+});
+
 module.exports = router;

@@ -11,13 +11,15 @@ import {
   Printer, 
   ArrowUpRight,
   TrendingUp,
-  FileText
+  FileText,
+  RefreshCw
 } from 'lucide-react';
 import { formatCurrency, formatNumber } from '../utils/formatters';
 
 export default function AgendaAlerts({ setCurrentPage }) {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [selectedLoja, setSelectedLoja] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [search, setSearch] = useState('');
@@ -45,6 +47,24 @@ export default function AgendaAlerts({ setCurrentPage }) {
   const showNotification = (msg) => {
     setNotification(msg);
     setTimeout(() => setNotification(''), 3500);
+  };
+
+  const handleSyncAll = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/sales/sync-all-webhooks', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        showNotification(data.message || 'Todas as vendas foram enviadas para o Webhook do n8n / Google Calendar com sucesso!');
+      } else {
+        alert(data.error || 'Erro ao sincronizar vendas.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro de conexão ao sincronizar com webhook.');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleSettle = async (saleId) => {
@@ -174,7 +194,17 @@ export default function AgendaAlerts({ setCurrentPage }) {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleSyncAll}
+            disabled={syncing}
+            className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+            title="Dispara todos os lançamentos de vendas para o Webhook do n8n / Google Agenda"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            <span>{syncing ? 'Sincronizando com n8n...' : '⚡ Sincronizar Tudo c/ Google Agenda'}</span>
+          </button>
+
           <button
             onClick={() => window.print()}
             className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-colors cursor-pointer"

@@ -1,13 +1,13 @@
 {
-  "name": "AgroVenda V2 - Backup Google Drive Oficial (Sem Duplicação e PDFs Válidos)",
+  "name": "AgroVenda V2 - Backup Google Drive Oficial (Sem Duplicação)",
   "nodes": [
     {
       "parameters": {},
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        -200,
-        0
+        -280,
+        40
       ],
       "id": "10000000-backup-4000-8000-000000000000",
       "name": "Executar Backup Manualmente"
@@ -27,8 +27,8 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -200,
-        -160
+        -280,
+        -140
       ],
       "id": "10000001-backup-4000-8000-000000000001",
       "name": "Agendamento Diário (02:00h)"
@@ -47,21 +47,21 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        60,
-        -80
+        -40,
+        -60
       ],
       "id": "10000002-backup-4000-8000-000000000002",
       "name": "Buscar Dados AgroVenda"
     },
     {
       "parameters": {
-        "jsCode": "const exportData = $input.first().json;\nconst files = exportData.files || [];\nconst results = [];\n\n// 1. Arquivo de Dados e Vendas Consolidado (JSON formatado)\nconst now = new Date();\nconst pad = (n) => String(n).padStart(2, '0');\nconst dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;\nconst dbFileName = `agrovenda_backup_vendas_${dateStr}.json`;\nconst dbContent = JSON.stringify(exportData.database || {}, null, 2);\n\nresults.push({\n  json: {\n    fileName: dbFileName,\n    tipo: 'Banco de Dados'\n  },\n  binary: {\n    data: await this.helpers.prepareBinaryData(\n      Buffer.from(dbContent, 'utf8'),\n      dbFileName,\n      'application/json'\n    )\n  }\n});\n\n// 2. Apenas se houver arquivos de Notas Fiscais reais (com conteúdo válido)\nfor (const f of files) {\n  if (f.contentBase64 && f.sizeBytes > 100) {\n    const mimeType = f.filename.toLowerCase().endsWith('.pdf') ? 'application/pdf' :\n                     (f.filename.toLowerCase().endsWith('.xml') ? 'application/xml' :\n                     (f.filename.toLowerCase().endsWith('.png') ? 'image/png' :\n                     (f.filename.toLowerCase().endsWith('.jpg') || f.filename.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' : 'application/octet-stream')));\n\n    const fileBuffer = Buffer.from(f.contentBase64, 'base64');\n    \n    results.push({\n      json: {\n        fileName: f.filename,\n        sizeBytes: f.sizeBytes,\n        tipo: 'Nota Fiscal / Documento'\n      },\n      binary: {\n        data: await this.helpers.prepareBinaryData(\n          fileBuffer,\n          f.filename,\n          mimeType\n        )\n      }\n    });\n  }\n}\n\nreturn results;"
+        "jsCode": "const exportData = $input.first().json;\nconst files = exportData.files || [];\nconst results = [];\n\n// 1. Arquivo de Dados e Vendas Consolidado do Dia (JSON formatado)\nconst now = new Date();\nconst pad = (n) => String(n).padStart(2, '0');\nconst dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;\nconst dbFileName = `agrovenda_backup_vendas_${dateStr}.json`;\nconst dbContent = JSON.stringify(exportData.database || {}, null, 2);\n\nresults.push({\n  json: {\n    fileName: dbFileName,\n    tipo: 'Banco de Dados'\n  },\n  binary: {\n    data: await this.helpers.prepareBinaryData(\n      Buffer.from(dbContent, 'utf8'),\n      dbFileName,\n      'application/json'\n    )\n  }\n});\n\n// 2. Arquivos de Notas Fiscais e Comprovantes (apenas com conteúdo válido)\nfor (const f of files) {\n  if (f.contentBase64 && f.sizeBytes > 100) {\n    const mimeType = f.filename.toLowerCase().endsWith('.pdf') ? 'application/pdf' :\n                     (f.filename.toLowerCase().endsWith('.xml') ? 'application/xml' :\n                     (f.filename.toLowerCase().endsWith('.png') ? 'image/png' :\n                     (f.filename.toLowerCase().endsWith('.jpg') || f.filename.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' : 'application/octet-stream')));\n\n    const fileBuffer = Buffer.from(f.contentBase64, 'base64');\n    \n    results.push({\n      json: {\n        fileName: f.filename,\n        sizeBytes: f.sizeBytes,\n        tipo: 'Nota Fiscal / Documento'\n      },\n      binary: {\n        data: await this.helpers.prepareBinaryData(\n          fileBuffer,\n          f.filename,\n          mimeType\n        )\n      }\n    });\n  }\n}\n\nreturn results;"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        300,
-        -80
+        200,
+        -60
       ],
       "id": "10000003-backup-4000-8000-000000000003",
       "name": "Preparar Arquivos Binários Válidos"
@@ -69,10 +69,9 @@
     {
       "parameters": {
         "resource": "file",
-        "operation": "upload",
-        "fileContent": "data",
+        "operation": "search",
+        "queryString": "name = '{{ $json.fileName }}' and trashed = false",
         "options": {
-          "fileName": "={{ $json.fileName }}",
           "folderId": {
             "__rl": true,
             "value": "1eUU4Vhg325_NtF19i_4tCQwVVOXFefeq",
@@ -83,11 +82,72 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        560,
-        -80
+        440,
+        -60
       ],
       "id": "10000004-backup-4000-8000-000000000004",
-      "name": "Enviar para o Google Drive",
+      "name": "Verificar se Já Existe no Drive",
+      "credentials": {
+        "googleDriveOAuth2": {
+          "id": "Google Drive account",
+          "name": "Google Drive account"
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "check_file_exists",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        -60
+      ],
+      "id": "10000005-backup-4000-8000-000000000005",
+      "name": "Arquivo Já Existe?"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "fileContent": "data",
+        "options": {
+          "fileName": "={{ $('Preparar Arquivos Binários Válidos').item.json.fileName }}",
+          "folderId": {
+            "__rl": true,
+            "value": "1eUU4Vhg325_NtF19i_4tCQwVVOXFefeq",
+            "mode": "id"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        940,
+        60
+      ],
+      "id": "10000006-backup-4000-8000-000000000006",
+      "name": "Salvar Novo Arquivo no Drive",
       "credentials": {
         "googleDriveOAuth2": {
           "id": "Google Drive account",
@@ -134,7 +194,30 @@
       "main": [
         [
           {
-            "node": "Enviar para o Google Drive",
+            "node": "Verificar se Já Existe no Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar se Já Existe no Drive": {
+      "main": [
+        [
+          {
+            "node": "Arquivo Já Existe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Arquivo Já Existe?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Salvar Novo Arquivo no Drive",
             "type": "main",
             "index": 0
           }

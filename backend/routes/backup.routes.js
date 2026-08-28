@@ -197,11 +197,26 @@ router.post('/restore', requireAuth, requirePermission('backup_sistema'), upload
       return res.status(400).json({ error: 'Nenhum arquivo de backup fornecido' });
     }
 
-    if (!backupData || !backupData.database) {
-      return res.status(400).json({ error: 'Formato de arquivo de backup inválido' });
+    let database = null;
+    let files = [];
+
+    if (backupData && backupData.database && typeof backupData.database === 'object') {
+      database = backupData.database;
+      files = backupData.files || [];
+    } else if (backupData && (backupData.sales || backupData.clients || backupData.products || backupData.weighingSlips)) {
+      // Direct database object (ex: exported by n8n or custom script)
+      database = backupData;
+      files = backupData.files || [];
+    } else if (Array.isArray(backupData)) {
+      // Raw sales array
+      database = { sales: backupData };
     }
 
-    const { sales, clients, products, purchases, weighingSlips, financialSummaries, users } = backupData.database;
+    if (!database) {
+      return res.status(400).json({ error: 'Formato de arquivo de backup inválido. O arquivo JSON precisa conter os dados do sistema.' });
+    }
+
+    const { sales, clients, products, purchases, weighingSlips, financialSummaries, users } = database;
 
     // 1. Restore Collections
     if (Array.isArray(sales)) {

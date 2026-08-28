@@ -79,21 +79,8 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body || {};\nconst files = body.files || [];\nconst folderName = body.driveFolder ? body.driveFolder.suggestedFolder : (body.client || 'Geral');\n\nconst results = [];\nfor (const f of files) {\n  if (f.contentBase64 && f.sizeBytes > 0) {\n    const fileBuffer = Buffer.from(f.contentBase64, 'base64');\n    results.push({\n      json: {\n        fileName: f.filename,\n        folderName: folderName,\n        client: body.client,\n        saleId: body.saleId,\n        sizeBytes: f.sizeBytes,\n        mimeType: f.mimeType\n      },\n      binary: {\n        data: await this.helpers.prepareBinaryData(\n          fileBuffer,\n          f.filename,\n          f.mimeType || 'application/pdf'\n        )\n      }\n    });\n  }\n}\n\nreturn results;"
-      },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        320,
-        140
-      ],
-      "id": "20000000-code-4000-8000-000000000004",
-      "name": "Extrair Arquivos e Pasta"
-    },
-    {
-      "parameters": {
         "resource": "folder",
-        "name": "={{ $json.folderName }}",
+        "name": "={{ $('Webhook AgroVenda').first().json.body.driveFolder.suggestedFolder }}",
         "options": {
           "parentFolderId": {
             "__rl": true,
@@ -105,10 +92,10 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        560,
-        60
+        320,
+        140
       ],
-      "id": "20000000-folder-4000-8000-000000000005",
+      "id": "20000000-folder-4000-8000-000000000004",
       "name": "Criar ou Usar Pasta da Loja no Drive",
       "credentials": {
         "googleDriveOAuth2": {
@@ -119,18 +106,16 @@
     },
     {
       "parameters": {
-        "mode": "combine",
-        "combinationMode": "mergeByPosition",
-        "options": {}
+        "jsCode": "const webhookBody = $('Webhook AgroVenda').first().json.body || {};\nconst files = webhookBody.files || [];\nconst folderId = $('Criar ou Usar Pasta da Loja no Drive').first().json.id;\n\nconst results = [];\nfor (const f of files) {\n  if (f.contentBase64 && f.sizeBytes > 0) {\n    const fileBuffer = Buffer.from(f.contentBase64, 'base64');\n    results.push({\n      json: {\n        fileName: f.filename,\n        folderId: folderId,\n        client: webhookBody.client,\n        saleId: webhookBody.saleId\n      },\n      binary: {\n        data: await this.helpers.prepareBinaryData(\n          fileBuffer,\n          f.filename,\n          f.mimeType || 'application/pdf'\n        )\n      }\n    });\n  }\n}\n\nreturn results;"
       },
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        780,
+        560,
         140
       ],
-      "id": "20000000-merge-4000-8000-000000000006",
-      "name": "Combinar Arquivos e Pasta"
+      "id": "20000000-code-4000-8000-000000000005",
+      "name": "Extrair Arquivos Binários da Venda"
     },
     {
       "parameters": {
@@ -141,7 +126,7 @@
           "fileName": "={{ $json.fileName }}",
           "folderId": {
             "__rl": true,
-            "value": "={{ $json.id }}",
+            "value": "={{ $json.folderId }}",
             "mode": "id"
           }
         }
@@ -149,11 +134,11 @@
       "type": "n8n-nodes-base.googleDrive",
       "typeVersion": 3,
       "position": [
-        1000,
+        800,
         140
       ],
-      "id": "20000000-upload-4000-8000-000000000007",
-      "name": "Salvar Arquivo Dentro da Pasta no Drive",
+      "id": "20000000-upload-4000-8000-000000000006",
+      "name": "Salvar Arquivo Dentro da Pasta Criada",
       "credentials": {
         "googleDriveOAuth2": {
           "id": "Google Drive account",
@@ -183,23 +168,7 @@
       "main": [
         [
           {
-            "node": "Extrair Arquivos e Pasta",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Extrair Arquivos e Pasta": {
-      "main": [
-        [
-          {
             "node": "Criar ou Usar Pasta da Loja no Drive",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Combinar Arquivos e Pasta",
             "type": "main",
             "index": 0
           }
@@ -210,18 +179,18 @@
       "main": [
         [
           {
-            "node": "Combinar Arquivos e Pasta",
+            "node": "Extrair Arquivos Binários da Venda",
             "type": "main",
-            "index": 1
+            "index": 0
           }
         ]
       ]
     },
-    "Combinar Arquivos e Pasta": {
+    "Extrair Arquivos Binários da Venda": {
       "main": [
         [
           {
-            "node": "Salvar Arquivo Dentro da Pasta no Drive",
+            "node": "Salvar Arquivo Dentro da Pasta Criada",
             "type": "main",
             "index": 0
           }

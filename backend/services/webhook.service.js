@@ -104,7 +104,8 @@ async function sendSaleWebhook(event, sale) {
       driveFolder: {
         monthFolder: folderMonth,
         clientFolder: clientName,
-        suggestedFolder: `${clientName} (${folderMonth})`
+        saleId: sale.id,
+        suggestedFolder: `${sale.id} - ${clientName} (${folderMonth})`
       },
       calendar: {
         summary: `💰 ${clientName.split(' ')[0]} · R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${sale.id})`,

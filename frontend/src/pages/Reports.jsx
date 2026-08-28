@@ -789,7 +789,7 @@ export default function Reports({ setCurrentPage }) {
             {filteredLojas.map((lojaGroup, lIdx) => {
               const isExpanded = expandedLojas[lojaGroup.loja];
               return (
-                <div key={lIdx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden page-break-avoid page-break-after print:border-gray-300 print:shadow-none print:mb-6">
+                <div key={lIdx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden page-break-avoid print:border print:border-gray-300 print:shadow-none print:mb-4">
                   <div 
                     onClick={() => toggleExpand(lojaGroup.loja)}
                     className="bg-gray-50 hover:bg-gray-100/80 p-4 flex items-center justify-between cursor-pointer border-b border-gray-200 transition-colors"
@@ -1034,7 +1034,7 @@ export default function Reports({ setCurrentPage }) {
             {filteredLojas.map((lojaGroup, lIdx) => {
               const isExpanded = expandedLojas[lojaGroup.loja];
               return (
-                <div key={lIdx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden page-break-avoid page-break-after print:border-gray-300 print:shadow-none print:mb-6">
+                <div key={lIdx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden page-break-avoid print:border print:border-gray-300 print:shadow-none print:mb-4">
                   <div 
                     onClick={() => toggleExpand(lojaGroup.loja)}
                     className="bg-gray-50 hover:bg-gray-100/80 p-4 flex items-center justify-between cursor-pointer border-b border-gray-200 transition-colors"

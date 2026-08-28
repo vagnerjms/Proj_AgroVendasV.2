@@ -62,18 +62,107 @@ body {
   color: #b91c1c;
 }
 
-/* Regras Especializadas de Impressão e Paginação */
+/* Regras Especializadas de Impressão e Paginação (A4 Paisagem & Relatórios) */
 @media print {
   @page {
-    size: landscape;
-    margin: 8mm 8mm 8mm 8mm;
+    size: A4 landscape;
+    margin: 6mm 6mm 6mm 6mm;
   }
 
-  body {
+  html, body {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background: #ffffff !important;
     color: #000000 !important;
+    font-size: 8pt !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    overflow: visible !important;
+  }
+
+  /* Reset all overflow and fixed width constraints on parent containers */
+  #root, div, main, section, article {
+    overflow: visible !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Remove shadow, rounded borders and decorative backgrounds that clip */
+  .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl, .shadow-2xl {
+    box-shadow: none !important;
+  }
+
+  /* Hide sidebar, navigation drawer, navbar and action buttons */
+  nav, aside, header, .print-hidden, [role="navigation"] {
+    display: none !important;
+  }
+
+  /* Ensure horizontal scroll wrappers don't clip table contents */
+  .overflow-x-auto, .overflow-hidden {
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Report Table General Formatting */
+  table {
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: auto !important;
+    border-collapse: collapse !important;
+    font-size: 7pt !important;
+    margin: 0 !important;
+  }
+
+  th {
+    padding: 2.5px 2.5px !important;
+    font-size: 6.5pt !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+    background-color: #f1f5f9 !important;
+    color: #1e293b !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  td {
+    padding: 2px 2.5px !important;
+    font-size: 7pt !important;
+    line-height: 1.15 !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+
+  tfoot td {
+    padding: 2.5px 2.5px !important;
+    font-size: 7pt !important;
+    font-weight: bold !important;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  /* Keep entire Store Group Cards together on the same page */
+  .page-break-avoid, .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 12px !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
   }
 
   .page-break-after {
@@ -84,16 +173,6 @@ body {
   .page-break-before {
     page-break-before: always !important;
     break-before: page !important;
-  }
-
-  .page-break-avoid {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  tr {
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
   }
 }
 

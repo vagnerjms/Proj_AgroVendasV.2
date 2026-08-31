@@ -811,14 +811,34 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                         </td>
                       )}
 
-                      {visibleColumns.totalKg && (
-                        <td className="py-3 px-4 text-right">
-                          <div className="font-bold text-gray-900">{formatNumber(sale.totalKg, 0)} kg</div>
-                          <div className="text-gray-500 text-[11px]">
-                            {formatNumber(sale.totalKg > 0 ? (sale.totalKg / 29) : (Number(sale.totalVolumes) || 0), 2)} cx (29kg)
-                          </div>
-                        </td>
-                      )}
+                      {visibleColumns.totalKg && (() => {
+                        const prodName = sale.items?.[0]?.product || '';
+                        let unitKg = 29;
+                        let unitLabel = 'cx (29kg)';
+                        if (prodName.includes('60kg') || prodName.toLowerCase().includes('saca')) {
+                          unitKg = 60;
+                          unitLabel = 'sc (60kg)';
+                        } else if (prodName.includes('20kg')) {
+                          unitKg = 20;
+                          unitLabel = 'cx (20kg)';
+                        } else if (prodName.includes('10kg')) {
+                          unitKg = 10;
+                          unitLabel = 'cx (10kg)';
+                        } else if (prodName.toLowerCase().includes('granel')) {
+                          unitKg = 29;
+                          unitLabel = 'cx eq. (29kg)';
+                        }
+                        const calculatedVol = sale.totalKg > 0 ? (sale.totalKg / unitKg) : (Number(sale.totalVolumes) || 0);
+
+                        return (
+                          <td className="py-3 px-4 text-right">
+                            <div className="font-bold text-gray-900">{formatNumber(sale.totalKg, 0)} kg</div>
+                            <div className="text-gray-500 text-[11px]">
+                              {formatNumber(calculatedVol, 2)} {unitLabel}
+                            </div>
+                          </td>
+                        );
+                      })()}
 
                       {/* Valor Total de VP */}
                       {visibleColumns.valorTotalVP && (

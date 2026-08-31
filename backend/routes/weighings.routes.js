@@ -182,10 +182,8 @@ async function syncLinkedSaleWeight(slip, chosenWeightKg, weightChoice) {
 router.put('/:id', async (req, res) => {
   try {
     const body = req.body;
-    const origin = Number(body.originWeightKg) || 0;
-    const dest = Number(body.destWeightKg) || 0;
-    const diff = Math.abs(origin - dest);
-    const diffPct = origin > 0 ? Number(((diff / origin) * 100).toFixed(2)) : 0;
+    let origin = Number(body.originWeightKg) || 0;
+    let dest = Number(body.destWeightKg) || 0;
 
     const allowed = [
       'client', 'product', 'truckPlate', 'driverName', 'date', 'originWeightKg',
@@ -196,20 +194,35 @@ router.put('/:id', async (req, res) => {
     for (const key of allowed) {
       if (body[key] !== undefined) updateData[key] = body[key];
     }
-    updateData.weightDifferenceKg = diff;
-    updateData.weightDifferencePct = diffPct;
 
-    // Se o usuário selecionou uma opção de peso (origem ou destino)
+    // Se o usuário selecionou uma opção de peso (origem ou destino), equaliza ambos os pesos
     const weightChoice = body.weightChoice; // 'origin' | 'dest'
     let chosenWeight = dest - (Number(body.discountKg) || 0);
+
     if (weightChoice === 'origin') {
       chosenWeight = origin - (Number(body.discountKg) || 0);
+      updateData.originWeightKg = origin;
+      updateData.destWeightKg = origin; // Equaliza destino com origem
+      updateData.weightDifferenceKg = 0;
+      updateData.weightDifferencePct = 0;
+      updateData.status = 'Ajustado';
     } else if (weightChoice === 'dest') {
       chosenWeight = dest - (Number(body.discountKg) || 0);
+      updateData.destWeightKg = dest;
+      updateData.originWeightKg = dest; // Equaliza origem com destino
+      updateData.weightDifferenceKg = 0;
+      updateData.weightDifferencePct = 0;
+      updateData.status = 'Ajustado';
+    } else {
+      const diff = Math.abs(origin - dest);
+      const diffPct = origin > 0 ? Number(((diff / origin) * 100).toFixed(2)) : 0;
+      updateData.weightDifferenceKg = diff;
+      updateData.weightDifferencePct = diffPct;
     }
+
     updateData.netWeightKg = chosenWeight;
 
-    if (body.applyWeightToSale || weightChoice) {
+    if (body.applyWeightToSale) {
       updateData.status = 'Ajustado';
     }
 
@@ -258,9 +271,14 @@ router.put('/:id/resolve', async (req, res) => {
     const choice = weightChoice || 'dest';
     const chosenWeight = choice === 'origin' ? slip.originWeightKg : slip.destWeightKg;
 
+    // Equaliza os dois pesos para eliminar a divergência
+    slip.originWeightKg = chosenWeight;
+    slip.destWeightKg = chosenWeight;
+    slip.weightDifferenceKg = 0;
+    slip.weightDifferencePct = 0;
     slip.status = action || 'Ajustado';
     slip.netWeightKg = chosenWeight - (slip.discountKg || 0);
-    slip.resolutionNotes = resolutionNotes || `Divergência tratada considerando ${choice === 'origin' ? 'Peso Origem' : 'Peso Destino'} (${chosenWeight.toLocaleString('pt-BR')} kg).`;
+    slip.resolutionNotes = resolutionNotes || `Divergência tratada considerando ${choice === 'origin' ? 'Peso Origem' : 'Peso Destino'} (${chosenWeight.toLocaleString('pt-BR')} kg) e pesos equalizados.`;
     slip.resolvedAt = new Date();
     await slip.save();
 

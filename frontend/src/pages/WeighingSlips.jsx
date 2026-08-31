@@ -507,7 +507,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => setEditForm({ ...editForm, weightChoice: 'origin' })}
+                  onClick={() => setEditForm({ ...editForm, weightChoice: 'origin', destWeightKg: editForm.originWeightKg, status: 'Ajustado' })}
                   className={`p-3 rounded-lg border text-left flex flex-col gap-1 transition-all cursor-pointer ${
                     editForm.weightChoice === 'origin'
                       ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/20 text-blue-950 font-bold'
@@ -524,7 +524,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
 
                 <button
                   type="button"
-                  onClick={() => setEditForm({ ...editForm, weightChoice: 'dest' })}
+                  onClick={() => setEditForm({ ...editForm, weightChoice: 'dest', originWeightKg: editForm.destWeightKg, status: 'Ajustado' })}
                   className={`p-3 rounded-lg border text-left flex flex-col gap-1 transition-all cursor-pointer ${
                     editForm.weightChoice === 'dest'
                       ? 'bg-emerald-50 border-emerald-600 ring-2 ring-emerald-500/20 text-emerald-950 font-bold'

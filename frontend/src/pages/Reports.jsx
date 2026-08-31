@@ -61,16 +61,20 @@ export default function Reports({ setCurrentPage }) {
     setDriveNotification('');
     setDriveError('');
     try {
+      const excelHtml = buildExcelContent();
       const res = await api.post('/api/reports/trigger-n8n', {
         webhookUrl: activeUrl,
         startDate: startDate || null,
         endDate: endDate || null,
         selectedLoja: selectedLoja,
-        activeTab: activeTab
+        activeTab: activeTab,
+        excelHtml: excelHtml,
+        filteredStores: filteredStores,
+        currentTotal: currentTotal
       });
 
       if (res.success) {
-        setDriveNotification('✅ Relatório enviado e processado com sucesso pelo n8n no Google Drive!');
+        setDriveNotification('✅ Relatório filtrado enviado e salvo com sucesso no Google Drive!');
       } else {
         setDriveError(res.message || 'Erro ao processar no n8n.');
       }
@@ -86,13 +90,16 @@ export default function Reports({ setCurrentPage }) {
     }
   };
 
-  // Download direto do Excel no navegador
-  const handleDownloadExcelDirect = () => {
+  // Gerador do HTML/Excel com formatação idêntica à tela e 100% filtrado
+  const buildExcelContent = () => {
     const stores = filteredStores;
     const total = currentTotal;
     const hojeFormatado = new Date().toLocaleDateString('pt-BR');
     const formatMoeda = (v) => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const formatNum = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const lojaLabel = selectedLoja === 'ALL' ? 'Todas as Lojas' : selectedLoja;
+    const periodoLabel = `${startDate || 'Início'} até ${endDate || 'Atual'}`;
 
     let excelContent = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
@@ -117,8 +124,8 @@ export default function Reports({ setCurrentPage }) {
       </head>
       <body>
         <table>
-          <tr><td colspan="11" class="titulo">🌾 AGROVENDA — RELATÓRIOS E FECHAMENTOS CONSOLIDADOS</td></tr>
-          <tr><td colspan="11" style="color: #555;">Gerado em: ${hojeFormatado} | Período: ${startDate || 'Início'} até ${endDate || 'Atual'}</td></tr>
+          <tr><td colspan="11" class="titulo">🌾 AGROVENDA — RELATÓRIO CONSOLIDADO FILTRADO</td></tr>
+          <tr><td colspan="11" style="color: #555;">Gerado em: ${hojeFormatado} | <b>Filtro Loja:</b> ${lojaLabel} | <b>Período:</b> ${periodoLabel}</td></tr>
         </table>
         <br/>
         <table>
@@ -175,7 +182,7 @@ export default function Reports({ setCurrentPage }) {
 
     excelContent += `
         <tr class="linha-total">
-          <td class="texto-loja">TOTAL GERAL</td>
+          <td class="texto-loja">TOTAL GERAL (${stores.length} Lojas)</td>
           <td class="num-centro">${total.nfs}</td>
           <td class="num-centro">${total.pedidosVenda}</td>
           <td class="num-centro">${total.pedidosSemNF || 0}</td>
@@ -240,12 +247,18 @@ export default function Reports({ setCurrentPage }) {
     }
 
     excelContent += `</body></html>`;
+    return excelContent;
+  };
 
+  // Download direto do Excel no navegador
+  const handleDownloadExcelDirect = () => {
+    const excelContent = buildExcelContent();
+    const safeLoja = selectedLoja === 'ALL' ? 'Geral' : selectedLoja.replace(/[^a-zA-Z0-9]/g, '_');
     const blob = new Blob([excelContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Relatorio_AgroVenda_Fechamento_${new Date().toISOString().split('T')[0]}.xls`;
+    a.download = `Relatorio_AgroVenda_${safeLoja}_${new Date().toISOString().split('T')[0]}.xls`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

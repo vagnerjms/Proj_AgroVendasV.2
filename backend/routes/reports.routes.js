@@ -153,22 +153,131 @@ router.get('/stores-summary', async (req, res) => {
 // POST /api/reports/trigger-n8n - Dispara webhook do n8n para gerar e salvar no Google Drive
 router.post('/trigger-n8n', requireAuth, async (req, res) => {
   try {
-    const { webhookUrl, startDate, endDate, selectedLoja, activeTab } = req.body;
+    const { webhookUrl, startDate, endDate, selectedLoja, activeTab, excelHtml, filteredStores, currentTotal } = req.body;
     if (!webhookUrl) {
       return res.status(400).json({ error: 'URL do Webhook do n8n não informada' });
     }
 
+    const safeLoja = (!selectedLoja || selectedLoja === 'ALL') ? 'Geral' : selectedLoja.replace(/[^a-zA-Z0-9]/g, '_');
+    const today = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+    const startStr = startDate || 'Inicio';
+    const endStr = endDate || todayStr;
+    const fileName = `Relatorio_AgroVenda_${safeLoja}_${startStr}_a_${endStr}.xls`;
+    const folderName = `Relatórios AgroVenda (${todayStr.slice(0, 7)})`;
+
+    let htmlContent = excelHtml;
+
+    // Se o HTML não veio do front, gera a partir da query filtrada no banco
+    let storesSummary = filteredStores;
+    let totalSummary = currentTotal;
+
+    if (!htmlContent) {
+      let query = {};
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      const validStart = (typeof startDate === 'string' && dateRegex.test(startDate.trim())) ? startDate.trim() : null;
+      const validEnd = (typeof endDate === 'string' && dateRegex.test(endDate.trim())) ? endDate.trim() : null;
+
+      if (validStart && validEnd) {
+        query.saleDate = { $gte: validStart, $lte: validEnd };
+      } else if (validStart) {
+        query.saleDate = { $gte: validStart };
+      } else if (validEnd) {
+        query.saleDate = { $lte: validEnd };
+      }
+
+      if (selectedLoja && selectedLoja !== 'ALL') {
+        query.client = selectedLoja;
+      }
+
+      const allSales = await Sale.find(query).sort({ saleDate: 1 }).lean();
+      const clientGroups = {};
+      for (const s of allSales) {
+        if (!clientGroups[s.client]) clientGroups[s.client] = [];
+        clientGroups[s.client].push(s);
+      }
+
+      storesSummary = Object.keys(clientGroups).map(clientName => {
+        const sales = clientGroups[clientName];
+        let nfs = 0, pedidosVenda = sales.length, pedidosSemNF = 0, pesoNF = 0, valorTotalNF = 0, funrural = 0, totalVendaAReceber = 0;
+        sales.forEach(s => {
+          if (s.status === 'Faturado' || s.nfFile) nfs++; else pedidosSemNF++;
+          const peso = Number(s.totalKg) || 0;
+          const valor = roundMoney(s.totalOperation);
+          const fiscal = calculateFiscalDeductions(valor);
+          pesoNF += peso;
+          valorTotalNF = roundMoney(valorTotalNF + valor);
+          funrural = roundMoney(funrural + fiscal.funruralTotal);
+          const caixas = Number(s.totalVolumes) || (peso > 0 ? (peso / 29) : 0);
+          let cotacao = Number(s.dailyQuote) || 45.0;
+          const valorVP = Number(s.valorTotalVP) > 0 ? roundMoney(s.valorTotalVP) : roundMoney(caixas * cotacao);
+          totalVendaAReceber = roundMoney(totalVendaAReceber + valorVP);
+        });
+        return {
+          loja: clientName,
+          nfs,
+          pedidosVenda,
+          pedidosSemNF,
+          pesoNF,
+          valorTotalNF: roundMoney(valorTotalNF),
+          funrural: roundMoney(funrural),
+          totalVendaAReceber: roundMoney(totalVendaAReceber),
+          liquidoNF: roundMoney(valorTotalNF - funrural)
+        };
+      });
+
+      totalSummary = {
+        nfs: storesSummary.reduce((a, b) => a + b.nfs, 0),
+        pedidosVenda: storesSummary.reduce((a, b) => a + b.pedidosVenda, 0),
+        pesoNF: storesSummary.reduce((a, b) => a + b.pesoNF, 0),
+        valorTotalNF: roundMoney(storesSummary.reduce((a, b) => a + b.valorTotalNF, 0)),
+        funrural: roundMoney(storesSummary.reduce((a, b) => a + b.funrural, 0)),
+        totalVendaAReceber: roundMoney(storesSummary.reduce((a, b) => a + b.totalVendaAReceber, 0)),
+        liquidoNF: roundMoney(storesSummary.reduce((a, b) => a + b.liquidoNF, 0))
+      };
+
+      htmlContent = `<html><head><meta charset="utf-8"></head><body><h2>Relatório AgroVenda (${safeLoja}) - ${startStr} a ${endStr}</h2></body></html>`;
+    }
+
+    const fileBuffer = Buffer.from(htmlContent, 'utf-8');
+    const contentBase64 = fileBuffer.toString('base64');
+
     const payload = {
+      event: 'report.generated',
       triggeredAt: new Date().toISOString(),
       user: req.user ? req.user.name : 'Administrador',
-      startDate: startDate || null,
-      endDate: endDate || null,
-      selectedLoja: selectedLoja || 'ALL',
-      activeTab: activeTab || 'geral'
+      fileName: fileName,
+      folderName: folderName,
+      suggestedFolder: folderName,
+      fileSize: fileBuffer.length,
+      mimeType: 'application/vnd.ms-excel',
+      contentBase64: contentBase64,
+      hasFiles: true,
+      files: [
+        {
+          filename: fileName,
+          mimeType: 'application/vnd.ms-excel',
+          sizeBytes: fileBuffer.length,
+          contentBase64: contentBase64
+        }
+      ],
+      driveFolder: {
+        monthFolder: todayStr.slice(0, 7),
+        clientFolder: safeLoja,
+        suggestedFolder: folderName
+      },
+      filters: {
+        startDate: startDate || null,
+        endDate: endDate || null,
+        selectedLoja: selectedLoja || 'ALL',
+        activeTab: activeTab || 'geral'
+      },
+      stores: storesSummary,
+      totalGeral: totalSummary
     };
 
     const fetchModule = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
-    // Se global fetch estiver disponível no Node 20+, usa global fetch
     const fetchFunc = typeof fetch === 'function' ? fetch : fetchModule;
 
     const response = await fetchFunc(webhookUrl, {
@@ -184,11 +293,11 @@ router.post('/trigger-n8n', requireAuth, async (req, res) => {
     res.json({
       success: response.ok,
       status: response.status,
-      message: response.ok ? 'Webhook do n8n disparado com sucesso!' : 'Falha na resposta do n8n',
+      message: response.ok ? 'Relatório filtrado enviado ao n8n com sucesso!' : 'Falha na resposta do n8n',
       response: resultJson
     });
   } catch (err) {
-    console.error('Erro ao disparar webhook do n8n:', err);
+    console.error('Erro ao disparar webhook de relatório no n8n:', err);
     res.status(500).json({ error: `Erro ao conectar com o n8n: ${err.message}` });
   }
 });

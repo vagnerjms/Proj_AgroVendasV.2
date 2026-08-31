@@ -1,0 +1,129 @@
+﻿{
+  "name": "AgroVenda V2 - Salvar Relatorio Filtrado no Google Drive",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "salvar-relatorio",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "30000000-webhook-4000-8000-000000000001",
+      "name": "Webhook Relatorio AgroVenda"
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $json.body.folderName || 'Relatorios AgroVenda' }}",
+        "options": {
+          "parentFolderId": {
+            "__rl": true,
+            "value": "1eUU4Vhg325_NtF19i_4tCQwVVOXFefeq",
+            "mode": "id"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "30000000-folder-4000-8000-000000000002",
+      "name": "Criar ou Usar Pasta Relatorios no Drive",
+      "credentials": {
+        "googleDriveOAuth2": {
+          "id": "Google Drive account",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $('Webhook Relatorio AgroVenda').first().json.body || {};\nconst folderId = $('Criar ou Usar Pasta Relatorios no Drive').first().json.id;\nconst fileName = body.fileName || `Relatorio_AgroVenda_${new Date().toISOString().split('T')[0]}.xls`;\nconst contentBase64 = body.contentBase64 || (body.files && body.files[0] ? body.files[0].contentBase64 : '');\n\nif (!contentBase64) {\n  throw new Error('Conteudo do arquivo nao foi recebido no webhook.');\n}\n\nconst fileBuffer = Buffer.from(contentBase64, 'base64');\n\nreturn [{\n  json: {\n    fileName: fileName,\n    folderId: folderId,\n    fileSize: fileBuffer.length,\n    filters: body.filters\n  },\n  binary: {\n    data: await this.helpers.prepareBinaryData(\n      fileBuffer,\n      fileName,\n      'application/vnd.ms-excel'\n    )\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "30000000-code-4000-8000-000000000003",
+      "name": "Preparar Arquivo Excel Filtrado"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "upload",
+        "fileContent": "data",
+        "options": {
+          "fileName": "={{ $json.fileName }}",
+          "folderId": {
+            "__rl": true,
+            "value": "={{ $json.folderId }}",
+            "mode": "id"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        480,
+        0
+      ],
+      "id": "30000000-upload-4000-8000-000000000004",
+      "name": "Salvar Excel na Pasta do Drive",
+      "credentials": {
+        "googleDriveOAuth2": {
+          "id": "Google Drive account",
+          "name": "Google Drive account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Relatorio AgroVenda": {
+      "main": [
+        [
+          {
+            "node": "Criar ou Usar Pasta Relatorios no Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar ou Usar Pasta Relatorios no Drive": {
+      "main": [
+        [
+          {
+            "node": "Preparar Arquivo Excel Filtrado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Arquivo Excel Filtrado": {
+      "main": [
+        [
+          {
+            "node": "Salvar Excel na Pasta do Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

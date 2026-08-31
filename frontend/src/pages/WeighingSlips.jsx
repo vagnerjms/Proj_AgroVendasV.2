@@ -25,6 +25,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
   // Resolution modal state
   const [resolvingSlip, setResolvingSlip] = useState(null);
   const [resolutionNotes, setResolutionNotes] = useState('');
+  const [resolveWeightChoice, setResolveWeightChoice] = useState('dest'); // 'dest' | 'origin'
   const [submittingResolution, setSubmittingResolution] = useState(false);
 
   // Edit Slip Modal State
@@ -37,7 +38,9 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
     destWeightKg: 0,
     humidityPct: 14.0,
     impurityPct: 1.0,
-    status: 'Divergente'
+    status: 'Divergente',
+    weightChoice: 'dest', // 'dest' | 'origin'
+    applyWeightToSale: true
   });
 
   // New Romaneio Modal
@@ -78,19 +81,29 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
     fetchSlips();
   };
 
+  const handleOpenResolve = (slip) => {
+    setResolvingSlip(slip);
+    setResolveWeightChoice('dest');
+    setResolutionNotes(`Divergência tratada e ajustada considerando peso de destino.`);
+  };
+
   const handleResolve = async (action) => {
     if (!resolvingSlip) return;
     setSubmittingResolution(true);
     try {
-      await api.put(`/api/weighings/${resolvingSlip.id}/resolve`, {
+      const res = await api.put(`/api/weighings/${resolvingSlip.id}/resolve`, {
         action: action,
-        resolutionNotes: resolutionNotes || `Divergência tratada e ${action.toLowerCase()} via auditoria comercial.`
+        weightChoice: resolveWeightChoice,
+        resolutionNotes: resolutionNotes || `Divergência tratada considerando ${resolveWeightChoice === 'origin' ? 'Peso Origem' : 'Peso Destino'}.`
       });
+      const saleMsg = res.saleUpdated ? ` e Venda ${res.saleId} recalculada com sucesso` : '';
+      showNotification(`Romaneio ${resolvingSlip.id}${saleMsg}!`);
       setResolvingSlip(null);
       setResolutionNotes('');
       fetchSlips();
     } catch (err) {
       console.error('Erro ao resolver divergência:', err);
+      showErrorNotification(err.message || 'Erro ao resolver divergência.');
     } finally {
       setSubmittingResolution(false);
     }
@@ -103,7 +116,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
   const showNotification = (msg) => {
     setNotification(msg);
     setErrorNotification('');
-    const timer = setTimeout(() => setNotification(''), 3500);
+    const timer = setTimeout(() => setNotification(''), 4500);
     return () => clearTimeout(timer);
   };
 
@@ -124,7 +137,9 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
       destWeightKg: slip.destWeightKg,
       humidityPct: slip.humidityPct || 14.0,
       impurityPct: slip.impurityPct || 1.0,
-      status: slip.status || 'Divergente'
+      status: slip.status || 'Divergente',
+      weightChoice: 'dest',
+      applyWeightToSale: true
     });
   };
 
@@ -133,8 +148,10 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
     if (!editingSlip || submittingSlip) return;
     setSubmittingSlip(true);
     try {
-      await api.put(`/api/weighings/${editingSlip.id}`, editForm);
-      showNotification(`Romaneio ${editingSlip.id} atualizado com sucesso!`);
+      const res = await api.put(`/api/weighings/${editingSlip.id}`, editForm);
+      const choiceLabel = editForm.weightChoice === 'origin' ? 'Peso Origem' : 'Peso Destino';
+      const saleMsg = res.saleUpdated ? ` (Peso ajustado na Venda ${res.saleId})` : '';
+      showNotification(`Romaneio ${editingSlip.id} atualizado com ${choiceLabel}${saleMsg}!`);
       setEditingSlip(null);
       fetchSlips();
     } catch (err) {
@@ -143,6 +160,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
     } finally {
       setSubmittingSlip(false);
     }
+  };
   };
 
   const handleDeleteSlip = async (slip) => {
@@ -383,25 +401,22 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
                       <div className="flex items-center justify-center gap-1">
                         {s.status === 'Divergente' && (
                           <button
-                            onClick={() => {
-                              setResolvingSlip(s);
-                              setResolutionNotes(`Diferença de ${s.weightDifferenceKg} kg aceita com desconto proporcional em conta gráfica.`);
-                            }}
-                            className="bg-[#173e27] hover:bg-[#1f5435] text-white text-[11px] font-semibold px-2 py-1 rounded transition-colors"
+                            onClick={() => handleOpenResolve(s)}
+                            className="bg-[#173e27] hover:bg-[#1f5435] text-white text-[11px] font-semibold px-2.5 py-1 rounded transition-colors cursor-pointer"
                           >
                             Tratar
                           </button>
                         )}
                         <button
                           onClick={() => handleOpenEdit(s)}
-                          className="text-gray-600 hover:text-emerald-700 p-1 rounded hover:bg-gray-100"
+                          className="text-gray-600 hover:text-emerald-700 p-1 rounded hover:bg-gray-100 cursor-pointer"
                           title="Editar romaneio"
                         >
                           <Edit className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDeleteSlip(s)}
-                          className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50"
+                          className="text-gray-400 hover:text-red-600 p-1 rounded hover:bg-red-50 cursor-pointer"
                           title="Excluir romaneio"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -419,10 +434,13 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
       {/* Modal: Editar Romaneio */}
       {editingSlip && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <form onSubmit={handleSaveEdit} className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+          <form onSubmit={handleSaveEdit} className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
             <div className="flex justify-between items-center border-b border-gray-100 pb-3">
-              <h3 className="text-base font-bold text-gray-900">Editar Romaneio {editingSlip.id}</h3>
-              <button type="button" onClick={() => setEditingSlip(null)} className="text-gray-400 hover:text-gray-600">
+              <div>
+                <span className="text-xs font-bold text-emerald-700 uppercase">Romaneio de Pesagem</span>
+                <h3 className="text-base font-bold text-gray-900">Editar Romaneio {editingSlip.id}</h3>
+              </div>
+              <button type="button" onClick={() => setEditingSlip(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -466,7 +484,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
                 <input
                   type="number"
                   value={editForm.originWeightKg}
-                  onChange={e => setEditForm({ ...editForm, originWeightKg: e.target.value })}
+                  onChange={e => setEditForm({ ...editForm, originWeightKg: Number(e.target.value) })}
                   className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
                 />
               </div>
@@ -475,9 +493,58 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
                 <input
                   type="number"
                   value={editForm.destWeightKg}
-                  onChange={e => setEditForm({ ...editForm, destWeightKg: e.target.value })}
+                  onChange={e => setEditForm({ ...editForm, destWeightKg: Number(e.target.value) })}
                   className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
                 />
+              </div>
+            </div>
+
+            {/* Opções de Ajuste de Peso na Venda */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide">
+                ⚖️ Opção de Ajuste de Peso na Venda
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, weightChoice: 'origin' })}
+                  className={`p-3 rounded-lg border text-left flex flex-col gap-1 transition-all cursor-pointer ${
+                    editForm.weightChoice === 'origin'
+                      ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/20 text-blue-950 font-bold'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-600">Considerar Peso Origem</span>
+                    <input type="radio" checked={editForm.weightChoice === 'origin'} readOnly className="text-blue-600" />
+                  </div>
+                  <span className="text-sm font-extrabold text-slate-900">{formatNumber(editForm.originWeightKg, 0)} kg</span>
+                  <span className="text-[10px] text-slate-500">~{Math.round((editForm.originWeightKg || 0) / 29)} caixas</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, weightChoice: 'dest' })}
+                  className={`p-3 rounded-lg border text-left flex flex-col gap-1 transition-all cursor-pointer ${
+                    editForm.weightChoice === 'dest'
+                      ? 'bg-emerald-50 border-emerald-600 ring-2 ring-emerald-500/20 text-emerald-950 font-bold'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-600">Considerar Peso Destino</span>
+                    <input type="radio" checked={editForm.weightChoice === 'dest'} readOnly className="text-emerald-600" />
+                  </div>
+                  <span className="text-sm font-extrabold text-slate-900">{formatNumber(editForm.destWeightKg, 0)} kg</span>
+                  <span className="text-[10px] text-slate-500">~{Math.round((editForm.destWeightKg || 0) / 29)} caixas</span>
+                </button>
+              </div>
+
+              <div className="text-[11px] text-slate-600 bg-white p-2 rounded border border-slate-200 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>
+                  Ao salvar, a venda vinculada (<b>{editingSlip.saleId || editingSlip.id.replace('ROM-', '')}</b>) será ajustada para <b>{formatNumber(editForm.weightChoice === 'origin' ? editForm.originWeightKg : editForm.destWeightKg, 0)} kg</b>.
+                </span>
               </div>
             </div>
 
@@ -488,8 +555,8 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
                 onChange={e => setEditForm({ ...editForm, status: e.target.value })}
                 className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
               >
+                <option value="Ajustado">Ajustado (Reconciliado)</option>
                 <option value="Divergente">Divergente</option>
-                <option value="Ajustado">Ajustado</option>
                 <option value="Aprovado">Aprovado</option>
               </select>
             </div>
@@ -498,15 +565,17 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
               <button
                 type="button"
                 onClick={() => setEditingSlip(null)}
-                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg"
+                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="bg-[#173e27] hover:bg-[#1f5435] text-white text-xs font-semibold px-4 py-2 rounded-lg"
+                disabled={submittingSlip}
+                className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer transition-all flex items-center gap-1.5"
               >
-                Salvar
+                <Check className="w-3.5 h-3.5" />
+                <span>{submittingSlip ? 'Ajustando...' : 'Ajustar & Salvar'}</span>
               </button>
             </div>
           </form>
@@ -515,14 +584,14 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
 
       {/* Modal: Resolver Divergência */}
       {resolvingSlip && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div>
                 <span className="text-xs font-bold text-orange-600 uppercase">Tratamento de Divergência</span>
                 <h3 className="text-base font-bold text-gray-900">Romaneio {resolvingSlip.id} ({resolvingSlip.truckPlate})</h3>
               </div>
-              <button onClick={() => setResolvingSlip(null)} className="text-gray-400 hover:text-gray-600 p-1">
+              <button onClick={() => setResolvingSlip(null)} className="text-gray-400 hover:text-gray-600 p-1 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -540,12 +609,54 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
               </div>
             </div>
 
+            {/* Opção Considerar Peso Origem vs Destino */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide">
+                ⚖️ Escolha qual peso fixar na Venda ({resolvingSlip.saleId || resolvingSlip.id.replace('ROM-', '')})
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setResolveWeightChoice('origin')}
+                  className={`p-3 rounded-lg border text-left flex flex-col gap-1 transition-all cursor-pointer ${
+                    resolveWeightChoice === 'origin'
+                      ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/20 text-blue-950 font-bold'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-600">Considerar Peso Origem</span>
+                    <input type="radio" checked={resolveWeightChoice === 'origin'} readOnly className="text-blue-600" />
+                  </div>
+                  <span className="text-sm font-extrabold text-slate-900">{formatNumber(resolvingSlip.originWeightKg, 0)} kg</span>
+                  <span className="text-[10px] text-slate-500">~{Math.round((resolvingSlip.originWeightKg || 0) / 29)} caixas</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setResolveWeightChoice('dest')}
+                  className={`p-3 rounded-lg border text-left flex flex-col gap-1 transition-all cursor-pointer ${
+                    resolveWeightChoice === 'dest'
+                      ? 'bg-emerald-50 border-emerald-600 ring-2 ring-emerald-500/20 text-emerald-950 font-bold'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-slate-600">Considerar Peso Destino</span>
+                    <input type="radio" checked={resolveWeightChoice === 'dest'} readOnly className="text-emerald-600" />
+                  </div>
+                  <span className="text-sm font-extrabold text-slate-900">{formatNumber(resolvingSlip.destWeightKg, 0)} kg</span>
+                  <span className="text-[10px] text-slate-500">~{Math.round((resolvingSlip.destWeightKg || 0) / 29)} caixas</span>
+                </button>
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Justificativa / Parecer Comercial:
               </label>
               <textarea
-                rows={3}
+                rows={2}
                 value={resolutionNotes}
                 onChange={e => setResolutionNotes(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
@@ -565,9 +676,10 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
                 type="button"
                 disabled={submittingResolution}
                 onClick={() => handleResolve('Ajustado')}
-                className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer transition-all"
+                className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer transition-all flex items-center gap-1.5"
               >
-                Ajustar e Compensar
+                <Check className="w-3.5 h-3.5" />
+                <span>{submittingResolution ? 'Ajustando...' : 'Ajustar Peso na Venda'}</span>
               </button>
             </div>
           </div>

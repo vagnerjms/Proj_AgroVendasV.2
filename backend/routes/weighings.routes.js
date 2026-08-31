@@ -102,6 +102,82 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Helper para sincronizar e recalcular a venda vinculada ao peso escolhido
+async function syncLinkedSaleWeight(slip, chosenWeightKg, weightChoice) {
+  if (!slip || !chosenWeightKg || chosenWeightKg <= 0) return null;
+
+  const rawSaleRef = slip.saleId || slip.id.replace('ROM-', '');
+  // Aceita formatos como 'ROM-VP046', 'VP046', 'VP46', '46'
+  const digits = rawSaleRef.replace(/[^0-9]/g, '');
+  const possibleIds = [
+    rawSaleRef,
+    rawSaleRef.replace('ROM-', ''),
+    `VP${digits.padStart(3, '0')}`,
+    `VP${digits}`
+  ];
+
+  const sale = await Sale.findOne({ id: { $in: possibleIds } });
+  if (!sale) return null;
+
+  const newTotalKg = Number(chosenWeightKg);
+  const newVolumes = Math.round(newTotalKg / 29);
+
+  // Recalcula totais da venda
+  if (sale.items && sale.items.length > 0) {
+    const unitPriceKg = sale.totalKg > 0 ? (sale.totalOperation / sale.totalKg) : (sale.items[0].price || 2.0);
+    sale.items[0].kg = newTotalKg;
+    sale.items[0].quantity = newVolumes;
+    sale.items[0].total = roundMoney(newTotalKg * unitPriceKg);
+    sale.totalOperation = sale.items[0].total;
+  } else if (sale.totalKg > 0) {
+    const pricePerKg = sale.totalOperation / sale.totalKg;
+    sale.totalOperation = roundMoney(newTotalKg * pricePerKg);
+  }
+
+  sale.totalKg = newTotalKg;
+  sale.totalVolumes = newVolumes;
+
+  // Recalcula impostos fiscais (FUNRURAL)
+  const fiscal = calculateFiscalDeductions(sale.totalOperation);
+  sale.funruralTotal = fiscal.funruralTotal;
+  sale.previdenciaSocial = fiscal.previdenciaSocial;
+  sale.rat = fiscal.rat;
+  sale.senar = fiscal.senar;
+
+  // Recalcula Valor Total VP
+  let cotacao = Number(sale.dailyQuote) || 0;
+  if (!cotacao && sale.notes) {
+    const matchCot = sale.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
+    if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
+  }
+  if (!cotacao) cotacao = 45.0;
+  sale.valorTotalVP = roundMoney(newVolumes * cotacao);
+
+  // Recalcula comissão
+  const comm = calculateCommission(sale.valorTotalVP, sale.feeValue);
+  sale.totalCommission = comm.comissao;
+
+  sale.isDivergent = false;
+
+  // Anota no histórico da venda
+  const choiceText = weightChoice === 'dest' ? 'Peso Destino' : (weightChoice === 'origin' ? 'Peso Origem' : 'Peso Ajustado');
+  const adjustTag = `[Pesagem: ${choiceText} (${newTotalKg.toLocaleString('pt-BR')} kg - ${newVolumes} cx)]`;
+  if (!sale.notes.includes('[Pesagem:')) {
+    sale.notes = sale.notes ? `${sale.notes} | ${adjustTag}` : adjustTag;
+  } else {
+    sale.notes = sale.notes.replace(/\[Pesagem:[^\]]+\]/, adjustTag);
+  }
+
+  await sale.save();
+
+  try {
+    const { sendSaleWebhook } = require('../services/webhook.service');
+    sendSaleWebhook('sale.updated', sale).catch(() => {});
+  } catch (e) {}
+
+  return sale;
+}
+
 // PUT /api/weighings/:id
 router.put('/:id', async (req, res) => {
   try {
@@ -122,7 +198,20 @@ router.put('/:id', async (req, res) => {
     }
     updateData.weightDifferenceKg = diff;
     updateData.weightDifferencePct = diffPct;
-    updateData.netWeightKg = dest - (Number(body.discountKg) || 0);
+
+    // Se o usuário selecionou uma opção de peso (origem ou destino)
+    const weightChoice = body.weightChoice; // 'origin' | 'dest'
+    let chosenWeight = dest - (Number(body.discountKg) || 0);
+    if (weightChoice === 'origin') {
+      chosenWeight = origin - (Number(body.discountKg) || 0);
+    } else if (weightChoice === 'dest') {
+      chosenWeight = dest - (Number(body.discountKg) || 0);
+    }
+    updateData.netWeightKg = chosenWeight;
+
+    if (body.applyWeightToSale || weightChoice) {
+      updateData.status = 'Ajustado';
+    }
 
     const updated = await WeighingSlip.findOneAndUpdate(
       { id: req.params.id },
@@ -130,8 +219,20 @@ router.put('/:id', async (req, res) => {
       { new: true }
     );
     if (!updated) return res.status(404).json({ error: 'Romaneio não encontrado' });
-    res.json(updated);
+
+    let updatedSale = null;
+    if (body.applyWeightToSale || weightChoice) {
+      updatedSale = await syncLinkedSaleWeight(updated, chosenWeight, weightChoice || 'dest');
+    }
+
+    res.json({
+      success: true,
+      slip: updated,
+      saleUpdated: !!updatedSale,
+      saleId: updatedSale ? updatedSale.id : null
+    });
   } catch (err) {
+    console.error('Erro ao atualizar romaneio:', err);
     res.status(500).json({ error: 'Erro ao atualizar romaneio' });
   }
 });
@@ -150,29 +251,30 @@ router.delete('/:id', async (req, res) => {
 // PUT /api/weighings/:id/resolve
 router.put('/:id/resolve', async (req, res) => {
   try {
-    const { action, resolutionNotes } = req.body;
+    const { action, resolutionNotes, weightChoice } = req.body;
     const slip = await WeighingSlip.findOne({ id: req.params.id });
     if (!slip) return res.status(404).json({ error: 'Romaneio não encontrado' });
 
+    const choice = weightChoice || 'dest';
+    const chosenWeight = choice === 'origin' ? slip.originWeightKg : slip.destWeightKg;
+
     slip.status = action || 'Ajustado';
-    slip.resolutionNotes = resolutionNotes || 'Divergência tratada e compensada financeiramente.';
+    slip.netWeightKg = chosenWeight - (slip.discountKg || 0);
+    slip.resolutionNotes = resolutionNotes || `Divergência tratada considerando ${choice === 'origin' ? 'Peso Origem' : 'Peso Destino'} (${chosenWeight.toLocaleString('pt-BR')} kg).`;
     slip.resolvedAt = new Date();
     await slip.save();
 
-    // Reconcile linked Sale isDivergent flag if resolved
-    if (slip.saleId) {
-      try {
-        await Sale.findOneAndUpdate(
-          { $or: [{ id: slip.saleId }, { id: slip.id.replace('ROM-', '') }] },
-          { isDivergent: false }
-        );
-      } catch (saleSyncErr) {
-        console.warn('Aviso: erro ao sincronizar reconciliação na venda:', saleSyncErr.message);
-      }
-    }
+    // Sincroniza e recalcula a Venda vinculada
+    const updatedSale = await syncLinkedSaleWeight(slip, chosenWeight, choice);
 
-    res.json({ success: true, slip });
+    res.json({
+      success: true,
+      slip,
+      saleUpdated: !!updatedSale,
+      saleId: updatedSale ? updatedSale.id : null
+    });
   } catch (err) {
+    console.error('Erro ao resolver divergência:', err);
     res.status(500).json({ error: 'Erro ao resolver divergência' });
   }
 });

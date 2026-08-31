@@ -3,6 +3,7 @@ const router = express.Router();
 const { WeighingSlip, Sale } = require('../db');
 const { escapeRegex } = require('../utils/security');
 const { requireAuth } = require('../middlewares/auth');
+const { roundMoney, calculateFiscalDeductions, calculateCommission } = require('../utils/money');
 
 // Protect all weighings endpoints with JWT authentication
 router.use(requireAuth);
@@ -162,10 +163,11 @@ async function syncLinkedSaleWeight(slip, chosenWeightKg, weightChoice) {
   // Anota no histórico da venda
   const choiceText = weightChoice === 'dest' ? 'Peso Destino' : (weightChoice === 'origin' ? 'Peso Origem' : 'Peso Ajustado');
   const adjustTag = `[Pesagem: ${choiceText} (${newTotalKg.toLocaleString('pt-BR')} kg - ${newVolumes} cx)]`;
-  if (!sale.notes.includes('[Pesagem:')) {
-    sale.notes = sale.notes ? `${sale.notes} | ${adjustTag}` : adjustTag;
+  const existingNotes = typeof sale.notes === 'string' ? sale.notes : '';
+  if (!existingNotes.includes('[Pesagem:')) {
+    sale.notes = existingNotes ? `${existingNotes} | ${adjustTag}` : adjustTag;
   } else {
-    sale.notes = sale.notes.replace(/\[Pesagem:[^\]]+\]/, adjustTag);
+    sale.notes = existingNotes.replace(/\[Pesagem:[^\]]+\]/, adjustTag);
   }
 
   await sale.save();

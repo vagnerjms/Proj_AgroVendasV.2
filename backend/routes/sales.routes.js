@@ -102,7 +102,13 @@ router.get('/', async (req, res) => {
       query = query.skip((pageNum - 1) * limitNum).limit(limitNum);
     }
     const sales = await query.lean();
-    res.json(sales);
+    const normalized = sales.map(s => {
+      if (s.totalKg > 0 && (!s.totalVolumes || s.totalVolumes === s.totalKg || s.totalVolumes > 2000)) {
+        s.totalVolumes = Number((s.totalKg / 29).toFixed(2));
+      }
+      return s;
+    });
+    res.json(normalized);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar vendas' });
   }

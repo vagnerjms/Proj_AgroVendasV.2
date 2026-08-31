@@ -815,7 +815,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                         <td className="py-3 px-4 text-right">
                           <div className="font-bold text-gray-900">{formatNumber(sale.totalKg, 0)} kg</div>
                           <div className="text-gray-500 text-[11px]">
-                            {formatNumber(sale.totalVolumes, 2)} cx (29kg)
+                            {formatNumber(sale.totalKg > 0 ? (sale.totalKg / 29) : (Number(sale.totalVolumes) || 0), 2)} cx (29kg)
                           </div>
                         </td>
                       )}
@@ -988,7 +988,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
             <div className="bg-white rounded-lg p-3 border border-gray-200 text-xs space-y-2">
               <div className="font-bold text-gray-800 flex items-center justify-between border-b border-gray-100 pb-2">
                 <span>Produto: {viewSale.items?.[0]?.product || 'Cenoura (Caixa 29kg)'}</span>
-                <span>{formatNumber(viewSale.totalKg, 0)} kg ({formatNumber(viewSale.totalVolumes, 2)} caixas)</span>
+                <span>{formatNumber(viewSale.totalKg, 0)} kg ({formatNumber(viewSale.totalKg > 0 ? (viewSale.totalKg / 29) : (Number(viewSale.totalVolumes) || 0), 2)} caixas)</span>
               </div>
               <div className="text-gray-600 text-[11px]">
                 {viewSale.notes}

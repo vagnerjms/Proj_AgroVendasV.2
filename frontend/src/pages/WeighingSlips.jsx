@@ -161,7 +161,6 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
       setSubmittingSlip(false);
     }
   };
-  };
 
   const handleDeleteSlip = async (slip) => {
     if (!window.confirm(`Deseja excluir o romaneio ${slip.id} (${slip.truckPlate})?`)) return;

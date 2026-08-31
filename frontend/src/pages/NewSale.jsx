@@ -195,20 +195,21 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       setNfeKey(editingSale.nfeKey || '');
       setEvidenceFile(editingSale.evidenceFile || null);
 
-      const prodName = editingSale.items?.[0]?.product || 'Cenoura (Caixa 29kg)';
-      setSelectedProduct(prodName);
+      const rawProdName = editingSale.items?.[0]?.product || 'Cenoura (Caixa 29kg)';
+      setSelectedProduct(rawProdName);
       setTotalWeightKg(editingSale.totalKg ? String(editingSale.totalKg) : '');
 
-      const prodUnit = editingSale.items?.[0]?.unit || (prodName.includes('Granel') || prodName.includes('(kg)') ? 'Granel (kg)' : 'Caixas (29kg)');
+      const isCebolaOrGranel = rawProdName.toLowerCase().includes('cebola') || rawProdName.toLowerCase().includes('granel') || rawProdName.includes('(kg)');
+      const prodUnit = editingSale.items?.[0]?.unit || (isCebolaOrGranel ? 'Granel (kg)' : 'Caixas (29kg)');
       setUnitType(prodUnit);
 
       let bWeight = 29;
-      if (prodUnit.includes('Granel') || prodName.includes('Granel') || prodName.includes('(kg)')) {
+      if (isCebolaOrGranel || prodUnit.includes('Granel') || prodUnit.includes('(kg)')) {
         bWeight = 1;
       } else if (editingSale.totalVolumes > 0 && editingSale.totalKg > 0) {
         bWeight = Number((editingSale.totalKg / editingSale.totalVolumes).toFixed(0));
       }
-      setBoxWeightKg(bWeight || 29);
+      setBoxWeightKg(bWeight || (isCebolaOrGranel ? 1 : 29));
 
       if (editingSale.totalOperation) {
         setTotalNfValue(String(editingSale.totalOperation));
@@ -238,6 +239,22 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       .then(data => setProducts(data))
       .catch(console.error);
   }, []);
+
+  // Sync unitType and boxWeight with registered product in catalog
+  useEffect(() => {
+    if (selectedProduct && products.length > 0) {
+      const p = products.find(prod => prod.name === selectedProduct || selectedProduct.toLowerCase().includes(prod.name.toLowerCase()) || prod.name.toLowerCase().includes(selectedProduct.toLowerCase()));
+      if (p) {
+        const defUnit = p.defaultUnit || (p.unitKg === 1 ? 'Granel (kg)' : 'Caixas (29kg)');
+        setUnitType(defUnit);
+        if (defUnit.includes('Granel') || defUnit.includes('(kg)') || p.unitKg === 1) {
+          setBoxWeightKg(1);
+        } else if (p.unitKg) {
+          setBoxWeightKg(p.unitKg);
+        }
+      }
+    }
+  }, [products, selectedProduct]);
 
   const applyProductData = (prod) => {
     if (!prod) return;
@@ -287,7 +304,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   };
 
   // Unit Characteristics & Flags
-  const isGranel = unitType.includes('Granel') || unitType.includes('(kg)') || selectedProduct.includes('Granel') || selectedProduct.includes('(kg)') || Number(boxWeightKg) === 1;
+  const isGranel = (unitType && (unitType.includes('Granel') || unitType.includes('(kg)'))) || (selectedProduct && (selectedProduct.toLowerCase().includes('cebola') || selectedProduct.includes('Granel') || selectedProduct.includes('(kg)'))) || Number(boxWeightKg) === 1;
   const isSacas = !isGranel && (unitType.includes('Sacas') || unitType.includes('60kg') || unitType.includes('40kg') || selectedProduct.includes('Sacas') || selectedProduct.includes('60kg'));
   const isToneladas = !isGranel && !isSacas && (unitType.includes('Toneladas') || unitType.includes('1000kg'));
   const isCaixas = !isGranel && !isSacas && !isToneladas;

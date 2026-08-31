@@ -199,8 +199,13 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       setSelectedProduct(prodName);
       setTotalWeightKg(editingSale.totalKg ? String(editingSale.totalKg) : '');
 
+      const prodUnit = editingSale.items?.[0]?.unit || (prodName.includes('Granel') || prodName.includes('(kg)') ? 'Granel (kg)' : 'Caixas (29kg)');
+      setUnitType(prodUnit);
+
       let bWeight = 29;
-      if (editingSale.totalVolumes > 0 && editingSale.totalKg > 0) {
+      if (prodUnit.includes('Granel') || prodName.includes('Granel') || prodName.includes('(kg)')) {
+        bWeight = 1;
+      } else if (editingSale.totalVolumes > 0 && editingSale.totalKg > 0) {
         bWeight = Number((editingSale.totalKg / editingSale.totalVolumes).toFixed(0));
       }
       setBoxWeightKg(bWeight || 29);
@@ -282,9 +287,9 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   };
 
   // Unit Characteristics & Flags
-  const isGranel = unitType.includes('Granel') || unitType.includes('(kg)') || boxWeightKg === 1;
-  const isSacas = unitType.includes('Sacas') || unitType.includes('60kg') || unitType.includes('40kg');
-  const isToneladas = unitType.includes('Toneladas') || unitType.includes('1000kg');
+  const isGranel = unitType.includes('Granel') || unitType.includes('(kg)') || selectedProduct.includes('Granel') || selectedProduct.includes('(kg)') || Number(boxWeightKg) === 1;
+  const isSacas = !isGranel && (unitType.includes('Sacas') || unitType.includes('60kg') || unitType.includes('40kg') || selectedProduct.includes('Sacas') || selectedProduct.includes('60kg'));
+  const isToneladas = !isGranel && !isSacas && (unitType.includes('Toneladas') || unitType.includes('1000kg'));
   const isCaixas = !isGranel && !isSacas && !isToneladas;
 
   const getUnitShortLabel = () => {

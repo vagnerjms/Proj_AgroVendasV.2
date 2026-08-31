@@ -42,6 +42,55 @@ export default function Reports({ setCurrentPage }) {
   const [showWebhookModal, setShowWebhookModal] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState(() => localStorage.getItem('agrovenda_n8n_drive_webhook') || '');
 
+  const stores = reportData.stores || [];
+  const rawTotalGeral = reportData.totalGeral || {
+    nfs: 0,
+    pedidosVenda: 0,
+    pedidosSemNF: 0,
+    pesoNF: 0,
+    pesoColheita: 0,
+    cxsVendidas: 0,
+    valorTotalNF: 0,
+    funrural: 0,
+    totalVendaAReceber: 0,
+    liquidoNF: 0,
+    totalComissao: 0,
+    totalLiquidoProdutor: 0
+  };
+
+  const filteredLojas = stores.filter(
+    l => selectedLoja === 'ALL' || l.loja === selectedLoja
+  );
+
+  // Dynamic totals: if ALL, uses rawTotalGeral; if a specific store is selected, recalculates from filteredLojas
+  const currentTotal = selectedLoja === 'ALL' ? rawTotalGeral : filteredLojas.reduce((acc, row) => ({
+    nfs: acc.nfs + (row.nfs || 0),
+    pedidosVenda: acc.pedidosVenda + (row.pedidosVenda || 0),
+    pedidosSemNF: acc.pedidosSemNF + (row.pedidosSemNF || 0),
+    pesoNF: acc.pesoNF + (row.pesoNF || 0),
+    pesoColheita: acc.pesoColheita + (row.pesoColheita || 0),
+    cxsVendidas: acc.cxsVendidas + (row.cxsVendidas || 0),
+    valorTotalNF: acc.valorTotalNF + (row.valorTotalNF || 0),
+    funrural: acc.funrural + (row.funrural || 0),
+    totalVendaAReceber: acc.totalVendaAReceber + (row.totalVendaAReceber || 0),
+    liquidoNF: acc.liquidoNF + (row.liquidoNF || 0),
+    totalComissao: acc.totalComissao + (row.totalComissao || 0),
+    totalLiquidoProdutor: acc.totalLiquidoProdutor + (row.totalLiquidoProdutor || 0)
+  }), {
+    nfs: 0,
+    pedidosVenda: 0,
+    pedidosSemNF: 0,
+    pesoNF: 0,
+    pesoColheita: 0,
+    cxsVendidas: 0,
+    valorTotalNF: 0,
+    funrural: 0,
+    totalVendaAReceber: 0,
+    liquidoNF: 0,
+    totalComissao: 0,
+    totalLiquidoProdutor: 0
+  });
+
   const saveWebhookConfig = (e) => {
     e.preventDefault();
     localStorage.setItem('agrovenda_n8n_drive_webhook', webhookUrl);
@@ -69,7 +118,7 @@ export default function Reports({ setCurrentPage }) {
         selectedLoja: selectedLoja,
         activeTab: activeTab,
         excelHtml: excelHtml,
-        filteredStores: filteredStores,
+        filteredStores: filteredLojas,
         currentTotal: currentTotal
       });
 
@@ -92,7 +141,7 @@ export default function Reports({ setCurrentPage }) {
 
   // Gerador do HTML/Excel com formatação idêntica à tela e 100% filtrado
   const buildExcelContent = () => {
-    const stores = filteredStores;
+    const stores = filteredLojas;
     const total = currentTotal;
     const hojeFormatado = new Date().toLocaleDateString('pt-BR');
     const formatMoeda = (v) => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -350,55 +399,6 @@ export default function Reports({ setCurrentPage }) {
       [lojaName]: !prev[lojaName]
     }));
   };
-
-  const stores = reportData.stores || [];
-  const rawTotalGeral = reportData.totalGeral || {
-    nfs: 0,
-    pedidosVenda: 0,
-    pedidosSemNF: 0,
-    pesoNF: 0,
-    pesoColheita: 0,
-    cxsVendidas: 0,
-    valorTotalNF: 0,
-    funrural: 0,
-    totalVendaAReceber: 0,
-    liquidoNF: 0,
-    totalComissao: 0,
-    totalLiquidoProdutor: 0
-  };
-
-  const filteredLojas = stores.filter(
-    l => selectedLoja === 'ALL' || l.loja === selectedLoja
-  );
-
-  // Dynamic totals: if ALL, uses rawTotalGeral; if a specific store is selected, recalculates from filteredLojas
-  const currentTotal = selectedLoja === 'ALL' ? rawTotalGeral : filteredLojas.reduce((acc, row) => ({
-    nfs: acc.nfs + (row.nfs || 0),
-    pedidosVenda: acc.pedidosVenda + (row.pedidosVenda || 0),
-    pedidosSemNF: acc.pedidosSemNF + (row.pedidosSemNF || 0),
-    pesoNF: acc.pesoNF + (row.pesoNF || 0),
-    pesoColheita: acc.pesoColheita + (row.pesoColheita || 0),
-    cxsVendidas: acc.cxsVendidas + (row.cxsVendidas || 0),
-    valorTotalNF: acc.valorTotalNF + (row.valorTotalNF || 0),
-    funrural: acc.funrural + (row.funrural || 0),
-    totalVendaAReceber: acc.totalVendaAReceber + (row.totalVendaAReceber || 0),
-    liquidoNF: acc.liquidoNF + (row.liquidoNF || 0),
-    totalComissao: acc.totalComissao + (row.totalComissao || 0),
-    totalLiquidoProdutor: acc.totalLiquidoProdutor + (row.totalLiquidoProdutor || 0)
-  }), {
-    nfs: 0,
-    pedidosVenda: 0,
-    pedidosSemNF: 0,
-    pesoNF: 0,
-    pesoColheita: 0,
-    cxsVendidas: 0,
-    valorTotalNF: 0,
-    funrural: 0,
-    totalVendaAReceber: 0,
-    liquidoNF: 0,
-    totalComissao: 0,
-    totalLiquidoProdutor: 0
-  });
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1700px] mx-auto space-y-6">

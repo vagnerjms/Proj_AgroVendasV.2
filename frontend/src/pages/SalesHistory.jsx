@@ -870,12 +870,20 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                       )}
 
                       {/* Comissão 3% */}
-                      {visibleColumns.feeValue && (
-                        <td className="py-3 px-4 text-right font-bold text-emerald-800">
-                          {formatCurrency(sale.totalCommission)}
-                          <span className="block text-[10px] text-gray-400 font-normal">3,0%</span>
-                        </td>
-                      )}
+                      {visibleColumns.feeValue && (() => {
+                        const vpVal = getValorTotalVP(sale);
+                        const feePct = Number(sale.feeValue) || 3.0;
+                        const commVal = Number(sale.totalCommission) > 100 
+                          ? Number(sale.totalCommission) 
+                          : (vpVal * (feePct / 100));
+
+                        return (
+                          <td className="py-3 px-4 text-right font-bold text-emerald-800">
+                            {formatCurrency(commVal)}
+                            <span className="block text-[10px] text-gray-400 font-normal">{formatNumber(feePct, 1)}%</span>
+                          </td>
+                        );
+                      })()}
 
                       {visibleColumns.status && (
                         <td className="py-3 px-4 text-center">

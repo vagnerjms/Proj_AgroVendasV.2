@@ -106,6 +106,24 @@ router.get('/', async (req, res) => {
       if (s.totalKg > 0 && (!s.totalVolumes || s.totalVolumes === s.totalKg || s.totalVolumes > 2000)) {
         s.totalVolumes = Number((s.totalKg / 29).toFixed(2));
       }
+
+      let cotacao = Number(s.dailyQuote) || 0;
+      if (!cotacao && s.notes) {
+        const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
+        if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
+      }
+
+      const kg = Number(s.totalKg) || 0;
+      if (cotacao > 0 && cotacao <= 10.0 && kg > 0) {
+        s.valorTotalVP = roundMoney(kg * cotacao);
+      } else if (cotacao > 10.0) {
+        s.valorTotalVP = roundMoney((s.totalVolumes || (kg / 29)) * cotacao);
+      }
+
+      const feePct = Number(s.feeValue) || 3.0;
+      const baseVP = Number(s.valorTotalVP) || Number(s.totalOperation) || 0;
+      s.totalCommission = roundMoney(baseVP * (feePct / 100));
+
       return s;
     });
     res.json(normalized);

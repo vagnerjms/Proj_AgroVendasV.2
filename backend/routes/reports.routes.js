@@ -66,17 +66,48 @@ router.get('/stores-summary', async (req, res) => {
         valorTotalNF = roundMoney(valorTotalNF + itemValorNF);
         funrural = roundMoney(funrural + itemFunrural);
         pesoColheita += itemPesoNF;
-        cxsVendidas += (Number(s.totalVolumes) || 0);
 
-        const caixas = Number(s.totalVolumes) || (itemPesoNF > 0 ? (itemPesoNF / 29) : 0);
+        // Calcula caixas de 29kg ou padrão do produto
+        const prodName = s.items?.[0]?.product || '';
+        let unitKg = 29;
+        if (prodName.includes('60kg') || prodName.toLowerCase().includes('saca')) {
+          unitKg = 60;
+        } else if (prodName.includes('50kg')) {
+          unitKg = 50;
+        } else if (prodName.includes('20kg')) {
+          unitKg = 20;
+        } else if (prodName.includes('10kg')) {
+          unitKg = 10;
+        }
+
+        let itemCaixas = 0;
+        if (itemPesoNF > 0) {
+          if (!s.totalVolumes || s.totalVolumes === s.totalKg || s.totalVolumes > 2000) {
+            itemCaixas = Number((itemPesoNF / unitKg).toFixed(2));
+          } else {
+            itemCaixas = Number(s.totalVolumes);
+          }
+        } else {
+          itemCaixas = Number(s.totalVolumes) || 0;
+        }
+
+        cxsVendidas = Number((cxsVendidas + itemCaixas).toFixed(2));
+
         let cotacao = Number(s.dailyQuote) || 0;
         if (!cotacao && s.notes) {
           const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
           if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
         }
-        if (!cotacao) cotacao = 45.0;
 
-        const valorVP = Number(s.valorTotalVP) > 0 ? roundMoney(s.valorTotalVP) : roundMoney(caixas * cotacao);
+        let valorVP = 0;
+        if (cotacao > 0 && cotacao <= 10.0 && itemPesoNF > 0) {
+          valorVP = roundMoney(itemPesoNF * cotacao);
+        } else if (cotacao > 10.0) {
+          valorVP = roundMoney(itemCaixas * cotacao);
+        } else {
+          valorVP = Number(s.valorTotalVP) > 0 ? roundMoney(s.valorTotalVP) : itemValorNF;
+        }
+
         totalVendaAReceber = roundMoney(totalVendaAReceber + valorVP);
 
         const nfNumber = s.nfFile ? s.nfFile.replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
@@ -92,7 +123,7 @@ router.get('/stores-summary', async (req, res) => {
           unit: s.items?.[0]?.unit || 'Caixas (29kg)',
           pesoNF: itemPesoNF,
           pesoColheita: itemPesoNF,
-          cxs: s.totalVolumes,
+          cxs: itemCaixas,
           precoKg: itemPrecoKg,
           valorNF: itemValorNF,
           funrural: itemFunrural,

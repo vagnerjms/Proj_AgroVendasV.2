@@ -869,13 +869,13 @@ export default function Reports({ setCurrentPage }) {
                             <td className="py-2 px-3 text-right text-gray-600">{formatNumber(it.pesoNF, 0)} kg</td>
                             <td className="py-2 px-3 text-right font-bold text-gray-900">{formatNumber(it.pesoColheita, 0)} kg</td>
                             <td className="py-2 px-3 text-right font-bold text-gray-900">
-                              {formatNumber(it.cxs, 2)} {it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
+                              {formatNumber(it.cxs, 2)} {it.unit?.includes('Sacas') ? 'sc' : 'cx'}
                             </td>
                             <td className="py-2 px-3 text-right text-gray-700">{it.precoKg > 0 ? `R$ ${it.precoKg.toFixed(2)}` : '-'}</td>
                             <td className="py-2 px-3 text-right font-bold text-gray-900">{formatCurrency(it.valorNF)}</td>
                             <td className="py-2 px-3 text-right text-red-600">-{formatCurrency(it.funrural)}</td>
                             <td className="py-2 px-3 text-right font-semibold text-blue-900">
-                              R$ {it.cotacao.toFixed(2)}/{it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
+                              R$ {it.cotacao.toFixed(2)}/{it.cotacao <= 10.0 ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
                             </td>
                             <td className="py-2 px-3 text-right font-black text-blue-950 bg-blue-50/30">{formatCurrency(it.valorVP)}</td>
                             <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/30">{formatCurrency(it.liquido)}</td>

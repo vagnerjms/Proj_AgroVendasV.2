@@ -151,8 +151,16 @@ async function syncLinkedSaleWeight(slip, chosenWeightKg, weightChoice) {
     const matchCot = sale.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
     if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
   }
-  if (!cotacao) cotacao = 45.0;
-  sale.valorTotalVP = roundMoney(newVolumes * cotacao);
+
+  if (cotacao > 0 && cotacao <= 10.0) {
+    // Cotação informada em R$/kg (ex: R$ 2,15/kg para Cebola/Granel): 25.420 kg * R$ 2,15 = R$ 54.653,00
+    sale.valorTotalVP = roundMoney(newTotalKg * cotacao);
+  } else if (cotacao > 10.0) {
+    // Cotação informada em R$/caixa (ex: R$ 45,00/cx): 877 cx * R$ 45,00
+    sale.valorTotalVP = roundMoney(newVolumes * cotacao);
+  } else {
+    sale.valorTotalVP = roundMoney(sale.totalOperation);
+  }
 
   // Recalcula comissão
   const comm = calculateCommission(sale.valorTotalVP, sale.feeValue);

@@ -347,7 +347,8 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   const funrural = calculateFunrural(effectiveTotalNF);
   const liquidoAReceber = Math.max(0, effectiveTotalNF - funrural.funruralTotal);
   
-  const valorTotalVP = isGranel 
+  const isQuotePerKg = (numQuote > 0 && numQuote <= 10.0) || isGranel;
+  const valorTotalVP = isQuotePerKg 
     ? (numWeight * numQuote) 
     : (calculatedVolumes * numQuote);
 

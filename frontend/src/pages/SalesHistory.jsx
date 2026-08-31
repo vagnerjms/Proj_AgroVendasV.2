@@ -308,15 +308,33 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
 
   // Helper calculation for Valor Total de VP (Comercial)
   const getValorTotalVP = (sale) => {
-    if (Number(sale.valorTotalVP) > 0) return Number(sale.valorTotalVP);
-    const caixas = Number(sale.totalVolumes) || (Number(sale.totalKg) > 0 ? (Number(sale.totalKg) / 29) : 0);
     let cotacao = Number(sale.dailyQuote) || 0;
     if (!cotacao && sale.notes) {
       const matchCot = sale.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
       if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
     }
-    if (!cotacao) cotacao = 45.0;
-    return caixas * cotacao;
+
+    const kg = Number(sale.totalKg) || 0;
+    const caixas = Number(sale.totalVolumes) || (kg > 0 ? (kg / 29) : 0);
+
+    // Se cotação foi informada em R$/kg (ex: R$ 2,15/kg), multiplica pelo peso total em kg
+    if (cotacao > 0 && cotacao <= 10.0 && kg > 0) {
+      return kg * cotacao;
+    }
+
+    if (Number(sale.valorTotalVP) > 0) {
+      // Se valorTotalVP gravado era anômalo (ex: caixas x 2,15 = 1884) quando a nota é de 55k, recalcula por kg
+      if (sale.valorTotalVP < 5000 && Number(sale.totalOperation) > 15000 && cotacao > 0 && cotacao <= 10.0 && kg > 0) {
+        return kg * cotacao;
+      }
+      return Number(sale.valorTotalVP);
+    }
+
+    if (cotacao > 10.0) {
+      return caixas * cotacao;
+    }
+
+    return Number(sale.totalOperation) || (caixas * (cotacao || 45.0));
   };
 
   // Helper calculation for Líquido a Receber (Valor NF - Funrural)

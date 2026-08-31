@@ -50,7 +50,10 @@ export function calculatePreciseSale({
   const liquidoAReceber = Math.max(0, valorTotalNF - funrural.funruralTotal);
 
   // 5. Valor Total da VP (Comercial / Cotação do dia)
-  const valorTotalVP = caixas * cot;
+  // Se a cotação for <= 10.0 (ex: R$ 2,15/kg) ou se unitKg === 1 (Granel), multiplica pelo peso total em kg
+  const valorTotalVP = (cot > 0 && cot <= 10.0) || uKg === 1
+    ? (kg * cot)
+    : (caixas * cot);
 
   // 6. Comissão AgroVenda (Calculada sobre a base comercial / Total VP)
   let totalCommission = 0;

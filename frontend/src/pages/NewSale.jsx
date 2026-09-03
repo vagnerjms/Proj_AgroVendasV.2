@@ -1080,16 +1080,6 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                   </span>
                 </div>
               </div>
-
-              <button
-                type="button"
-                onClick={handleAddItem}
-                className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer self-start sm:self-auto"
-                title="Adicionar outro produto a esta mesma venda"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ Adicionar Produto</span>
-              </button>
             </div>
 
             {/* SELETOR DE CLIENTE COMPRADOR */}
@@ -1316,7 +1306,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                 className="bg-white hover:bg-slate-100 border border-dashed border-slate-300 hover:border-emerald-600 text-slate-700 hover:text-emerald-800 text-xs font-bold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer w-full justify-center shadow-2xs"
               >
                 <Plus className="w-4 h-4 text-emerald-700" />
-                <span>+ Adicionar Outro Produto na Mesma Venda / Carga Mista</span>
+                <span>Adicionar Outro Produto na Mesma Venda / Carga Mista</span>
               </button>
             </div>
 

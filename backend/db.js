@@ -31,12 +31,15 @@ const SaleSchema = new mongoose.Schema({
   },
   items: [
     {
-      product: String,
-      quantity: Number,
-      unit: String,
-      price: Number,
-      total: Number,
-      kg: Number
+      product: { type: String, default: '' },
+      quantity: { type: Number, default: 0 },
+      unit: { type: String, default: 'Caixas (29kg)' },
+      boxWeightKg: { type: Number, default: 29 },
+      price: { type: Number, default: 0 },
+      total: { type: Number, default: 0 },
+      kg: { type: Number, default: 0 },
+      dailyQuote: { type: Number, default: 0 },
+      valorTotalVP: { type: Number, default: 0 }
     }
   ],
   feeType: { type: String, default: 'Porcentagem (%)' },

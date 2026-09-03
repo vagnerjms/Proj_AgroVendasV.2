@@ -81,14 +81,20 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   const [registeringClient, setRegisteringClient] = useState(false);
   const [clientRegisteredNotice, setClientRegisteredNotice] = useState('');
 
-  // Product Selection, Unit Type & Dynamic Pricings (INITIALIZED BLANK)
-  const [selectedProduct, setSelectedProduct] = useState('');
-  const [unitType, setUnitType] = useState('Caixas (29kg)');
-  const [totalWeightKg, setTotalWeightKg] = useState('');
-  const [boxWeightKg, setBoxWeightKg] = useState('');
-  const [pricePerKg, setPricePerKg] = useState('');
-  const [totalNfValue, setTotalNfValue] = useState('');
-  const [dailyQuote, setDailyQuote] = useState('');
+  // Helper for empty item
+  const createEmptyItem = () => ({
+    id: Date.now() + Math.random(),
+    product: '',
+    unit: 'Caixas (29kg)',
+    boxWeightKg: 29,
+    totalKg: '',
+    pricePerKg: '',
+    totalNf: '',
+    dailyQuote: ''
+  });
+
+  // Dynamic Array of Products in the Sale
+  const [saleItems, setSaleItems] = useState([createEmptyItem()]);
 
   // Clients & Products options from backend
   const [clients, setClients] = useState([]);
@@ -140,13 +146,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     setDestCity('');
     setDestUF('');
     setNotes('');
-    setSelectedProduct('');
-    setUnitType('Caixas (29kg)');
-    setTotalWeightKg('');
-    setBoxWeightKg('');
-    setPricePerKg('');
-    setTotalNfValue('');
-    setDailyQuote('');
+    setSaleItems([createEmptyItem()]);
     setNfFile(null);
     setNfeKey('');
     setEvidenceFile(null);
@@ -195,35 +195,37 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       setNfeKey(editingSale.nfeKey || '');
       setEvidenceFile(editingSale.evidenceFile || null);
 
-      const rawProdName = editingSale.items?.[0]?.product || 'Cenoura (Caixa 29kg)';
-      setSelectedProduct(rawProdName);
-      setTotalWeightKg(editingSale.totalKg ? String(editingSale.totalKg) : '');
-
-      const isCebolaOrGranel = rawProdName.toLowerCase().includes('cebola') || rawProdName.toLowerCase().includes('granel') || rawProdName.includes('(kg)');
-      const prodUnit = editingSale.items?.[0]?.unit || (isCebolaOrGranel ? 'Granel (kg)' : 'Caixas (29kg)');
-      setUnitType(prodUnit);
-
-      let bWeight = 29;
-      if (isCebolaOrGranel || prodUnit.includes('Granel') || prodUnit.includes('(kg)')) {
-        bWeight = 1;
-      } else if (editingSale.totalVolumes > 0 && editingSale.totalKg > 0) {
-        bWeight = Number((editingSale.totalKg / editingSale.totalVolumes).toFixed(0));
-      }
-      setBoxWeightKg(bWeight || (isCebolaOrGranel ? 1 : 29));
-
-      if (editingSale.totalOperation) {
-        setTotalNfValue(String(editingSale.totalOperation));
-        if (editingSale.totalKg > 0) {
-          setPricePerKg((editingSale.totalOperation / editingSale.totalKg).toFixed(4));
-        }
-      }
-
-      // Extract daily quote from field, notes or fallback
-      if (editingSale.dailyQuote) {
-        setDailyQuote(String(editingSale.dailyQuote));
-      } else if (editingSale.notes) {
-        const m = editingSale.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
-        if (m) setDailyQuote(m[1].replace(',', '.'));
+      if (editingSale.items && editingSale.items.length > 0) {
+        const loaded = editingSale.items.map((it, idx) => {
+          const rawProd = it.product || 'Cenoura';
+          const isGr = rawProd.toLowerCase().includes('cebola') || rawProd.toLowerCase().includes('granel') || it.unit?.includes('Granel');
+          const bw = it.boxWeightKg || (isGr ? 1 : 29);
+          const kg = it.kg || (it.quantity ? it.quantity * bw : 0);
+          const pKg = it.pricePerKg || (kg > 0 && it.total ? (it.total / kg) : (it.price || 0));
+          return {
+            id: Date.now() + idx,
+            product: rawProd,
+            unit: it.unit || (isGr ? 'Granel (kg)' : 'Caixas (29kg)'),
+            boxWeightKg: bw,
+            totalKg: kg ? String(kg) : '',
+            pricePerKg: pKg ? Number(pKg).toFixed(4) : '',
+            totalNf: it.total ? Number(it.total).toFixed(2) : '',
+            dailyQuote: it.dailyQuote ? String(it.dailyQuote) : (editingSale.dailyQuote ? String(editingSale.dailyQuote) : '')
+          };
+        });
+        setSaleItems(loaded);
+      } else {
+        const rawProd = 'Cenoura';
+        setSaleItems([{
+          id: Date.now(),
+          product: rawProd,
+          unit: 'Caixas (29kg)',
+          boxWeightKg: 29,
+          totalKg: editingSale.totalKg ? String(editingSale.totalKg) : '',
+          pricePerKg: editingSale.totalKg > 0 && editingSale.totalOperation ? (editingSale.totalOperation / editingSale.totalKg).toFixed(4) : '',
+          totalNf: editingSale.totalOperation ? String(editingSale.totalOperation) : '',
+          dailyQuote: editingSale.dailyQuote ? String(editingSale.dailyQuote) : ''
+        }]);
       }
     }
   }, [editingSale]);
@@ -240,53 +242,79 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       .catch(console.error);
   }, []);
 
-  // Sync unitType and boxWeight with registered product in catalog
-  useEffect(() => {
-    if (selectedProduct && products.length > 0) {
-      const p = products.find(prod => prod.name === selectedProduct || selectedProduct.toLowerCase().includes(prod.name.toLowerCase()) || prod.name.toLowerCase().includes(selectedProduct.toLowerCase()));
-      if (p) {
-        const defUnit = p.defaultUnit || (p.unitKg === 1 ? 'Granel (kg)' : 'Caixas (29kg)');
-        setUnitType(defUnit);
-        if (defUnit.includes('Granel') || defUnit.includes('(kg)') || p.unitKg === 1) {
-          setBoxWeightKg(1);
-        } else if (p.unitKg) {
-          setBoxWeightKg(p.unitKg);
-        }
-      }
-    }
-  }, [products, selectedProduct]);
-
-  const applyProductData = (prod) => {
-    if (!prod) return;
-    setSelectedProduct(prod.name);
-    const defUnit = prod.defaultUnit || 'Caixas (29kg)';
-    setUnitType(defUnit);
-
-    let uKg = prod.unitKg || 29;
-    if (defUnit.includes('Granel') || defUnit.includes('(kg)')) {
-      uKg = 1;
-    } else if (defUnit.includes('29kg')) {
-      uKg = 29;
-    } else if (defUnit.includes('20kg')) {
-      uKg = 20;
-    } else if (defUnit.includes('60kg')) {
-      uKg = 60;
-    } else if (defUnit.includes('1000kg')) {
-      uKg = 1000;
-    }
-    setBoxWeightKg(uKg);
+  // Multi-item manipulation handlers
+  const handleAddItem = () => {
+    setSaleItems(prev => [...prev, createEmptyItem()]);
   };
 
-  const handleProductSelect = (productName) => {
-    if (!productName) {
-      setSelectedProduct('');
-      setBoxWeightKg('');
+  const handleRemoveItem = (index) => {
+    if (saleItems.length <= 1) {
+      setSaleItems([createEmptyItem()]);
       return;
     }
-    const prod = products.find(p => p.name === productName);
-    if (prod) {
-      applyProductData(prod);
-    }
+    setSaleItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleItemProductSelect = (index, prodName) => {
+    setSaleItems(prev => {
+      const copy = [...prev];
+      const it = { ...copy[index], product: prodName };
+      const catalogProd = products.find(p => p.name === prodName);
+      if (catalogProd) {
+        const defUnit = catalogProd.defaultUnit || (catalogProd.unitKg === 1 ? 'Granel (kg)' : 'Caixas (29kg)');
+        it.unit = defUnit;
+        it.boxWeightKg = defUnit.includes('Granel') || defUnit.includes('(kg)') || catalogProd.unitKg === 1 ? 1 : (catalogProd.unitKg || 29);
+      } else {
+        const isCebola = prodName.toLowerCase().includes('cebola') || prodName.toLowerCase().includes('granel');
+        it.unit = isCebola ? 'Granel (kg)' : 'Caixas (29kg)';
+        it.boxWeightKg = isCebola ? 1 : 29;
+      }
+      const kg = Number(it.totalKg) || 0;
+      const p = Number(it.pricePerKg) || 0;
+      if (kg > 0 && p > 0) {
+        it.totalNf = (kg * p).toFixed(2);
+      }
+      copy[index] = it;
+      return copy;
+    });
+  };
+
+  const handleItemFieldChange = (index, field, value) => {
+    setSaleItems(prev => {
+      const copy = [...prev];
+      const it = { ...copy[index], [field]: value };
+      const kg = Number(field === 'totalKg' ? value : it.totalKg) || 0;
+      const p = Number(field === 'pricePerKg' ? value : it.pricePerKg) || 0;
+      const nf = Number(field === 'totalNf' ? value : it.totalNf) || 0;
+
+      if (field === 'totalKg') {
+        if (kg > 0 && p > 0) {
+          it.totalNf = (kg * p).toFixed(2);
+        } else if (kg > 0 && nf > 0) {
+          it.pricePerKg = (nf / kg).toFixed(4);
+        }
+      } else if (field === 'pricePerKg') {
+        if (kg > 0) {
+          it.totalNf = (kg * p).toFixed(2);
+        }
+      } else if (field === 'totalNf') {
+        if (kg > 0 && nf >= 0) {
+          it.pricePerKg = (nf / kg).toFixed(4);
+        }
+      } else if (field === 'unit') {
+        if (value.includes('Granel') || value.includes('(kg)')) {
+          it.boxWeightKg = 1;
+        } else if (value.includes('20kg')) {
+          it.boxWeightKg = 20;
+        } else if (value.includes('29kg')) {
+          it.boxWeightKg = 29;
+        } else if (value.includes('60kg')) {
+          it.boxWeightKg = 60;
+        }
+      }
+      copy[index] = it;
+      return copy;
+    });
   };
 
   const handleClientSelect = (clientName) => {
@@ -303,80 +331,50 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     }
   };
 
-  // Unit Characteristics & Flags
-  const isGranel = (unitType && (unitType.includes('Granel') || unitType.includes('(kg)'))) || (selectedProduct && (selectedProduct.toLowerCase().includes('cebola') || selectedProduct.includes('Granel') || selectedProduct.includes('(kg)'))) || Number(boxWeightKg) === 1;
-  const isSacas = !isGranel && (unitType.includes('Sacas') || unitType.includes('60kg') || unitType.includes('40kg') || selectedProduct.includes('Sacas') || selectedProduct.includes('60kg'));
-  const isToneladas = !isGranel && !isSacas && (unitType.includes('Toneladas') || unitType.includes('1000kg'));
-  const isCaixas = !isGranel && !isSacas && !isToneladas;
+  // Aggregated totals across all items
+  const totalWeightKg = saleItems.reduce((acc, it) => acc + (Number(it.totalKg) || 0), 0);
+  
+  const totalVolumes = saleItems.reduce((acc, it) => {
+    const kg = Number(it.totalKg) || 0;
+    const bw = Number(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : 29);
+    const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
+    return acc + (isGr ? kg : (bw > 0 ? (kg / bw) : 0));
+  }, 0);
 
-  const getUnitShortLabel = () => {
-    if (isGranel) return 'kg';
-    if (isSacas) return 'sc';
-    if (isToneladas) return 'ton';
-    return 'cx';
-  };
+  const totalCaixas29kg = saleItems.reduce((acc, it) => {
+    const kg = Number(it.totalKg) || 0;
+    const bw = Number(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : 29);
+    const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
+    return acc + (isGr ? (kg / 29) : (bw > 0 ? (kg / bw) : 0));
+  }, 0);
 
-  const getVolumeLabel = () => {
-    if (isGranel) return 'Peso Total Faturado (kg)';
-    if (isSacas) return `Sacas Calculadas (${boxWeightKg || 60}kg)`;
-    if (isToneladas) return 'Toneladas Calculadas (ton)';
-    return `Caixas Calculadas (${boxWeightKg || 29}kg)`;
-  };
+  const effectiveTotalNF = saleItems.reduce((acc, it) => {
+    const kg = Number(it.totalKg) || 0;
+    const p = Number(it.pricePerKg) || 0;
+    const nf = it.totalNf !== '' && it.totalNf !== undefined ? Number(it.totalNf) : (kg * p);
+    return acc + nf;
+  }, 0);
 
-  // Numeric values for calculation
-  const numWeight = Number(totalWeightKg) || 0;
-  const numBoxWeight = Number(boxWeightKg) || 1;
-  const numPriceKg = Number(pricePerKg) || 0;
-  const numQuote = Number(dailyQuote) || 0;
-
-  // Handlers for bidirectional edits (Price/Kg <-> Total NF Value <-> Weight)
-  const handleWeightChange = (newWeightStr) => {
-    setTotalWeightKg(newWeightStr);
-    const w = Number(newWeightStr) || 0;
-    if (w > 0 && numPriceKg > 0) {
-      setTotalNfValue((w * numPriceKg).toFixed(2));
-    } else if (w > 0 && Number(totalNfValue) > 0) {
-      setPricePerKg((Number(totalNfValue) / w).toFixed(4));
+  const valorTotalVP = saleItems.reduce((acc, it) => {
+    const kg = Number(it.totalKg) || 0;
+    const bw = Number(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : 29);
+    const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
+    const vol = isGr ? kg : (bw > 0 ? (kg / bw) : 0);
+    const q = Number(it.dailyQuote) || 0;
+    if (q <= 0) {
+      const p = Number(it.pricePerKg) || 0;
+      const nf = it.totalNf !== '' && it.totalNf !== undefined ? Number(it.totalNf) : (kg * p);
+      return acc + nf;
     }
-  };
-
-  const handlePricePerKgChange = (newPriceStr) => {
-    setPricePerKg(newPriceStr);
-    const p = Number(newPriceStr) || 0;
-    if (numWeight > 0) {
-      setTotalNfValue((numWeight * p).toFixed(2));
-    }
-  };
-
-  const handleTotalNfValueChange = (newTotalNfStr) => {
-    setTotalNfValue(newTotalNfStr);
-    const tot = Number(newTotalNfStr) || 0;
-    if (numWeight > 0 && tot >= 0) {
-      setPricePerKg((tot / numWeight).toFixed(4));
-    }
-  };
-
-  // Calculated Volumes
-  const calculatedVolumes = isGranel 
-    ? numWeight 
-    : (numBoxWeight > 0 ? (numWeight / numBoxWeight) : 0);
-
-  // Effective Total NF Value
-  const effectiveTotalNF = totalNfValue !== '' 
-    ? Number(totalNfValue) 
-    : (numPriceKg > 0 ? (numWeight * numPriceKg) : 0);
+    const isQKg = (q > 0 && q <= 10.0) || isGr;
+    return acc + (isQKg ? (kg * q) : (vol * q));
+  }, 0);
 
   const funrural = calculateFunrural(effectiveTotalNF);
   const liquidoAReceber = Math.max(0, effectiveTotalNF - funrural.funruralTotal);
-  
-  const isQuotePerKg = (numQuote > 0 && numQuote <= 10.0) || isGranel;
-  const valorTotalVP = isQuotePerKg 
-    ? (numWeight * numQuote) 
-    : (calculatedVolumes * numQuote);
-
   const totalCommission = feeType === 'Porcentagem (%)' 
     ? (valorTotalVP * (Number(feeValue) / 100))
-    : (feeType === 'Valor Fixo por Saca/Volume' ? calculatedVolumes * Number(feeValue) : Number(feeValue));
+    : (feeType === 'Valor Fixo por Saca/Volume' ? totalVolumes * Number(feeValue) : Number(feeValue));
 
   // Dynamic Title
   const getPageTitle = () => {
@@ -501,30 +499,49 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         }
       }
 
-      if (data.totalKg && data.totalKg > 0) {
-        setTotalWeightKg(String(data.totalKg));
-        if (data.totalOperation && data.totalOperation > 0) {
-          setTotalNfValue(Number(data.totalOperation).toFixed(2));
-          setPricePerKg(Number((data.totalOperation / data.totalKg).toFixed(4)));
-        }
-      } else if (data.totalOperation && data.totalOperation > 0) {
-        setTotalNfValue(Number(data.totalOperation).toFixed(2));
-      }
-
-      // Auto-match product from XML items if available
+      // Multi-Item XML Mapping
       if (data.items && data.items.length > 0) {
-        const xProd = (data.items[0].product || '').toLowerCase();
-        const matchedProd = products.find(p => 
-          xProd.includes(p.name.toLowerCase()) || 
-          p.name.toLowerCase().includes(xProd) ||
-          (xProd.includes('cenoura') && p.name.includes('Cenoura')) ||
-          (xProd.includes('cebola') && p.name.includes('Cebola')) ||
-          (xProd.includes('soja') && p.name.includes('Soja')) ||
-          (xProd.includes('milho') && p.name.includes('Milho'))
-        );
-        if (matchedProd) {
-          applyProductData(matchedProd);
-        }
+        const importedItems = data.items.map((it, idx) => {
+          const rawName = (it.product || '').toLowerCase();
+          const matchedCatalogProd = products.find(p => 
+            rawName.includes(p.name.toLowerCase()) || 
+            p.name.toLowerCase().includes(rawName) ||
+            (rawName.includes('cenoura') && p.name.includes('Cenoura')) ||
+            (rawName.includes('cebola') && p.name.includes('Cebola')) ||
+            (rawName.includes('beterraba') && p.name.includes('Beterraba'))
+          );
+
+          const resolvedProdName = matchedCatalogProd?.name || it.product || 'Produto Agrícola';
+          const resolvedUnit = matchedCatalogProd?.defaultUnit || it.unit || 'Caixas (29kg)';
+          const boxW = matchedCatalogProd?.unitKg || it.boxWeightKg || (resolvedUnit.includes('Granel') ? 1 : 29);
+          const itemKg = it.kg || (it.quantity ? it.quantity * boxW : 0);
+          const itemPrice = it.price ? Number(it.price).toFixed(4) : '';
+          const itemTotNf = it.total ? Number(it.total).toFixed(2) : (itemKg > 0 && itemPrice ? (itemKg * Number(itemPrice)).toFixed(2) : '');
+
+          return {
+            id: Date.now() + idx,
+            product: resolvedProdName,
+            unit: resolvedUnit,
+            boxWeightKg: boxW,
+            totalKg: itemKg ? String(itemKg) : '',
+            pricePerKg: itemPrice,
+            totalNf: itemTotNf,
+            dailyQuote: ''
+          };
+        });
+
+        setSaleItems(importedItems);
+      } else if (data.totalKg && data.totalKg > 0) {
+        setSaleItems([{
+          id: Date.now(),
+          product: 'Cenoura',
+          unit: 'Caixas (29kg)',
+          boxWeightKg: 29,
+          totalKg: String(data.totalKg),
+          pricePerKg: data.totalOperation ? (data.totalOperation / data.totalKg).toFixed(4) : '',
+          totalNf: data.totalOperation ? Number(data.totalOperation).toFixed(2) : '',
+          dailyQuote: ''
+        }]);
       }
 
       // Check if this NF-e was already imported in another sale
@@ -668,20 +685,48 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       return;
     }
 
-    if (!selectedProduct) {
-      setErrorMessage('Por favor, selecione o produto da venda.');
+    const hasEmptyProduct = saleItems.some(it => !it.product || !it.product.trim());
+    if (hasEmptyProduct) {
+      setErrorMessage('Por favor, selecione o produto para todos os itens da venda.');
       setSubmitting(false);
       return;
     }
 
-    if (!totalWeightKg || Number(totalWeightKg) <= 0) {
-      setErrorMessage('Por favor, informe o peso total da carga em kg.');
+    const hasInvalidWeight = saleItems.some(it => !it.totalKg || Number(it.totalKg) <= 0);
+    if (hasInvalidWeight) {
+      setErrorMessage('Por favor, informe o peso (kg) válido para todos os itens da venda.');
       setSubmitting(false);
       return;
     }
 
     try {
-      const unitDescription = isGranel ? 'Granel (kg)' : (isSacas ? `Sacas (${boxWeightKg}kg)` : `Caixas (${boxWeightKg}kg)`);
+      const formattedItems = saleItems.map(it => {
+        const kg = Number(it.totalKg) || 0;
+        const bw = Number(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : 29);
+        const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
+        const vol = isGr ? kg : (bw > 0 ? (kg / bw) : 0);
+        const p = Number(it.pricePerKg) || 0;
+        const itNf = it.totalNf !== '' ? Number(it.totalNf) : (kg * p);
+        const q = Number(it.dailyQuote) || 0;
+        const isQKg = (q > 0 && q <= 10.0) || isGr;
+        const itVP = q > 0 ? (isQKg ? (kg * q) : (vol * q)) : itNf;
+
+        return {
+          product: it.product || 'Produto Agrícola',
+          unit: it.unit || 'Caixas (29kg)',
+          boxWeightKg: bw,
+          kg: kg,
+          quantity: vol,
+          price: isGr ? p : (p * bw),
+          pricePerKg: p,
+          total: itNf,
+          dailyQuote: q,
+          valorTotalVP: itVP
+        };
+      });
+
+      const productNamesSummary = saleItems.map(it => it.product).filter(Boolean).join(' + ');
+
       const payload = {
         operationType,
         saleDate,
@@ -690,35 +735,25 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         origin: origin || 'Produtor Rural',
         destCity: destCity || 'São Paulo',
         destUF: destUF || 'SP',
-        notes: `Venda de ${selectedProduct} | Pesagem: ${totalWeightKg} kg (${calculatedVolumes.toFixed(2)} ${getUnitShortLabel()}) | NF: R$ ${effectiveTotalNF.toFixed(2)} | Cotação: R$ ${dailyQuote}/${getUnitShortLabel()} | Vencimento: ${dueDate ? dueDate.split('-').reverse().join('/') : ''} (${Number(paymentTermDays) === 0 ? 'À Vista' : `${paymentTermDays} dias`})`,
+        notes: `Venda de ${productNamesSummary || 'Produtos'} | Pesagem: ${totalWeightKg.toLocaleString('pt-BR')} kg (${totalVolumes.toFixed(0)} vol) | NF: R$ ${effectiveTotalNF.toFixed(2)} | Vencimento: ${dueDate ? dueDate.split('-').reverse().join('/') : ''}`,
         nfFile,
         nfeKey,
         evidenceFile,
         paymentTerms: Number(paymentTermDays) === 0 ? 'À Vista' : `${paymentTermDays} dias`,
         paymentTermDays: Number(paymentTermDays) || 0,
         dueDate,
-        dailyQuote: Number(dailyQuote) || 0,
+        dailyQuote: saleItems[0]?.dailyQuote ? Number(saleItems[0].dailyQuote) : 0,
         valorTotalVP: Number(valorTotalVP) || 0,
         freightType,
         carrierName,
         truckPlate,
         driverName,
         driverCPF,
-        items: [
-          {
-            product: selectedProduct,
-            kg: numWeight,
-            quantity: calculatedVolumes,
-            unit: unitDescription,
-            price: isGranel ? numPriceKg : (numPriceKg * numBoxWeight),
-            pricePerKg: numPriceKg,
-            total: effectiveTotalNF
-          }
-        ],
+        items: formattedItems,
         feeType,
         feeValue,
-        totalVolumes: calculatedVolumes,
-        totalKg: numWeight,
+        totalVolumes: totalVolumes,
+        totalKg: totalWeightKg,
         totalOperation: effectiveTotalNF,
         totalCommission: totalCommission,
         funruralTotal: funrural.funruralTotal,
@@ -1033,198 +1068,283 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         {/* Left Form (8 cols) */}
         <div className="lg:col-span-8 space-y-6">
           
-          {/* Card: Seleção de Produto e Precificação Adaptativa */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+          {/* Card: Seleção de Cliente e Grade de Produtos Multi-Item */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 pb-3 gap-3">
               <div className="flex items-center gap-2">
                 <Package className="w-5 h-5 text-emerald-700" />
                 <div>
-                  <h2 className="text-sm font-bold text-gray-900">Produto & Precificação Adaptativa</h2>
+                  <h2 className="text-sm font-extrabold text-gray-900">Itens da Venda & Produtos (Carga Mista)</h2>
                   <span className="text-[11px] text-gray-500">
-                    O formulário adapta automaticamente os campos de acordo com a unidade do produto e permite edição direta do valor da NF.
+                    Adicione um ou múltiplos produtos para a mesma operação/nota fiscal. O sistema consolida pesos, caixas e totais fiscais e comerciais.
                   </span>
                 </div>
               </div>
-              {selectedProduct && (
-                <span className="text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg">
-                  Tipo: {isGranel ? 'Granel (kg)' : (isSacas ? 'Sacas' : 'Caixas')}
-                </span>
-              )}
+
+              <button
+                type="button"
+                onClick={handleAddItem}
+                className="bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer self-start sm:self-auto"
+                title="Adicionar outro produto a esta mesma venda"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Adicionar Produto</span>
+              </button>
             </div>
 
-            {/* SELETOR DO PRODUTO E CLIENTE */}
-            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-800 mb-1">
-                    Produto / Commodity Agrícola *
-                  </label>
-                  <select
-                    required
-                    value={selectedProduct}
-                    onChange={(e) => handleProductSelect(e.target.value)}
-                    className="w-full bg-white border border-gray-300 text-xs rounded-lg px-3 py-2.5 font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-[#1d5a37] shadow-sm"
+            {/* SELETOR DE CLIENTE COMPRADOR */}
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+              <label className="block text-xs font-bold text-gray-800 mb-1">
+                Cliente / Destinatário Comprador *
+              </label>
+              <select
+                required
+                value={selectedClient}
+                onChange={(e) => handleClientSelect(e.target.value)}
+                className="w-full bg-white border border-gray-300 text-xs rounded-lg px-3 py-2.5 font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-[#1d5a37] shadow-sm"
+              >
+                <option value="">-- Selecione o Cliente Comprador --</option>
+                {!clients.some(c => c.name === selectedClient) && selectedClient && (
+                  <option value={selectedClient}>{selectedClient} (Importado da NF-e)</option>
+                )}
+                {clients.map(c => (
+                  <option key={c.id || c.name} value={c.name}>
+                    {c.name} {c.city ? `(${c.city}/${c.state || c.uf || 'SP'})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* LISTA DE PRODUTOS DA VENDA */}
+            <div className="space-y-4">
+              {saleItems.map((item, index) => {
+                const isItemGranel = (item.unit && (item.unit.includes('Granel') || item.unit.includes('(kg)'))) || (item.product && (item.product.toLowerCase().includes('cebola') || item.product.includes('Granel') || item.product.includes('(kg)'))) || Number(item.boxWeightKg) === 1;
+                const isItemSacas = !isItemGranel && (item.unit?.includes('Sacas') || item.unit?.includes('60kg'));
+                const unitShort = isItemGranel ? 'kg' : (isItemSacas ? 'sc' : 'cx');
+                const itemKg = Number(item.totalKg) || 0;
+                const boxW = Number(item.boxWeightKg) || (isItemGranel ? 1 : 29);
+                const itemVol = isItemGranel ? itemKg : (boxW > 0 ? (itemKg / boxW) : 0);
+                const itemP = Number(item.pricePerKg) || 0;
+                const itemNfVal = item.totalNf !== '' && item.totalNf !== undefined ? Number(item.totalNf) : (itemKg * itemP);
+                const itemQuote = Number(item.dailyQuote) || 0;
+                const isQuoteKg = (itemQuote > 0 && itemQuote <= 10.0) || isItemGranel;
+                const itemVPVal = itemQuote > 0 ? (isQuoteKg ? (itemKg * itemQuote) : (itemVol * itemQuote)) : itemNfVal;
+
+                return (
+                  <div 
+                    key={item.id || index}
+                    className="bg-slate-50/70 border border-slate-200 rounded-xl p-4 space-y-3 transition-all hover:border-emerald-300"
                   >
-                    <option value="">-- Selecione o Produto --</option>
-                    {!products.some(p => p.name === selectedProduct) && selectedProduct && (
-                      <option value={selectedProduct}>{selectedProduct} (Importado da NF-e)</option>
-                    )}
-                    {products.map(p => (
-                      <option key={p.id || p.name} value={p.name}>
-                        {p.name} — {p.defaultUnit || `${p.unitKg}kg`} ({p.category})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    {/* Header do Item */}
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-emerald-900 bg-emerald-100 px-2 py-0.5 rounded-md">
+                          Item #{index + 1}
+                        </span>
+                        <span className="text-xs font-bold text-gray-800">
+                          {item.product || 'Selecione o Produto'}
+                        </span>
+                        <span className="text-[10px] text-gray-500 font-semibold bg-white px-2 py-0.5 rounded border border-gray-200">
+                          {item.unit || 'Caixas (29kg)'}
+                        </span>
+                      </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-gray-800 mb-1">
-                    Cliente / Destinatário Comprador *
-                  </label>
-                  <select
-                    required
-                    value={selectedClient}
-                    onChange={(e) => handleClientSelect(e.target.value)}
-                    className="w-full bg-white border border-gray-300 text-xs rounded-lg px-3 py-2.5 font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-[#1d5a37] shadow-sm"
-                  >
-                    <option value="">-- Selecione o Cliente Comprador --</option>
-                    {!clients.some(c => c.name === selectedClient) && selectedClient && (
-                      <option value={selectedClient}>{selectedClient} (Importado da NF-e)</option>
-                    )}
-                    {clients.map(c => (
-                      <option key={c.id || c.name} value={c.name}>
-                        {c.name} {c.city ? `(${c.city}/${c.state || c.uf || 'SP'})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+                      {saleItems.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveItem(index)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1 rounded-md transition-colors text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                          title="Excluir este produto da venda"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remover</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Linha 1: Seleção de Produto e Unidade */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                          Produto / Commodity *
+                        </label>
+                        <select
+                          required
+                          value={item.product}
+                          onChange={(e) => handleItemProductSelect(index, e.target.value)}
+                          className="w-full bg-white border border-gray-300 text-xs rounded-lg px-2.5 py-2 font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                        >
+                          <option value="">-- Escolha o Produto --</option>
+                          {!products.some(p => p.name === item.product) && item.product && (
+                            <option value={item.product}>{item.product} (Importado)</option>
+                          )}
+                          {products.map(p => (
+                            <option key={p.id || p.name} value={p.name}>
+                              {p.name} — {p.defaultUnit || `${p.unitKg}kg`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                          Embalagem / Padrão
+                        </label>
+                        <select
+                          value={item.unit}
+                          onChange={(e) => handleItemFieldChange(index, 'unit', e.target.value)}
+                          className="w-full bg-white border border-gray-300 text-xs rounded-lg px-2.5 py-2 font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                        >
+                          <option value="Caixas (29kg)">Caixas (29kg) — Cenoura / Padrão</option>
+                          <option value="Caixas (20kg)">Caixas / Sacos (20kg) — Beterraba</option>
+                          <option value="Granel (kg)">Granel (kg) — Cebola / Raízes</option>
+                          <option value="Sacas (60kg)">Sacas (60kg) — Grãos / Batata</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-gray-700 mb-1">
+                          Peso Padrão Embalagem (kg)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          disabled={isItemGranel}
+                          value={item.boxWeightKg}
+                          onChange={(e) => handleItemFieldChange(index, 'boxWeightKg', Number(e.target.value))}
+                          className={`w-full border rounded-lg px-2.5 py-2 text-xs font-bold outline-none ${
+                            isItemGranel ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Linha 2: Pesos, Preços e Cotações */}
+                    <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5 bg-white p-3 rounded-lg border border-slate-200">
+                      
+                      {/* Peso Total do Item */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-700 mb-0.5">
+                          1. Peso Total (kg) *
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          placeholder="Ex: 17400"
+                          value={item.totalKg}
+                          onChange={(e) => handleItemFieldChange(index, 'totalKg', e.target.value)}
+                          className="w-full bg-emerald-50/40 border border-emerald-300 text-xs rounded-lg px-2 py-1.5 font-extrabold text-gray-900 outline-none focus:ring-2 focus:ring-emerald-600"
+                        />
+                      </div>
+
+                      {/* Caixas Calculadas */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-700 mb-0.5">
+                          2. Caixas / Vol.
+                        </label>
+                        <div className="w-full bg-gray-50 border border-gray-200 text-xs rounded-lg px-2 py-1.5 font-extrabold text-gray-900 truncate">
+                          {formatNumber(itemVol, isItemGranel ? 0 : 2)} {unitShort}
+                        </div>
+                      </div>
+
+                      {/* Preço Unitário NF (R$/kg) */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-700 mb-0.5">
+                          3. Preço NF (R$/kg)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.0001"
+                          placeholder="Ex: 1,41"
+                          value={item.pricePerKg}
+                          onChange={(e) => handleItemFieldChange(index, 'pricePerKg', e.target.value)}
+                          className="w-full bg-white border border-gray-300 text-xs rounded-lg px-2 py-1.5 font-bold text-gray-900 outline-none"
+                        />
+                      </div>
+
+                      {/* Cotação do Dia Comercial */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-emerald-900 mb-0.5">
+                          4. Cotação (R$/{unitShort})
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="Ex: 45,00"
+                          value={item.dailyQuote}
+                          onChange={(e) => handleItemFieldChange(index, 'dailyQuote', e.target.value)}
+                          className="w-full bg-blue-50/40 border border-blue-300 text-xs rounded-lg px-2 py-1.5 font-bold text-blue-950 outline-none"
+                        />
+                      </div>
+
+                      {/* Subtotal NF */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-gray-700 mb-0.5">
+                          Subtotal NF (R$)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0,00"
+                          value={item.totalNf}
+                          onChange={(e) => handleItemFieldChange(index, 'totalNf', e.target.value)}
+                          className="w-full bg-white border border-emerald-400 text-xs rounded-lg px-2 py-1.5 font-extrabold text-emerald-950 outline-none"
+                        />
+                      </div>
+
+                      {/* Subtotal Comercial VP */}
+                      <div>
+                        <label className="block text-[10px] font-bold text-blue-900 mb-0.5">
+                          Subtotal VP (R$)
+                        </label>
+                        <div className="w-full bg-blue-50 border border-blue-200 text-xs rounded-lg px-2 py-1.5 font-black text-blue-950 truncate">
+                          {formatCurrency(itemVPVal)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* GRID DE PESAGEM E COTAÇÃO DINÂMICA */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 bg-emerald-50/40 p-4 rounded-xl border border-emerald-100">
-              <div>
-                <label className="block text-xs font-bold text-gray-800 mb-1">
-                  1. Peso Total (kg) *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  placeholder="Ex: 25000"
-                  value={totalWeightKg}
-                  onChange={(e) => handleWeightChange(e.target.value)}
-                  className="w-full bg-white border border-emerald-300 text-xs rounded-lg px-3 py-2 font-extrabold text-gray-900 outline-none focus:ring-2 focus:ring-emerald-600"
-                />
-                <span className="text-[10px] text-gray-400 mt-0.5 block">Peso balança / NF</span>
-              </div>
-
-              {/* Peso da Caixa/Embalagem */}
-              <div>
-                <label className="block text-xs font-bold text-gray-800 mb-1">
-                  2. {isGranel ? 'Embalagem' : (isSacas ? 'Peso da Saca (kg)' : 'Peso da Caixa (kg)')}
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  disabled={isGranel || !selectedProduct}
-                  placeholder={isGranel ? '1' : (isSacas ? '60' : '29')}
-                  value={boxWeightKg}
-                  onChange={(e) => setBoxWeightKg(e.target.value)}
-                  className={`w-full border rounded-lg px-3 py-2 text-xs font-bold outline-none ${
-                    isGranel ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-emerald-300 text-gray-900'
-                  }`}
-                />
-                <span className="text-[10px] text-gray-400 mt-0.5 block">
-                  {isGranel ? 'Granel (1 kg = 1 unidade)' : (isSacas ? 'Padrão saca: 60kg' : 'Padrão caixa: 29kg')}
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-800 mb-1">
-                  3. Preço Unit. NF (R$/kg)
-                </label>
-                <input
-                  type="number"
-                  step="0.0001"
-                  placeholder="Ex: 1,30"
-                  value={pricePerKg}
-                  onChange={(e) => handlePricePerKgChange(e.target.value)}
-                  className="w-full bg-white border border-emerald-300 text-xs rounded-lg px-3 py-2 font-bold text-gray-900 outline-none"
-                />
-                <span className="text-[10px] text-gray-400 mt-0.5 block">Calcula ou deduz do total NF</span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-800 mb-1">
-                  4. Cotação Dia (R$/{getUnitShortLabel()})
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Ex: 45,00"
-                  value={dailyQuote}
-                  onChange={(e) => setDailyQuote(e.target.value)}
-                  className="w-full bg-white border border-emerald-300 text-xs rounded-lg px-3 py-2 font-bold text-emerald-900 outline-none"
-                />
-                <span className="text-[10px] text-gray-400 mt-0.5 block">
-                  Cotação comercial VP
-                </span>
-              </div>
+            {/* BOTÃO ADICIONAR OUTRO PRODUTO */}
+            <div className="flex justify-center pt-1">
+              <button
+                type="button"
+                onClick={handleAddItem}
+                className="bg-white hover:bg-slate-100 border border-dashed border-slate-300 hover:border-emerald-600 text-slate-700 hover:text-emerald-800 text-xs font-bold px-4 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer w-full justify-center shadow-2xs"
+              >
+                <Plus className="w-4 h-4 text-emerald-700" />
+                <span>+ Adicionar Outro Produto na Mesma Venda / Carga Mista</span>
+              </button>
             </div>
 
-            {/* SEGUNDA LINHA: RESUMO + VALOR TOTAL DA NF EDITÁVEL */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs pt-1">
-              
-              {/* Volume / Caixas / Kilos */}
-              <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 flex flex-col justify-center">
-                <span className="text-gray-500 text-[10px] block font-semibold">{getVolumeLabel()}:</span>
-                <span className="font-extrabold text-gray-900 text-sm mt-0.5">
-                  {formatNumber(calculatedVolumes, isGranel ? 0 : 2)} {getUnitShortLabel()}
-                </span>
+            {/* BARRA DE TOTAIS CONSOLIDADOS DA VENDA */}
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-200 text-xs">
+              <div>
+                <span className="block text-[10px] font-bold text-emerald-800 uppercase">Peso Total Carga</span>
+                <span className="text-sm font-black text-gray-900">{formatNumber(totalWeightKg, 0)} kg</span>
               </div>
-
-              {/* VALOR TOTAL DA NF EDITÁVEL (CAMPO DIRETO) */}
-              <div className="bg-emerald-50/50 p-3 rounded-xl border-2 border-emerald-400/80 shadow-sm relative group">
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-emerald-950 text-[10px] font-extrabold flex items-center gap-1">
-                    <Edit3 className="w-3 h-3 text-emerald-700" />
-                    <span>Valor Total da NF (R$) *</span>
-                  </label>
-                  <span className="text-[9px] bg-emerald-200/60 text-emerald-900 px-1.5 py-0.2 rounded font-bold">
-                    Editável
-                  </span>
-                </div>
-                <div className="relative">
-                  <span className="absolute left-2.5 top-1.5 text-xs font-bold text-emerald-900">R$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="0,00"
-                    value={totalNfValue}
-                    onChange={(e) => handleTotalNfValueChange(e.target.value)}
-                    className="w-full bg-white border border-emerald-400 text-xs rounded-lg pl-8 pr-2 py-1.5 font-black text-emerald-950 outline-none focus:ring-2 focus:ring-emerald-600 shadow-inner"
-                  />
-                </div>
-                <span className="text-[9px] text-emerald-700 mt-1 block">
-                  Altere livremente o valor fiscal da nota
-                </span>
+              <div>
+                <span className="block text-[10px] font-bold text-emerald-800 uppercase">Total Caixas (29kg)</span>
+                <span className="text-sm font-black text-gray-900">{formatNumber(totalCaixas29kg, 2)} cx</span>
               </div>
-
-              {/* FUNRURAL CALCULADO SOBRE O VALOR DA NF */}
-              <div className="bg-red-50/60 p-3 rounded-xl border border-red-200 flex flex-col justify-center">
-                <span className="text-red-700 text-[10px] block font-semibold">(-) FUNRURAL (1,63%):</span>
-                <span className="font-extrabold text-red-600 text-sm mt-0.5">
-                  -{formatCurrency(funrural.funruralTotal)}
-                </span>
+              <div>
+                <span className="block text-[10px] font-bold text-emerald-800 uppercase">Valor Total NF</span>
+                <span className="text-sm font-black text-[#173e27]">{formatCurrency(effectiveTotalNF)}</span>
               </div>
-
-              {/* LÍQUIDO A RECEBER */}
-              <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 flex flex-col justify-center">
-                <span className="text-emerald-800 text-[10px] block font-semibold">(=) Líquido a Receber:</span>
-                <span className="font-extrabold text-emerald-950 text-sm mt-0.5">
-                  {formatCurrency(liquidoAReceber)}
-                </span>
+              <div>
+                <span className="block text-[10px] font-bold text-red-700 uppercase">(-) FUNRURAL (1,63%)</span>
+                <span className="text-sm font-black text-red-600">-{formatCurrency(funrural.funruralTotal)}</span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold text-emerald-800 uppercase">(=) Líquido a Receber</span>
+                <span className="text-sm font-black text-emerald-950">{formatCurrency(liquidoAReceber)}</span>
+              </div>
+              <div className="bg-blue-50 p-1.5 rounded-lg border border-blue-200">
+                <span className="block text-[10px] font-bold text-blue-900 uppercase">Total Comercial</span>
+                <span className="text-sm font-black text-blue-950">{formatCurrency(valorTotalVP)}</span>
               </div>
             </div>
           </div>
@@ -1482,19 +1602,21 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
 
             <div className="space-y-3 text-xs">
               <div className="flex justify-between text-gray-600">
-                <span>Produto:</span>
-                <span className="font-bold text-gray-900">{selectedProduct || 'Não selecionado'}</span>
+                <span>Produtos ({saleItems.length}):</span>
+                <span className="font-bold text-gray-900 truncate max-w-[170px]" title={saleItems.map(it => it.product).filter(Boolean).join(', ')}>
+                  {saleItems.map(it => it.product).filter(Boolean).join(', ') || 'Nenhum'}
+                </span>
               </div>
 
               <div className="flex justify-between text-gray-600">
-                <span>Peso Total em Kilos:</span>
-                <span className="font-bold text-gray-900">{formatNumber(numWeight, 0)} kg</span>
+                <span>Peso Total Carga:</span>
+                <span className="font-bold text-gray-900">{formatNumber(totalWeightKg, 0)} kg</span>
               </div>
 
               <div className="flex justify-between text-gray-600">
-                <span>{getVolumeLabel()}:</span>
+                <span>Total Caixas (29kg eq.):</span>
                 <span className="font-bold text-gray-900">
-                  {formatNumber(calculatedVolumes, isGranel ? 0 : 2)} {getUnitShortLabel()}
+                  {formatNumber(totalCaixas29kg, 2)} cx
                 </span>
               </div>
 
@@ -1514,10 +1636,15 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                 <div className="flex justify-between"><span>↳ SENAR (0,23%):</span><span>{formatCurrency(funrural.senar)}</span></div>
               </div>
 
-              {/* VALOR TOTAL VP EM EVIDÊNCIA */}
-              <div className="flex justify-between items-center text-blue-950 font-black text-sm border border-blue-200 bg-blue-50/60 p-2.5 rounded-xl shadow-xs">
+              <div className="flex justify-between text-emerald-950 font-bold bg-emerald-50/50 p-2 rounded-lg border border-emerald-200">
+                <span>(=) Líquido a Receber:</span>
+                <span className="font-black text-sm">{formatCurrency(liquidoAReceber)}</span>
+              </div>
+
+              {/* VALOR TOTAL COMERCIAL (VP) EM EVIDÊNCIA */}
+              <div className="flex justify-between items-center text-blue-950 font-black text-sm border border-blue-200 bg-blue-50/70 p-2.5 rounded-xl shadow-xs">
                 <span className="text-blue-900 font-bold">
-                  Valor Total VP {numQuote > 0 ? `(R$ ${numQuote}/${getUnitShortLabel()})` : ''}:
+                  Valor Total Comercial:
                 </span>
                 <span className="text-blue-950 font-black text-base">
                   {formatCurrency(valorTotalVP)}

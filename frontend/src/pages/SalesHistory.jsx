@@ -805,8 +805,14 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                           <div className="font-semibold text-gray-900 truncate max-w-[200px]" title={sale.client}>
                             {sale.client}
                           </div>
-                          <div className="text-gray-400 text-[11px]">
-                            {sale.items?.[0]?.product || 'Cenoura'}
+                          <div className="text-gray-500 text-[11px] flex flex-wrap gap-1 mt-0.5">
+                            {sale.items && sale.items.length > 1 ? (
+                              <span className="bg-emerald-50 text-emerald-900 font-bold px-1.5 py-0.5 rounded border border-emerald-200">
+                                {sale.items.length} produtos ({sale.items.map(it => it.product).join(' + ')})
+                              </span>
+                            ) : (
+                              <span>{sale.items?.[0]?.product || 'Cenoura'}</span>
+                            )}
                           </div>
                         </td>
                       )}
@@ -1013,14 +1019,35 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
             </div>
 
             {/* Itens e Pesos */}
-            <div className="bg-white rounded-lg p-3 border border-gray-200 text-xs space-y-2">
+            <div className="bg-white rounded-xl p-3.5 border border-gray-200 text-xs space-y-2.5">
               <div className="font-bold text-gray-800 flex items-center justify-between border-b border-gray-100 pb-2">
-                <span>Produto: {viewSale.items?.[0]?.product || 'Cenoura (Caixa 29kg)'}</span>
-                <span>{formatNumber(viewSale.totalKg, 0)} kg ({formatNumber(viewSale.totalKg > 0 ? (viewSale.totalKg / 29) : (Number(viewSale.totalVolumes) || 0), 2)} caixas)</span>
+                <span>Itens da Operação ({viewSale.items?.length || 1})</span>
+                <span className="font-black text-gray-900">{formatNumber(viewSale.totalKg, 0)} kg ({formatNumber(viewSale.totalVolumes || (viewSale.totalKg / 29), 2)} caixas eq.)</span>
               </div>
-              <div className="text-gray-600 text-[11px]">
-                {viewSale.notes}
-              </div>
+              
+              {viewSale.items && viewSale.items.length > 0 ? (
+                <div className="divide-y divide-gray-100">
+                  {viewSale.items.map((it, i) => (
+                    <div key={i} className="py-1.5 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-bold text-gray-900">{it.product || 'Produto'}</span>
+                        <span className="text-gray-400 text-[11px] ml-2">({it.unit || 'Caixas 29kg'})</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-extrabold text-gray-900">{formatNumber(it.kg, 0)} kg</span>
+                        <span className="text-gray-500 text-[11px] ml-2">({formatNumber(it.quantity, 0)} vol)</span>
+                        {it.total ? <span className="font-bold text-emerald-800 ml-2">· {formatCurrency(it.total)}</span> : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {viewSale.notes && (
+                <div className="text-gray-600 text-[11px] bg-gray-50 p-2 rounded-lg border border-gray-100">
+                  {viewSale.notes}
+                </div>
+              )}
             </div>
 
             {/* Breakdown Financeiro: NF vs FUNRURAL vs Líquido vs VP */}

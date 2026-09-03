@@ -201,27 +201,87 @@ class NfeParserService {
     if (detList.length > 0) {
       items = detList.map(d => {
         const prod = d.prod || {};
+        const rawName = prod.xProd || 'Produto Agrícola';
         const q = Number(prod.qCom) || 1;
         const vUn = Number(prod.vUnCom) || (vProd / q);
         const vTot = Number(prod.vProd) || (q * vUn);
-        const u = prod.uCom || 'Sacas (60kg)';
+        const u = (prod.uCom || '').toUpperCase();
+        
+        // Intelligent product and unit identification
+        let resolvedProduct = rawName;
+        let resolvedUnit = 'Caixas (29kg)';
+        let boxWeight = 29;
+        let itemKg = 0;
+        let itemQty = q;
+
+        const isCebola = rawName.toUpperCase().includes('CEBOLA');
+        const isCenoura = rawName.toUpperCase().includes('CENOURA');
+        const isBeterraba = rawName.toUpperCase().includes('BETERRABA');
+        const isGranel = u.includes('KG') || isCebola;
+
+        if (isCebola) {
+          resolvedProduct = 'Cebola';
+          resolvedUnit = 'Granel (kg)';
+          boxWeight = 1;
+          itemKg = q;
+          itemQty = Math.round(q / 29); // caixas equivalentes
+        } else if (isBeterraba) {
+          resolvedProduct = 'Beterraba';
+          resolvedUnit = 'Caixas (20kg)';
+          boxWeight = 20;
+          if (u.includes('KG')) {
+            itemKg = q;
+            itemQty = Math.round(q / 20);
+          } else {
+            itemQty = q;
+            itemKg = q * 20;
+          }
+        } else if (isCenoura) {
+          resolvedProduct = 'Cenoura';
+          resolvedUnit = 'Caixas (29kg)';
+          boxWeight = 29;
+          if (u.includes('KG')) {
+            itemKg = q;
+            itemQty = Math.round(q / 29);
+          } else {
+            itemQty = q;
+            itemKg = q * 29;
+          }
+        } else if (isGranel) {
+          resolvedUnit = 'Granel (kg)';
+          boxWeight = 1;
+          itemKg = q;
+          itemQty = Math.round(q / 29);
+        } else {
+          resolvedUnit = 'Caixas (29kg)';
+          boxWeight = 29;
+          itemQty = q;
+          itemKg = q * 29;
+        }
+
         return {
-          product: prod.xProd || 'Commodity Agrícola',
-          quantity: q,
-          unit: u.toUpperCase().includes('KG') ? 'Granel (kg)' : (u.toUpperCase().includes('TON') ? 'Toneladas (1000kg)' : 'Sacas (60kg)'),
+          product: resolvedProduct,
+          quantity: itemQty,
+          unit: resolvedUnit,
+          boxWeightKg: boxWeight,
           price: vUn,
           total: vTot,
-          kg: pesoL || (q * 60)
+          kg: itemKg || q,
+          dailyQuote: 0,
+          valorTotalVP: 0
         };
       });
     } else {
       items = [{
-        product: 'Grãos Agrícolas Comercial',
+        product: 'Cenoura',
         quantity: qVol,
-        unit: 'Sacas (60kg)',
+        unit: 'Caixas (29kg)',
+        boxWeightKg: 29,
         price: qVol > 0 ? Number((vNF / qVol).toFixed(2)) : vNF,
         total: vNF,
-        kg: pesoL
+        kg: pesoL,
+        dailyQuote: 0,
+        valorTotalVP: 0
       }];
     }
 

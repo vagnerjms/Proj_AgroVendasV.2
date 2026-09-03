@@ -113,12 +113,21 @@ router.get('/stores-summary', async (req, res) => {
         const nfNumber = s.nfFile ? s.nfFile.replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
         const comm = calculateCommission(valorVP, s.feeValue);
 
-        // Nome / resumo dos produtos
+        // Nome / discriminação dos produtos
         let productLabel = 'Cenoura';
         if (s.items && s.items.length > 1) {
-          productLabel = `${s.items.length} produtos (${s.items.map(it => it.product).join(' + ')})`;
+          productLabel = s.items.map(it => {
+            const itKg = Number(it.kg) || 0;
+            const bw = Number(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : (it.product?.toLowerCase().includes('batata') ? 25 : 29));
+            const itVol = Number(it.quantity) || (itKg > 0 && bw > 0 ? itKg / bw : 0);
+            const unitAbbr = it.unit?.toLowerCase().includes('saca') || it.product?.toLowerCase().includes('batata') ? 'sc' : (it.unit?.toLowerCase().includes('granel') ? 'kg' : 'cx');
+            return `${it.product || 'Item'} (${itVol > 0 ? `${itVol.toFixed(0)} ${unitAbbr}` : `${itKg} kg`})`;
+          }).join(' + ');
         } else if (s.items && s.items.length === 1) {
-          productLabel = s.items[0].product;
+          productLabel = s.items[0].product || 'Cenoura';
+        } else if (s.notes) {
+          const m = s.notes.match(/Venda de ([^|]+)/i);
+          if (m && m[1]) productLabel = m[1].trim();
         }
 
         return {

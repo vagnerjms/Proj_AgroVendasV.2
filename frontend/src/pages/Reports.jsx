@@ -201,7 +201,7 @@ export default function Reports({ setCurrentPage }) {
               <th>Sem NF</th>
               <th>Peso NF (kg)</th>
               <th>Peso Colheita (kg)</th>
-              <th>CXS (29kg)</th>
+              <th>Volumes (cx/sc)</th>
               <th>Valor Total NF (R$)</th>
               <th>FUNRURAL (R$)</th>
               <th style="background-color: #1e40af;">Total Comercial VP (R$)</th>
@@ -247,7 +247,7 @@ export default function Reports({ setCurrentPage }) {
       </table>
       <br/><br/>
       <table>
-        <tr><td colspan="11" style="font-size: 12pt; font-weight: bold; background-color: #e2e8f0;">DETALHAMENTO INDIVIDUAL DAS VENDAS POR LOJA (VPs)</td></tr>
+        <tr><td colspan="12" style="font-size: 12pt; font-weight: bold; background-color: #e2e8f0;">DETALHAMENTO INDIVIDUAL DAS VENDAS POR LOJA (VPs)</td></tr>
       </table>
     `;
 
@@ -256,16 +256,17 @@ export default function Reports({ setCurrentPage }) {
         <br/>
         <table>
           <tr class="loja-header">
-            <td colspan="5">Loja: ${s.loja} (${s.pedidosVenda} VPs)</td>
+            <td colspan="6">Loja: ${s.loja} (${s.pedidosVenda} VPs)</td>
             <td colspan="3" style="text-align: right;">Total NF: ${formatMoeda(s.valorTotalNF)}</td>
             <td colspan="3" style="text-align: right;">Total VP: ${formatMoeda(s.totalVendaAReceber)}</td>
           </tr>
           <tr style="background-color: #f8fafc; font-weight: bold; font-size: 9pt; text-align: center;">
             <td>Nº VP</td>
+            <td>Produto(s)</td>
             <td>Data</td>
             <td>Nº NF</td>
             <td>Peso NF (kg)</td>
-            <td>Caixas</td>
+            <td>Volumes</td>
             <td>Preço/Kg</td>
             <td>Valor NF</td>
             <td>FUNRURAL</td>
@@ -276,13 +277,15 @@ export default function Reports({ setCurrentPage }) {
       `;
 
       for (const item of (s.itens || [])) {
+        const unitLabel = item.unit?.toLowerCase().includes('saca') || item.product?.toLowerCase().includes('batata') ? 'sc' : 'cx';
         excelContent += `
           <tr>
             <td class="num-centro"><b>${item.vp}</b></td>
+            <td class="texto-loja" style="font-size: 8.5pt; font-weight: bold; color: #1e293b;">${item.product || 'Produto'}</td>
             <td class="num-centro">${item.dataVP || '-'}</td>
             <td class="num-centro">${item.nf || 'Pendente'}</td>
             <td class="num-direita">${formatNum(item.pesoNF)} kg</td>
-            <td class="num-direita">${formatNum(item.cxs)} cx</td>
+            <td class="num-direita">${formatNum(item.cxs)} ${unitLabel}</td>
             <td class="num-direita">${formatMoeda(item.precoKg)}</td>
             <td class="num-direita">${formatMoeda(item.valorNF)}</td>
             <td class="funrural">-${formatMoeda(item.funrural)}</td>

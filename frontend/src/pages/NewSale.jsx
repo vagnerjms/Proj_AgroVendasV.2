@@ -1568,7 +1568,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                   className="w-full bg-white border border-gray-300 text-xs rounded-lg px-3 py-2 outline-none font-semibold"
                 >
                   <option value="Porcentagem (%)">Porcentagem (%)</option>
-                  <option value="Valor Fixo por Saca/Volume">Valor Fixo por {isGranel ? 'kg' : (isSacas ? 'Saca' : 'Caixa')}</option>
+                  <option value="Valor Fixo por Saca/Volume">Valor Fixo por Volume / Caixa</option>
                   <option value="Valor Fixo Total">Valor Fixo Total</option>
                 </select>
               </div>

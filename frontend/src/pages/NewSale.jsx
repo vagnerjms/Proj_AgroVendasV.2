@@ -242,6 +242,17 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       .catch(console.error);
   }, []);
 
+  // Helper to safely parse numbers with comma or dot
+  const parseNum = (val) => {
+    if (val === '' || val === null || val === undefined) return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const clean = String(val).trim().replace(/\./g, '').replace(',', '.');
+    const n = parseFloat(clean);
+    if (!isNaN(n)) return n;
+    const direct = parseFloat(String(val).replace(',', '.'));
+    return isNaN(direct) ? 0 : direct;
+  };
+
   // Multi-item manipulation handlers
   const handleAddItem = () => {
     setSaleItems(prev => [...prev, createEmptyItem()]);
@@ -261,16 +272,18 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       const it = { ...copy[index], product: prodName };
       const catalogProd = products.find(p => p.name === prodName);
       if (catalogProd) {
-        const defUnit = catalogProd.defaultUnit || (catalogProd.unitKg === 1 ? 'Granel (kg)' : 'Caixas (29kg)');
+        const defUnit = catalogProd.defaultUnit || (catalogProd.unitKg === 1 ? 'Granel (kg)' : (catalogProd.name.toLowerCase().includes('batata') ? 'Sacas (50kg)' : 'Caixas (29kg)'));
         it.unit = defUnit;
-        it.boxWeightKg = defUnit.includes('Granel') || defUnit.includes('(kg)') || catalogProd.unitKg === 1 ? 1 : (catalogProd.unitKg || 29);
+        it.boxWeightKg = defUnit.includes('Granel') || defUnit.includes('(kg)') || catalogProd.unitKg === 1 ? 1 : (catalogProd.unitKg || (catalogProd.name.toLowerCase().includes('batata') ? 50 : 29));
       } else {
-        const isCebola = prodName.toLowerCase().includes('cebola') || prodName.toLowerCase().includes('granel');
-        it.unit = isCebola ? 'Granel (kg)' : 'Caixas (29kg)';
-        it.boxWeightKg = isCebola ? 1 : 29;
+        const nameL = prodName.toLowerCase();
+        const isCebola = nameL.includes('cebola') || nameL.includes('granel');
+        const isBatata = nameL.includes('batata');
+        it.unit = isCebola ? 'Granel (kg)' : (isBatata ? 'Sacas (50kg)' : 'Caixas (29kg)');
+        it.boxWeightKg = isCebola ? 1 : (isBatata ? 50 : 29);
       }
-      const kg = Number(it.totalKg) || 0;
-      const p = Number(it.pricePerKg) || 0;
+      const kg = parseNum(it.totalKg);
+      const p = parseNum(it.pricePerKg);
       if (kg > 0 && p > 0) {
         it.totalNf = (kg * p).toFixed(2);
       }
@@ -283,9 +296,9 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     setSaleItems(prev => {
       const copy = [...prev];
       const it = { ...copy[index], [field]: value };
-      const kg = Number(field === 'totalKg' ? value : it.totalKg) || 0;
-      const p = Number(field === 'pricePerKg' ? value : it.pricePerKg) || 0;
-      const nf = Number(field === 'totalNf' ? value : it.totalNf) || 0;
+      const kg = parseNum(field === 'totalKg' ? value : it.totalKg);
+      const p = parseNum(field === 'pricePerKg' ? value : it.pricePerKg);
+      const nf = parseNum(field === 'totalNf' ? value : it.totalNf);
 
       if (field === 'totalKg') {
         if (kg > 0 && p > 0) {
@@ -304,6 +317,10 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       } else if (field === 'unit') {
         if (value.includes('Granel') || value.includes('(kg)')) {
           it.boxWeightKg = 1;
+        } else if (value.includes('50kg')) {
+          it.boxWeightKg = 50;
+        } else if (value.includes('25kg')) {
+          it.boxWeightKg = 25;
         } else if (value.includes('20kg')) {
           it.boxWeightKg = 20;
         } else if (value.includes('29kg')) {
@@ -311,6 +328,8 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         } else if (value.includes('60kg')) {
           it.boxWeightKg = 60;
         }
+      } else if (field === 'boxWeightKg') {
+        it.boxWeightKg = parseNum(value) || 1;
       }
       copy[index] = it;
       return copy;
@@ -332,38 +351,38 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   };
 
   // Aggregated totals across all items
-  const totalWeightKg = saleItems.reduce((acc, it) => acc + (Number(it.totalKg) || 0), 0);
+  const totalWeightKg = saleItems.reduce((acc, it) => acc + parseNum(it.totalKg), 0);
   
   const totalVolumes = saleItems.reduce((acc, it) => {
-    const kg = Number(it.totalKg) || 0;
-    const bw = Number(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : 29);
+    const kg = parseNum(it.totalKg);
+    const bw = parseNum(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : 29);
     const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
     return acc + (isGr ? kg : (bw > 0 ? (kg / bw) : 0));
   }, 0);
 
   const totalCaixas29kg = saleItems.reduce((acc, it) => {
-    const kg = Number(it.totalKg) || 0;
-    const bw = Number(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : 29);
+    const kg = parseNum(it.totalKg);
+    const bw = parseNum(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : 29);
     const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
     return acc + (isGr ? (kg / 29) : (bw > 0 ? (kg / bw) : 0));
   }, 0);
 
   const effectiveTotalNF = saleItems.reduce((acc, it) => {
-    const kg = Number(it.totalKg) || 0;
-    const p = Number(it.pricePerKg) || 0;
-    const nf = it.totalNf !== '' && it.totalNf !== undefined ? Number(it.totalNf) : (kg * p);
+    const kg = parseNum(it.totalKg);
+    const p = parseNum(it.pricePerKg);
+    const nf = it.totalNf !== '' && it.totalNf !== undefined ? parseNum(it.totalNf) : (kg * p);
     return acc + nf;
   }, 0);
 
   const valorTotalVP = saleItems.reduce((acc, it) => {
-    const kg = Number(it.totalKg) || 0;
-    const bw = Number(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : 29);
+    const kg = parseNum(it.totalKg);
+    const bw = parseNum(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : 29);
     const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
     const vol = isGr ? kg : (bw > 0 ? (kg / bw) : 0);
-    const q = Number(it.dailyQuote) || 0;
+    const q = parseNum(it.dailyQuote);
     if (q <= 0) {
-      const p = Number(it.pricePerKg) || 0;
-      const nf = it.totalNf !== '' && it.totalNf !== undefined ? Number(it.totalNf) : (kg * p);
+      const p = parseNum(it.pricePerKg);
+      const nf = it.totalNf !== '' && it.totalNf !== undefined ? parseNum(it.totalNf) : (kg * p);
       return acc + nf;
     }
     const isQKg = (q > 0 && q <= 10.0) || isGr;
@@ -1112,14 +1131,14 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
             <div className="space-y-4">
               {saleItems.map((item, index) => {
                 const isItemGranel = (item.unit && (item.unit.includes('Granel') || item.unit.includes('(kg)'))) || (item.product && (item.product.toLowerCase().includes('cebola') || item.product.includes('Granel') || item.product.includes('(kg)'))) || Number(item.boxWeightKg) === 1;
-                const isItemSacas = !isItemGranel && (item.unit?.includes('Sacas') || item.unit?.includes('60kg'));
+                const isItemSacas = !isItemGranel && (item.unit?.toLowerCase().includes('saca') || item.unit?.toLowerCase().includes('sc') || item.product?.toLowerCase().includes('batata'));
                 const unitShort = isItemGranel ? 'kg' : (isItemSacas ? 'sc' : 'cx');
-                const itemKg = Number(item.totalKg) || 0;
-                const boxW = Number(item.boxWeightKg) || (isItemGranel ? 1 : 29);
+                const itemKg = parseNum(item.totalKg);
+                const boxW = parseNum(item.boxWeightKg) || (isItemGranel ? 1 : 29);
                 const itemVol = isItemGranel ? itemKg : (boxW > 0 ? (itemKg / boxW) : 0);
-                const itemP = Number(item.pricePerKg) || 0;
-                const itemNfVal = item.totalNf !== '' && item.totalNf !== undefined ? Number(item.totalNf) : (itemKg * itemP);
-                const itemQuote = Number(item.dailyQuote) || 0;
+                const itemP = parseNum(item.pricePerKg);
+                const itemNfVal = item.totalNf !== '' && item.totalNf !== undefined ? parseNum(item.totalNf) : (itemKg * itemP);
+                const itemQuote = parseNum(item.dailyQuote);
                 const isQuoteKg = (itemQuote > 0 && itemQuote <= 10.0) || isItemGranel;
                 const itemVPVal = itemQuote > 0 ? (isQuoteKg ? (itemKg * itemQuote) : (itemVol * itemQuote)) : itemNfVal;
 
@@ -1137,8 +1156,8 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                         <span className="text-xs font-bold text-gray-800">
                           {item.product || 'Selecione o Produto'}
                         </span>
-                        <span className="text-[10px] text-gray-500 font-semibold bg-white px-2 py-0.5 rounded border border-gray-200">
-                          {item.unit || 'Caixas (29kg)'}
+                        <span className="text-[10px] text-gray-600 font-semibold bg-white px-2 py-0.5 rounded border border-gray-200">
+                          {item.unit || 'Embalagem'} ({item.boxWeightKg || 29}kg)
                         </span>
                       </div>
 
@@ -1190,8 +1209,10 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                         >
                           <option value="Caixas (29kg)">Caixas (29kg) — Cenoura / Padrão</option>
                           <option value="Caixas (20kg)">Caixas / Sacos (20kg) — Beterraba</option>
-                          <option value="Granel (kg)">Granel (kg) — Cebola / Raízes</option>
-                          <option value="Sacas (60kg)">Sacas (60kg) — Grãos / Batata</option>
+                          <option value="Sacas (50kg)">Sacas (50kg) — Batata Especial</option>
+                          <option value="Sacas (25kg)">Sacas (25kg) — Batata / Cebola</option>
+                          <option value="Sacas (60kg)">Sacas (60kg) — Grãos / Soja / Milho</option>
+                          <option value="Granel (kg)">Granel (kg) — Raízes / Granel</option>
                         </select>
                       </div>
 
@@ -1204,7 +1225,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                           step="0.1"
                           disabled={isItemGranel}
                           value={item.boxWeightKg}
-                          onChange={(e) => handleItemFieldChange(index, 'boxWeightKg', Number(e.target.value))}
+                          onChange={(e) => handleItemFieldChange(index, 'boxWeightKg', e.target.value)}
                           className={`w-full border rounded-lg px-2.5 py-2 text-xs font-bold outline-none ${
                             isItemGranel ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-300 text-gray-900'
                           }`}
@@ -1221,8 +1242,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                           1. Peso Total (kg) *
                         </label>
                         <input
-                          type="number"
-                          step="0.01"
+                          type="text"
                           required
                           placeholder="Ex: 17400"
                           value={item.totalKg}
@@ -1234,7 +1254,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                       {/* Caixas Calculadas */}
                       <div>
                         <label className="block text-[10px] font-bold text-gray-700 mb-0.5">
-                          2. Caixas / Vol.
+                          2. Volumes ({unitShort})
                         </label>
                         <div className="w-full bg-gray-50 border border-gray-200 text-xs rounded-lg px-2 py-1.5 font-extrabold text-gray-900 truncate">
                           {formatNumber(itemVol, isItemGranel ? 0 : 2)} {unitShort}
@@ -1247,8 +1267,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                           3. Preço NF (R$/kg)
                         </label>
                         <input
-                          type="number"
-                          step="0.0001"
+                          type="text"
                           placeholder="Ex: 1,41"
                           value={item.pricePerKg}
                           onChange={(e) => handleItemFieldChange(index, 'pricePerKg', e.target.value)}
@@ -1262,8 +1281,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                           4. Cotação (R$/{unitShort})
                         </label>
                         <input
-                          type="number"
-                          step="0.01"
+                          type="text"
                           placeholder="Ex: 45,00"
                           value={item.dailyQuote}
                           onChange={(e) => handleItemFieldChange(index, 'dailyQuote', e.target.value)}
@@ -1277,8 +1295,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                           Subtotal NF (R$)
                         </label>
                         <input
-                          type="number"
-                          step="0.01"
+                          type="text"
                           placeholder="0,00"
                           value={item.totalNf}
                           onChange={(e) => handleItemFieldChange(index, 'totalNf', e.target.value)}
@@ -1315,29 +1332,29 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
 
             {/* BARRA DE TOTAIS CONSOLIDADOS DA VENDA */}
             <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-200 text-xs">
-              <div>
-                <span className="block text-[10px] font-bold text-emerald-800 uppercase">Peso Total Carga</span>
-                <span className="text-sm font-black text-gray-900">{formatNumber(totalWeightKg, 0)} kg</span>
+              <div className="min-w-0">
+                <span className="block text-[10px] font-bold text-emerald-800 uppercase truncate">Peso Total Carga</span>
+                <span className="text-sm font-black text-gray-900 truncate block" title={`${formatNumber(totalWeightKg, 0)} kg`}>{formatNumber(totalWeightKg, 0)} kg</span>
               </div>
-              <div>
-                <span className="block text-[10px] font-bold text-emerald-800 uppercase">Total Caixas (29kg)</span>
-                <span className="text-sm font-black text-gray-900">{formatNumber(totalCaixas29kg, 2)} cx</span>
+              <div className="min-w-0">
+                <span className="block text-[10px] font-bold text-emerald-800 uppercase truncate">Total Volumes</span>
+                <span className="text-sm font-black text-gray-900 truncate block" title={`${formatNumber(totalVolumes, 2)} vol`}>{formatNumber(totalVolumes, 2)} vol</span>
               </div>
-              <div>
-                <span className="block text-[10px] font-bold text-emerald-800 uppercase">Valor Total NF</span>
-                <span className="text-sm font-black text-[#173e27]">{formatCurrency(effectiveTotalNF)}</span>
+              <div className="min-w-0">
+                <span className="block text-[10px] font-bold text-emerald-800 uppercase truncate">Valor Total NF</span>
+                <span className="text-sm font-black text-[#173e27] truncate block" title={formatCurrency(effectiveTotalNF)}>{formatCurrency(effectiveTotalNF)}</span>
               </div>
-              <div>
-                <span className="block text-[10px] font-bold text-red-700 uppercase">(-) FUNRURAL (1,63%)</span>
-                <span className="text-sm font-black text-red-600">-{formatCurrency(funrural.funruralTotal)}</span>
+              <div className="min-w-0">
+                <span className="block text-[10px] font-bold text-red-700 uppercase truncate">(-) FUNRURAL (1,63%)</span>
+                <span className="text-sm font-black text-red-600 truncate block" title={formatCurrency(funrural.funruralTotal)}>-{formatCurrency(funrural.funruralTotal)}</span>
               </div>
-              <div>
-                <span className="block text-[10px] font-bold text-emerald-800 uppercase">(=) Líquido a Receber</span>
-                <span className="text-sm font-black text-emerald-950">{formatCurrency(liquidoAReceber)}</span>
+              <div className="min-w-0">
+                <span className="block text-[10px] font-bold text-emerald-800 uppercase truncate">(=) Líquido a Receber</span>
+                <span className="text-sm font-black text-emerald-950 truncate block" title={formatCurrency(liquidoAReceber)}>{formatCurrency(liquidoAReceber)}</span>
               </div>
-              <div className="bg-blue-50 p-1.5 rounded-lg border border-blue-200">
-                <span className="block text-[10px] font-bold text-blue-900 uppercase">Total Comercial</span>
-                <span className="text-sm font-black text-blue-950">{formatCurrency(valorTotalVP)}</span>
+              <div className="bg-blue-50 p-1.5 rounded-lg border border-blue-200 min-w-0">
+                <span className="block text-[10px] font-bold text-blue-900 uppercase truncate">Total Comercial</span>
+                <span className="text-sm font-black text-blue-950 truncate block" title={formatCurrency(valorTotalVP)}>{formatCurrency(valorTotalVP)}</span>
               </div>
             </div>
           </div>

@@ -308,6 +308,29 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
 
   // Helper calculation for Valor Total de VP (Comercial)
   const getValorTotalVP = (sale) => {
+    // 1. Prioritize multi-item sum if sale.items exists
+    if (sale.items && Array.isArray(sale.items) && sale.items.length > 0) {
+      const itemsSum = sale.items.reduce((acc, it) => {
+        const itKg = Number(it.kg) || 0;
+        const bw = Number(it.boxWeightKg) || 25;
+        const itVol = Number(it.quantity) || (itKg > 0 && bw > 0 ? (itKg / bw) : 0);
+        const q = Number(it.dailyQuote) || 0;
+        if (q > 0) {
+          const isQKg = (q > 0 && q <= 10.0) || (it.unit && it.unit.includes('Granel')) || bw === 1;
+          return acc + (isQKg ? (itKg * q) : (itVol * q));
+        }
+        if (Number(it.valorTotalVP) > 0) return acc + Number(it.valorTotalVP);
+        if (Number(it.total) > 0) return acc + Number(it.total);
+        return acc;
+      }, 0);
+
+      if (itemsSum > 0) return itemsSum;
+    }
+
+    if (Number(sale.valorTotalVP) > 0) {
+      return Number(sale.valorTotalVP);
+    }
+
     let cotacao = Number(sale.dailyQuote) || 0;
     if (!cotacao && sale.notes) {
       const matchCot = sale.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
@@ -315,19 +338,13 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
     }
 
     const kg = Number(sale.totalKg) || 0;
-    const caixas = Number(sale.totalVolumes) || (kg > 0 ? (kg / 29) : 0);
+    const isBatata = (sale.items && sale.items.some(it => it.product?.toLowerCase().includes('batata'))) || (sale.notes && sale.notes.toLowerCase().includes('batata'));
+    const bw = isBatata ? 25 : 29;
+    const caixas = Number(sale.totalVolumes) || (kg > 0 ? (kg / bw) : 0);
 
     // Se cotação foi informada em R$/kg (ex: R$ 2,15/kg), multiplica pelo peso total em kg
     if (cotacao > 0 && cotacao <= 10.0 && kg > 0) {
       return kg * cotacao;
-    }
-
-    if (Number(sale.valorTotalVP) > 0) {
-      // Se valorTotalVP gravado era anômalo (ex: caixas x 2,15 = 1884) quando a nota é de 55k, recalcula por kg
-      if (sale.valorTotalVP < 5000 && Number(sale.totalOperation) > 15000 && cotacao > 0 && cotacao <= 10.0 && kg > 0) {
-        return kg * cotacao;
-      }
-      return Number(sale.valorTotalVP);
     }
 
     if (cotacao > 10.0) {
@@ -818,23 +835,10 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                       )}
 
                       {visibleColumns.totalKg && (() => {
-                        const prodName = sale.items?.[0]?.product || '';
-                        let unitKg = 29;
-                        let unitLabel = 'cx (29kg)';
-                        if (prodName.includes('60kg') || prodName.toLowerCase().includes('saca')) {
-                          unitKg = 60;
-                          unitLabel = 'sc (60kg)';
-                        } else if (prodName.includes('20kg')) {
-                          unitKg = 20;
-                          unitLabel = 'cx (20kg)';
-                        } else if (prodName.includes('10kg')) {
-                          unitKg = 10;
-                          unitLabel = 'cx (10kg)';
-                        } else if (prodName.toLowerCase().includes('granel')) {
-                          unitKg = 29;
-                          unitLabel = 'cx eq. (29kg)';
-                        }
-                        const calculatedVol = sale.totalKg > 0 ? (sale.totalKg / unitKg) : (Number(sale.totalVolumes) || 0);
+                        const isBatata = (sale.items && sale.items.some(it => it.product?.toLowerCase().includes('batata'))) || (sale.notes && sale.notes.toLowerCase().includes('batata'));
+                        const unitKg = isBatata ? 25 : (sale.items?.[0]?.boxWeightKg || 29);
+                        const unitLabel = isBatata ? 'sc (25kg)' : (unitKg === 20 ? 'cx (20kg)' : 'cx (29kg)');
+                        const calculatedVol = Number(sale.totalVolumes) > 0 ? Number(sale.totalVolumes) : (sale.totalKg > 0 ? (sale.totalKg / unitKg) : 0);
 
                         return (
                           <td className="py-3 px-4 text-right">

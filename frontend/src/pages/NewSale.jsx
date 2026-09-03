@@ -495,11 +495,13 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
             uf: data.emit.uf || '',
             address: data.emit.address || ''
           });
-          setProducerRegisteredNotice('');
         }
       }
 
-      // Multi-Item XML Mapping
+      if (data.truckPlate) setTruckPlate(data.truckPlate);
+      if (data.carrierName) setCarrierName(data.carrierName);
+
+      // Multi-Item XML/PDF Mapping
       if (data.items && data.items.length > 0) {
         const importedItems = data.items.map((it, idx) => {
           const rawName = (it.product || '').toLowerCase();
@@ -508,7 +510,8 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
             p.name.toLowerCase().includes(rawName) ||
             (rawName.includes('cenoura') && p.name.includes('Cenoura')) ||
             (rawName.includes('cebola') && p.name.includes('Cebola')) ||
-            (rawName.includes('beterraba') && p.name.includes('Beterraba'))
+            (rawName.includes('beterraba') && p.name.includes('Beterraba')) ||
+            (rawName.includes('batata') && p.name.includes('Batata'))
           );
 
           const resolvedProdName = matchedCatalogProd?.name || it.product || 'Produto Agrícola';

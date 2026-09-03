@@ -16,124 +16,345 @@ class NfeParserService {
   }
 
   /**
-   * Parse PDF DANFE files using text recognition and regex heuristics.
+   * Parse PDF DANFE & NFA-e files using text extraction, tabular parsing and regex heuristics.
    */
   static async _parsePdf(filePath, originalName) {
     const dataBuffer = fs.readFileSync(filePath);
-    const pdfInstance = new PDFParse({ data: dataBuffer });
-    const pdfResult = await pdfInstance.getText();
-    const text = pdfResult.text || '';
+    let text = '';
 
-    // Extract Access Key (44 digits)
-    const keyMatch = text.match(/(\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4}\s*\d{4})/);
-    const nfeKey = keyMatch ? keyMatch[1].replace(/\s+/g, '') : '';
-
-    // Extract NF Number
-    const nfMatch = text.match(/(\d{7,9})\s*Nº\s*SÉRIE/i) || text.match(/Nº\s*(\d{7,9})/i) || originalName.match(/(\d{7,9})/);
-    const nNF = nfMatch ? nfMatch[1] : '';
-
-    // Extract Destination (Buyer)
-    let destName = '';
-    if (text.includes('HORTIFRUTI RUBI')) destName = 'HORTIFRUTI RUBI LTDA';
-    else if (text.includes('BADIN FAVILLA')) destName = 'BADIN FAVILLA HORTIFRUTI LTDA';
-    else if (text.includes('AZEVEDO')) destName = 'COMERCIAL DE VERDURAS AZEVEDO LTDA';
-    else if (text.includes('WD')) destName = 'COMERCIAL DE VERDURAS WD LTDA';
-    else if (text.includes('HORT BOM')) destName = 'HORT BOM ALIMENTOS LTDA';
-    else if (text.includes('HARADA')) destName = 'MARCELO KATSUMI HARADA';
-    else if (text.includes('W & A') || text.includes('W&A')) destName = 'W & A DISTRIBUIDORA DE VERDURAS LTDA';
-    else {
-      const destExtract = text.match(/DESTINATÁRIO[\s\S]*?NOME\s*\/\s*RAZÃO\s*SOCIAL[\s\r\n]+([^\r\n]+)/i);
-      if (destExtract) destName = destExtract[1].trim();
-    }
-
-    // Extract Emission Date
-    let dhEmi = new Date().toISOString().split('T')[0];
-    const dateMatch = text.match(/DATA DE EMISSÃO[\s\r\n]+(\d{2})\/(\d{2})\/(\d{2,4})/i);
-    if (dateMatch) {
-      let yr = dateMatch[3];
-      if (yr.length === 2) yr = `20${yr}`;
-      dhEmi = `${yr}-${dateMatch[2]}-${dateMatch[1]}`;
-    }
-
-    // Extract Total Value & Unit Price
-    let vNF = 0;
-    let unitPrice = 0;
-    const prodMatch = text.match(/(?:CENOURA|CEBOLA|BATATA|BETERRABA|SOJA|MILHO|PRODUTO)[^\n]*?([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/i);
-    if (prodMatch) {
-      const p1 = parseFloat(prodMatch[1].replace(/\./g, '').replace(',', '.'));
-      const p2 = parseFloat(prodMatch[2].replace(/\./g, '').replace(',', '.'));
-      const p3 = parseFloat(prodMatch[3].replace(/\./g, '').replace(',', '.'));
-      if (p3 > 0) vNF = p3;
-      if (p2 > 0) unitPrice = p2;
-    }
-
-    if (!vNF || vNF === 0) {
-      const impMatch = text.match(/0,00\s+0,00\s+0,00\s+0,00\s+([\d.,]+)/) || text.match(/(?:BASE\s*DE\s*CÁLCULO|TOTAL\s*DA\s*NOTA)[\s\S]*?(\d{1,3}(?:\.\d{3})*,\d{2})/i);
-      if (impMatch) {
-        vNF = parseFloat(impMatch[1].replace(/\./g, '').replace(',', '.'));
+    try {
+      if (typeof PDFParse === 'function') {
+        const res = await PDFParse(dataBuffer);
+        text = res.text || '';
+      } else {
+        const pdfInstance = new PDFParse({ data: dataBuffer });
+        const pdfResult = await pdfInstance.getText();
+        text = pdfResult.text || '';
+      }
+    } catch (e) {
+      console.warn('Tentativa alternativa de extração de texto PDF:', e.message);
+      try {
+        const pdfAlt = require('pdf-parse');
+        if (typeof pdfAlt === 'function') {
+          const res = await pdfAlt(dataBuffer);
+          text = res.text || '';
+        }
+      } catch (err2) {
+        console.error('Falha geral no pdf-parse:', err2);
       }
     }
 
-    // Extract Net Weight (kg)
-    let pesoL = 0;
-    const pesoMatch = text.match(/PESO\s*LÍQUIDO[\s\r\n]+([\d.,]+)/i);
-    if (pesoMatch) {
-      const rawPeso = pesoMatch[1].trim();
-      pesoL = parseFloat(rawPeso.replace(/\./g, '').replace(',', '.'));
-    }
-    if (unitPrice === 0 && pesoL > 0 && vNF > 0) {
-      unitPrice = vNF / pesoL;
+    if (!text || text.trim().length === 0) {
+      throw new Error('Não foi possível extrair o texto legível deste arquivo PDF.');
     }
 
-    // Extract Product
-    let productName = 'Cenoura (Caixa 29kg)';
-    if (text.toLowerCase().includes('cebola')) productName = 'Cebola — Granel (kg)';
-    else if (text.toLowerCase().includes('cenoura')) productName = 'Cenoura (Caixa 29kg)';
-    else if (text.toLowerCase().includes('beterraba')) productName = 'Beterraba (Caixa 20kg)';
+    // 1. Extrair Chave de Acesso (44 dígitos)
+    const keyMatch = text.match(/(\d{4}[\s.-]*\d{4}[\s.-]*\d{4}[\s.-]*\d{4}[\s.-]*\d{4}[\s.-]*\d{4}[\s.-]*\d{4}[\s.-]*\d{4}[\s.-]*\d{4}[\s.-]*\d{4}[\s.-]*\d{4})/);
+    let nfeKey = keyMatch ? keyMatch[1].replace(/[\s.-]/g, '') : '';
+    if (!nfeKey) {
+      const pureDigits = text.match(/\b\d{44}\b/);
+      if (pureDigits) nfeKey = pureDigits[0];
+    }
 
-    const previdencia = vNF * TAX_RATES.PREVIDENCIA;
-    const rat = vNF * TAX_RATES.RAT;
-    const senar = vNF * TAX_RATES.SENAR;
-    const funruralTotal = vNF * TAX_RATES.FUNRURAL_TOTAL;
+    // 2. Extrair Número da Nota e Série
+    let nNF = '';
+    let serie = '';
+    const nfMatch = text.match(/NFA-e[\s\S]*?N[º°o]?\s*([\d.]+)/i) || 
+                   text.match(/DANFE[\s\S]*?N[º°o]?\s*([\d.]+)/i) || 
+                   text.match(/N[º°o]:?\s*([\d.]+)/i) ||
+                   originalName.match(/(\d{7,9})/);
+    if (nfMatch) {
+      nNF = nfMatch[1].replace(/\./g, '');
+    }
+    const serieMatch = text.match(/S[ÉE]RIE:?\s*(\d+)/i);
+    if (serieMatch) serie = serieMatch[1];
+
+    // 3. Extrair Data de Emissão
+    let dhEmi = new Date().toISOString().split('T')[0];
+    const dateMatch = text.match(/DATA\s*(?:DA\s*)?EMISS[ÃA]O[\s\r\n:]+([0-3]?\d)\/([0-1]?\d)\/(\d{2,4})/i) ||
+                      text.match(/PROTOCOLO[\s\S]*?-\s*([0-3]?\d)\/([0-1]?\d)\/(\d{2,4})/i) ||
+                      text.match(/([0-3]?\d)\/([0-1]?\d)\/(\d{4})/);
+    if (dateMatch) {
+      let day = dateMatch[1].padStart(2, '0');
+      let month = dateMatch[2].padStart(2, '0');
+      let year = dateMatch[3];
+      if (year.length === 2) year = `20${year}`;
+      dhEmi = `${year}-${month}-${day}`;
+    }
+
+    // 4. Extrair Emitente (Produtor Rural / Remetente)
+    let emitName = '';
+    let emitDoc = '';
+    let emitIE = '';
+    let emitCity = '';
+    let emitUF = '';
+    let emitAddress = '';
+
+    const emitBlockMatch = text.match(/(?:EMITENTE|REMETENTE)[\s\S]*?(?:DESTINAT[ÁA]RIO|DESTINATARIO)/i);
+    const emitBlock = emitBlockMatch ? emitBlockMatch[0] : text;
+
+    const emitDocMatch = emitBlock.match(/(?:CPF|CNPJ)[\s\r\n:]*(\d{2,3}\.?\d{3}\.?\d{3}[/-]?\d{2,4}-?\d{2})/i) ||
+                         emitBlock.match(/(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/);
+    if (emitDocMatch) emitDoc = emitDocMatch[1].trim();
+
+    const emitIeMatch = emitBlock.match(/INSCRI[ÇC][ÃA]O\s*ESTADUAL[\s\r\n:]*([\d.-]+)/i);
+    if (emitIeMatch) emitIE = emitIeMatch[1].trim();
+
+    const emitNameMatch = emitBlock.match(/(?:NOME\s*\/\s*RAZ[ÃA]O\s*SOCIAL|NOME\s*\/\s*NOME\s*EMPRESARIAL)[\s\r\n:]+([^\r\n]+)/i) ||
+                          emitBlock.match(/(?:VENDA|SAIDA|SAÍDA)[\s\r\n]+([A-ZÀ-Ú\s]{4,60})/i);
+    if (emitNameMatch) {
+      emitName = emitNameMatch[1].replace(/CNPJ|CPF|ENDEREÇO|DATA|BAIRRO|CEP/gi, '').trim();
+    }
+
+    const emitMunMatch = emitBlock.match(/MUNIC[ÍI]PIO[\s\S]*?(?:\d{1,5}\s*-\s*)?([A-ZÀ-Ú\s]+)\s+(MG|SP|GO|RJ|PR|BA|RS|SC|ES|MS|MT|DF|TO|PA|PE|CE|MA|PI|RN|PB|AL|SE|RO|AC|AM|RR|AP)/i) ||
+                         emitBlock.match(/(?:\d{1,5}\s*-\s*)?([A-ZÀ-Ú\s]+)\s+(MG|SP|GO|RJ|PR|BA|RS|SC|ES|MS|MT|DF|TO|PA)\s+BRASIL/i);
+    if (emitMunMatch) {
+      emitCity = emitMunMatch[1].replace(/^\d+\s*-\s*/, '').trim();
+      emitUF = emitMunMatch[2].trim();
+    }
+
+    const emitEndMatch = emitBlock.match(/ENDERE[ÇC]O[\s\r\n:]+([^\r\n]+)/i);
+    if (emitEndMatch) {
+      emitAddress = emitEndMatch[1].replace(/BAIRRO|DISTRITO|CEP|MUNICÍPIO|FONE/gi, '').trim();
+    }
+
+    // 5. Extrair Destinatário (Comprador / CEASA)
+    let destName = '';
+    let destDoc = '';
+    let destIE = '';
+    let destCity = '';
+    let destUF = '';
+    let destAddress = '';
+
+    const destBlockMatch = text.match(/DESTINAT[ÁA]RIO[\s\S]*?(?:C[ÁA]LCULO\s*(?:DO)?\s*IMPOSTO|DADOS\s*DOS\s*PRODUTOS|TRANSPORTADOR)/i);
+    const destBlock = destBlockMatch ? destBlockMatch[0] : text;
+
+    const destDocMatch = destBlock.match(/(?:CNPJ|CPF)[\s\r\n:]*(\d{2,3}\.?\d{3}\.?\d{3}[/-]?\d{2,4}-?\d{2})/i) ||
+                         destBlock.match(/(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}|\d{3}\.\d{3}\.\d{3}-\d{2})/);
+    if (destDocMatch) destDoc = destDocMatch[1].trim();
+
+    const destIeMatch = destBlock.match(/INSCRI[ÇC][ÃA]O\s*ESTADUAL[\s\r\n:]*([\d.-]+)/i);
+    if (destIeMatch) destIE = destIeMatch[1].trim();
+
+    const destNameMatch = destBlock.match(/(?:NOME\s*\/\s*RAZ[ÃA]O\s*SOCIAL|NOME\s*\/\s*NOME\s*EMPRESARIAL)[\s\r\n:]+([^\r\n]+)/i) ||
+                          destBlock.match(/([A-ZÀ-Ú0-9\s.,-]{4,60}\s+(?:LTDA|S\/A|ME|EPP|EIRELI|COMERCIAL|DISTRIBUIDORA|SUPERMERCADOS|HORTIFRUTI))/i);
+    if (destNameMatch) {
+      destName = destNameMatch[1].replace(/CNPJ|CPF|ENDEREÇO|DATA|BAIRRO|CEP/gi, '').trim();
+    }
+
+    const destMunMatch = destBlock.match(/MUNIC[ÍI]PIO[\s\S]*?(?:\d{1,5}\s*-\s*)?([A-ZÀ-Ú\s]+)\s+(MG|SP|GO|RJ|PR|BA|RS|SC|ES|MS|MT|DF|TO|PA|PE|CE|MA|PI|RN|PB|AL|SE|RO|AC|AM|RR|AP)/i) ||
+                         destBlock.match(/(?:\d{1,5}\s*-\s*)?([A-ZÀ-Ú\s]+)\s+(MG|SP|GO|RJ|PR|BA|RS|SC|ES|MS|MT|DF|TO|PA)\s+BRASIL/i);
+    if (destMunMatch) {
+      destCity = destMunMatch[1].replace(/^\d+\s*-\s*/, '').trim();
+      destUF = destMunMatch[2].trim();
+    }
+
+    const destEndMatch = destBlock.match(/ENDERE[ÇC]O[\s\r\n:]+([^\r\n]+)/i);
+    if (destEndMatch) {
+      destAddress = destEndMatch[1].replace(/BAIRRO|DISTRITO|CEP|MUNICÍPIO|FONE/gi, '').trim();
+    }
+
+    // 6. Extrair Transportador & Placa
+    let carrierName = '';
+    let truckPlate = '';
+    const transpBlockMatch = text.match(/TRANSPORTADOR[\s\S]*?(?:DADOS\s*DOS\s*PRODUTOS|DADOS\s*ADICIONAIS)/i);
+    if (transpBlockMatch) {
+      const tBlock = transpBlockMatch[0];
+      const tNameMatch = tBlock.match(/(?:RAZ[ÃA]O\s*SOCIAL|NOME)[\s\r\n:]+([^\r\n]+)/i);
+      if (tNameMatch) carrierName = tNameMatch[1].replace(/CNPJ|PLACA|FRETE|INSCRIÇÃO/gi, '').trim();
+
+      const plateMatch = tBlock.match(/PLACA(?:\s*DO\s*VE[ÍI]CULO)?[\s\r\n:]*([A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}-?[0-9]{4})/i) ||
+                         tBlock.match(/\b([A-Z]{3}[0-9][A-Z0-9][0-9]{2})\b/);
+      if (plateMatch) truckPlate = plateMatch[1].replace('-', '').toUpperCase();
+    }
+
+    // 7. Extrair Valor Total da Nota
+    let vNF = 0;
+    const totalMatch = text.match(/VALOR\s*TOTAL\s*DA\s*NOTA[\s\S]*?R?\$?\s*([\d.,]+)/i) || 
+                       text.match(/VALOR\s*TOTAL\s*DOS\s*PRODUTOS[\s\S]*?R?\$?\s*([\d.,]+)/i);
+    if (totalMatch) {
+      vNF = parseFloat(totalMatch[1].replace(/\./g, '').replace(',', '.'));
+    }
+
+    // 8. Extrair Tabela de Itens / Produtos (Multi-Produtos)
+    const items = [];
+    const lines = text.split(/[\r\n]+/);
+
+    // Regex para linhas da tabela de produtos do DANFE / NFA-e
+    // Ex: 01 HORTIFRUTIGRANJEIROS - BATATA ESPECIAL 07019000 40 5101 SC 840,0000 80,00 67.200,00 ...
+    const itemRowRegex = /^(?:(\d{1,3})\s+)?([A-ZÀ-Ú0-9\s\-–\.\/]+?)\s+(\d{8})\s+(\d{2,3})\s+(\d{4})\s+([A-Z]{2,3})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/i;
+    const fallbackItemRegex = /^(?:(\d{1,3})\s+)?([A-ZÀ-Ú0-9\s\-–\.\/]{3,60}?)\s+(SC|CX|KG|UN|TON|SACAS|CAIXAS|QUILOS)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/i;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      const m1 = trimmed.match(itemRowRegex);
+      if (m1) {
+        const rawProdDesc = m1[2].trim();
+        const unitRaw = m1[6].toUpperCase();
+        const qty = parseFloat(m1[7].replace(/\./g, '').replace(',', '.'));
+        const unitPrice = parseFloat(m1[8].replace(/\./g, '').replace(',', '.'));
+        const totalVal = parseFloat(m1[9].replace(/\./g, '').replace(',', '.'));
+
+        if (qty > 0 && totalVal > 0) {
+          items.push(NfeParserService._buildProductItem(rawProdDesc, unitRaw, qty, unitPrice, totalVal));
+        }
+        continue;
+      }
+
+      const m2 = trimmed.match(fallbackItemRegex);
+      if (m2) {
+        const rawProdDesc = m2[2].trim();
+        const unitRaw = m2[3].toUpperCase();
+        const qty = parseFloat(m2[4].replace(/\./g, '').replace(',', '.'));
+        const unitPrice = parseFloat(m2[5].replace(/\./g, '').replace(',', '.'));
+        const totalVal = parseFloat(m2[6].replace(/\./g, '').replace(',', '.'));
+
+        if (qty > 0 && totalVal > 0) {
+          items.push(NfeParserService._buildProductItem(rawProdDesc, unitRaw, qty, unitPrice, totalVal));
+        }
+      }
+    }
+
+    // Fallback se a tabela não foi capturada em linhas individuais
+    if (items.length === 0) {
+      const volMatch = text.match(/QUANTIDADE[\s\S]*?([\d.,]+)\s+([A-Z\s]+)/i);
+      let totalQty = volMatch ? parseFloat(volMatch[1].replace(/\./g, '').replace(',', '.')) : 1;
+      let prodName = volMatch && volMatch[2] ? volMatch[2].trim() : 'Produto Agrícola';
+      if (prodName.includes('BATATA')) prodName = 'Batata Especial';
+
+      let boxW = 29;
+      let unit = 'Caixas (29kg)';
+      if (prodName.toLowerCase().includes('batata')) {
+        boxW = 50;
+        unit = 'Sacas (50kg)';
+      } else if (prodName.toLowerCase().includes('beterraba')) {
+        boxW = 20;
+        unit = 'Caixas (20kg)';
+      } else if (prodName.toLowerCase().includes('cebola')) {
+        boxW = 1;
+        unit = 'Granel (kg)';
+      }
+
+      const itemKg = totalQty * boxW;
+      items.push({
+        product: prodName,
+        unit: unit,
+        boxWeightKg: boxW,
+        quantity: totalQty,
+        kg: itemKg,
+        price: totalQty > 0 && vNF > 0 ? (vNF / totalQty) : 0,
+        pricePerKg: itemKg > 0 && vNF > 0 ? (vNF / itemKg) : 0,
+        total: vNF,
+        dailyQuote: 0,
+        valorTotalVP: vNF
+      });
+    }
+
+    const totalKg = items.reduce((acc, it) => acc + (Number(it.kg) || 0), 0);
+    const totalVolumes = items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0);
+    const totalOperation = vNF > 0 ? vNF : items.reduce((acc, it) => acc + (Number(it.total) || 0), 0);
+
+    const previdencia = totalOperation * TAX_RATES.PREVIDENCIA;
+    const rat = totalOperation * TAX_RATES.RAT;
+    const senar = totalOperation * TAX_RATES.SENAR;
+    const funruralTotal = totalOperation * TAX_RATES.FUNRURAL_TOTAL;
 
     return {
       success: true,
       nfeNumber: nNF,
       nfeKey: nfeKey,
+      serie: serie,
       saleDate: dhEmi,
       nfeDate: dhEmi,
       emit: {
-        name: 'BRUNO PERES ROMEIRO',
-        document: '037.582.631-90',
-        city: 'Campo Alegre de Goiás',
-        uf: 'GO',
-        originText: 'BRUNO PERES ROMEIRO (Fazenda Campo Alegre/GO)'
+        name: emitName || 'Produtor Rural',
+        document: emitDoc,
+        ie: emitIE,
+        city: emitCity,
+        uf: emitUF,
+        address: emitAddress,
+        originText: emitName ? `${emitName} (${emitCity || 'Fazenda'}/${emitUF || 'MG'})` : 'Produtor Rural'
       },
       dest: {
         name: destName || 'Cliente Comprador',
-        document: '',
-        city: 'Goiânia',
-        uf: 'GO'
+        document: destDoc,
+        ie: destIE,
+        city: destCity,
+        uf: destUF,
+        address: destAddress
       },
-      totalOperation: vNF,
-      totalVolumes: pesoL > 0 ? (pesoL / 29) : 0,
-      totalKg: pesoL,
-      items: [
-        {
-          product: productName,
-          quantity: pesoL > 0 ? (pesoL / 29) : 1,
-          unit: 'Caixas (29kg)',
-          price: (pesoL > 0 && vNF > 0) ? (vNF / pesoL) : 0,
-          total: vNF,
-          kg: pesoL
-        }
-      ],
+      transp: {
+        carrierName: carrierName,
+        truckPlate: truckPlate
+      },
+      truckPlate: truckPlate,
+      carrierName: carrierName,
+      totalOperation: totalOperation,
+      totalVolumes: totalVolumes,
+      totalKg: totalKg,
+      items: items,
       funrural: {
         total: funruralTotal,
         previdencia: previdencia,
         rat: rat,
         senar: senar
       }
+    };
+  }
+
+  /**
+   * Helper to normalize product names and packaging weights from PDF lines
+   */
+  static _buildProductItem(rawDesc, rawUnit, quantity, unitPrice, totalVal) {
+    const descLower = rawDesc.toLowerCase();
+    let productName = rawDesc.replace(/^HORTIFRUTIGRANJEIROS\s*-\s*/i, '').trim();
+    let unit = 'Caixas (29kg)';
+    let boxWeightKg = 29;
+
+    if (descLower.includes('batata')) {
+      productName = productName.toUpperCase().includes('BATATA') ? productName : `Batata — ${productName}`;
+      unit = 'Sacas (50kg)';
+      boxWeightKg = 50;
+    } else if (descLower.includes('cenoura')) {
+      unit = 'Caixas (29kg)';
+      boxWeightKg = 29;
+    } else if (descLower.includes('beterraba')) {
+      unit = 'Caixas (20kg)';
+      boxWeightKg = 20;
+    } else if (descLower.includes('cebola')) {
+      if (rawUnit === 'KG' || descLower.includes('granel')) {
+        unit = 'Granel (kg)';
+        boxWeightKg = 1;
+      } else {
+        unit = 'Caixas / Sacos (20kg)';
+        boxWeightKg = 20;
+      }
+    } else if (rawUnit === 'KG') {
+      unit = 'Granel (kg)';
+      boxWeightKg = 1;
+    } else if (rawUnit === 'SC' || rawUnit === 'SACAS') {
+      unit = 'Sacas (60kg)';
+      boxWeightKg = 60;
+    } else if (rawUnit === 'CX' || rawUnit === 'CAIXAS') {
+      unit = 'Caixas (29kg)';
+      boxWeightKg = 29;
+    }
+
+    const isGranel = boxWeightKg === 1 || unit.includes('Granel');
+    const kg = isGranel ? quantity : (quantity * boxWeightKg);
+    const pKg = kg > 0 ? (totalVal / kg) : (boxWeightKg > 0 ? unitPrice / boxWeightKg : unitPrice);
+
+    return {
+      product: productName,
+      unit: unit,
+      boxWeightKg: boxWeightKg,
+      quantity: quantity,
+      kg: kg,
+      price: unitPrice,
+      pricePerKg: pKg,
+      total: totalVal,
+      dailyQuote: 0,
+      valorTotalVP: totalVal
     };
   }
 

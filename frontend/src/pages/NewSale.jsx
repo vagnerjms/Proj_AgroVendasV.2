@@ -272,15 +272,15 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       const it = { ...copy[index], product: prodName };
       const catalogProd = products.find(p => p.name === prodName);
       if (catalogProd) {
-        const defUnit = catalogProd.defaultUnit || (catalogProd.unitKg === 1 ? 'Granel (kg)' : (catalogProd.name.toLowerCase().includes('batata') ? 'Sacas (50kg)' : 'Caixas (29kg)'));
+        const defUnit = catalogProd.defaultUnit || (catalogProd.unitKg === 1 ? 'Granel (kg)' : (catalogProd.name.toLowerCase().includes('batata') ? 'Sacas (25kg)' : 'Caixas (29kg)'));
         it.unit = defUnit;
-        it.boxWeightKg = defUnit.includes('Granel') || defUnit.includes('(kg)') || catalogProd.unitKg === 1 ? 1 : (catalogProd.unitKg || (catalogProd.name.toLowerCase().includes('batata') ? 50 : 29));
+        it.boxWeightKg = defUnit.includes('Granel') || defUnit.includes('(kg)') || catalogProd.unitKg === 1 ? 1 : (catalogProd.unitKg || (catalogProd.name.toLowerCase().includes('batata') ? 25 : 29));
       } else {
         const nameL = prodName.toLowerCase();
         const isCebola = nameL.includes('cebola') || nameL.includes('granel');
         const isBatata = nameL.includes('batata');
-        it.unit = isCebola ? 'Granel (kg)' : (isBatata ? 'Sacas (50kg)' : 'Caixas (29kg)');
-        it.boxWeightKg = isCebola ? 1 : (isBatata ? 50 : 29);
+        it.unit = isCebola ? 'Granel (kg)' : (isBatata ? 'Sacas (25kg)' : 'Caixas (29kg)');
+        it.boxWeightKg = isCebola ? 1 : (isBatata ? 25 : 29);
       }
       const kg = parseNum(it.totalKg);
       const p = parseNum(it.pricePerKg);
@@ -536,8 +536,8 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
           });
 
           const resolvedProdName = matchedCatalogProd?.name || it.product || 'Batata Especial';
-          const resolvedUnit = it.unit || matchedCatalogProd?.defaultUnit || 'Sacas (50kg)';
-          const boxW = it.boxWeightKg || matchedCatalogProd?.unitKg || (resolvedUnit.includes('50kg') ? 50 : (resolvedUnit.includes('20kg') ? 20 : (resolvedUnit.includes('Granel') ? 1 : 29)));
+          const resolvedUnit = it.unit || matchedCatalogProd?.defaultUnit || 'Sacas (25kg)';
+          const boxW = it.boxWeightKg || matchedCatalogProd?.unitKg || (resolvedUnit.includes('25kg') ? 25 : (resolvedUnit.includes('20kg') ? 20 : (resolvedUnit.includes('Granel') ? 1 : 29)));
           const itemKg = it.kg || (it.quantity ? it.quantity * boxW : 0);
           const itemPricePerKg = it.pricePerKg ? Number(it.pricePerKg).toFixed(4) : (itemKg > 0 && it.total ? (Number(it.total) / itemKg).toFixed(4) : (it.price ? Number(it.price).toFixed(4) : ''));
           const itemTotNf = it.total ? Number(it.total).toFixed(2) : (itemKg > 0 && itemPricePerKg ? (itemKg * Number(itemPricePerKg)).toFixed(2) : '');

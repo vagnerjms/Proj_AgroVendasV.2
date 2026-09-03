@@ -234,8 +234,8 @@ class NfeParserService {
       let prodName = volMatch && volMatch[2] ? volMatch[2].trim() : 'Batata Especial';
       if (prodName.includes('BATATA')) prodName = 'Batata Especial';
 
-      let boxW = 50;
-      let unit = 'Sacas (50kg)';
+      let boxW = 25;
+      let unit = 'Sacas (25kg)';
       if (prodName.toLowerCase().includes('cenoura')) {
         boxW = 29;
         unit = 'Caixas (29kg)';
@@ -331,8 +331,8 @@ class NfeParserService {
       } else {
         productName = 'Batata Especial';
       }
-      unit = 'Sacas (50kg)';
-      boxWeightKg = 50;
+      unit = 'Sacas (25kg)';
+      boxWeightKg = 25;
     } else if (descLower.includes('cenoura')) {
       productName = 'Cenoura';
       unit = 'Caixas (29kg)';

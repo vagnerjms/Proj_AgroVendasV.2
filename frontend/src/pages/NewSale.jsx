@@ -199,13 +199,14 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         const loaded = editingSale.items.map((it, idx) => {
           const rawProd = it.product || 'Cenoura';
           const isGr = rawProd.toLowerCase().includes('cebola') || rawProd.toLowerCase().includes('granel') || it.unit?.includes('Granel');
-          const bw = it.boxWeightKg || (isGr ? 1 : 29);
+          const isBatata = rawProd.toLowerCase().includes('batata') || it.unit?.toLowerCase().includes('saca') || it.unit?.includes('25kg');
+          const bw = it.boxWeightKg || (isGr ? 1 : (isBatata ? 25 : 29));
           const kg = it.kg || (it.quantity ? it.quantity * bw : 0);
           const pKg = it.pricePerKg || (kg > 0 && it.total ? (it.total / kg) : (it.price || 0));
           return {
             id: Date.now() + idx,
             product: rawProd,
-            unit: it.unit || (isGr ? 'Granel (kg)' : 'Caixas (29kg)'),
+            unit: it.unit || (isGr ? 'Granel (kg)' : (isBatata ? 'Sacas (25kg)' : 'Caixas (29kg)')),
             boxWeightKg: bw,
             totalKg: kg ? String(kg) : '',
             pricePerKg: pKg ? Number(pKg).toFixed(4) : '',
@@ -242,15 +243,29 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       .catch(console.error);
   }, []);
 
-  // Helper to safely parse numbers with comma or dot
+  // Helper to safely parse numbers with comma or dot (handles Brazilian and standard JS decimals)
   const parseNum = (val) => {
     if (val === '' || val === null || val === undefined) return 0;
     if (typeof val === 'number') return isNaN(val) ? 0 : val;
-    const clean = String(val).trim().replace(/\./g, '').replace(',', '.');
-    const n = parseFloat(clean);
-    if (!isNaN(n)) return n;
-    const direct = parseFloat(String(val).replace(',', '.'));
-    return isNaN(direct) ? 0 : direct;
+    const str = String(val).trim();
+    if (str === '') return 0;
+
+    // Se possui pontos e vírgulas: formato brasileiro "68.000,00"
+    if (str.includes('.') && str.includes(',')) {
+      const clean = str.replace(/\./g, '').replace(',', '.');
+      const n = parseFloat(clean);
+      return isNaN(n) ? 0 : n;
+    }
+
+    // Se possui apenas vírgula: "68000,00" ou "3,40"
+    if (str.includes(',')) {
+      const n = parseFloat(str.replace(',', '.'));
+      return isNaN(n) ? 0 : n;
+    }
+
+    // Se possui apenas ponto decimal: "68000.00" ou "3.4000" ou "20000"
+    const n = parseFloat(str);
+    return isNaN(n) ? 0 : n;
   };
 
   // Multi-item manipulation handlers
@@ -355,14 +370,14 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   
   const totalVolumes = saleItems.reduce((acc, it) => {
     const kg = parseNum(it.totalKg);
-    const bw = parseNum(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : 29);
+    const bw = parseNum(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : (it.unit?.includes('25kg') || it.product?.toLowerCase().includes('batata') ? 25 : 29));
     const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
     return acc + (isGr ? kg : (bw > 0 ? (kg / bw) : 0));
   }, 0);
 
   const totalCaixas29kg = saleItems.reduce((acc, it) => {
     const kg = parseNum(it.totalKg);
-    const bw = parseNum(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : 29);
+    const bw = parseNum(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : (it.unit?.includes('25kg') || it.product?.toLowerCase().includes('batata') ? 25 : 29));
     const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
     return acc + (isGr ? (kg / 29) : (bw > 0 ? (kg / bw) : 0));
   }, 0);
@@ -1159,7 +1174,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                           {item.product || 'Selecione o Produto'}
                         </span>
                         <span className="text-[10px] text-gray-600 font-semibold bg-white px-2 py-0.5 rounded border border-gray-200">
-                          {item.unit || 'Embalagem'} ({item.boxWeightKg || 29}kg)
+                          {item.unit || 'Sacas (25kg)'}
                         </span>
                       </div>
 
@@ -1258,7 +1273,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                         <label className="block text-[10px] font-bold text-gray-700 mb-0.5">
                           2. Volumes ({unitShort})
                         </label>
-                        <div className="w-full bg-gray-50 border border-gray-200 text-xs rounded-lg px-2 py-1.5 font-extrabold text-gray-900 truncate">
+                        <div className="w-full bg-gray-50 border border-gray-200 text-xs rounded-lg px-2 py-1.5 font-extrabold text-gray-900 whitespace-nowrap overflow-x-auto">
                           {formatNumber(itemVol, isItemGranel ? 0 : 2)} {unitShort}
                         </div>
                       </div>
@@ -1310,7 +1325,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                         <label className="block text-[10px] font-bold text-blue-900 mb-0.5">
                           Subtotal VP (R$)
                         </label>
-                        <div className="w-full bg-blue-50 border border-blue-200 text-xs rounded-lg px-2 py-1.5 font-black text-blue-950 truncate">
+                        <div className="w-full bg-blue-50 border border-blue-200 text-xs rounded-lg px-2 py-1.5 font-black text-blue-950 whitespace-nowrap overflow-x-auto">
                           {formatCurrency(itemVPVal)}
                         </div>
                       </div>
@@ -1626,9 +1641,9 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
               </div>
 
               <div className="flex justify-between text-gray-600">
-                <span>Total Caixas (29kg eq.):</span>
+                <span>Total Volumes:</span>
                 <span className="font-bold text-gray-900">
-                  {formatNumber(totalCaixas29kg, 2)} cx
+                  {formatNumber(totalVolumes, 2)} {saleItems.some(it => it.unit?.toLowerCase().includes('saca') || it.product?.toLowerCase().includes('batata')) ? 'sc' : 'cx'}
                 </span>
               </div>
 

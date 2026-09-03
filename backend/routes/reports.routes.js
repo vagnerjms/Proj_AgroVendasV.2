@@ -67,73 +67,81 @@ router.get('/stores-summary', async (req, res) => {
         funrural = roundMoney(funrural + itemFunrural);
         pesoColheita += itemPesoNF;
 
-        // Calcula caixas de 29kg ou padrão do produto
-        const prodName = s.items?.[0]?.product || '';
-        let unitKg = 29;
-        if (prodName.includes('60kg') || prodName.toLowerCase().includes('saca')) {
-          unitKg = 60;
-        } else if (prodName.includes('50kg')) {
-          unitKg = 50;
-        } else if (prodName.includes('20kg')) {
-          unitKg = 20;
-        } else if (prodName.includes('10kg')) {
-          unitKg = 10;
-        }
-
-        let itemCaixas = 0;
-        if (itemPesoNF > 0) {
-          if (!s.totalVolumes || s.totalVolumes === s.totalKg || s.totalVolumes > 2000) {
-            itemCaixas = Number((itemPesoNF / unitKg).toFixed(2));
-          } else {
-            itemCaixas = Number(s.totalVolumes);
-          }
-        } else {
-          itemCaixas = Number(s.totalVolumes) || 0;
-        }
+        // Volumes
+        const isBatata = (s.items && s.items.some(it => it.product?.toLowerCase().includes('batata'))) || (s.notes && s.notes.toLowerCase().includes('batata'));
+        const unitKg = isBatata ? 25 : (s.items?.[0]?.boxWeightKg || 29);
+        let itemCaixas = Number(s.totalVolumes) > 0 ? Number(s.totalVolumes) : (itemPesoNF > 0 ? Number((itemPesoNF / unitKg).toFixed(2)) : 0);
 
         cxsVendidas = Number((cxsVendidas + itemCaixas).toFixed(2));
 
-        let cotacao = Number(s.dailyQuote) || 0;
-        if (!cotacao && s.notes) {
-          const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
-          if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
-        }
-
+        // Valor Comercial (VP) consolidado multi-item
         let valorVP = 0;
-        if (cotacao > 0 && cotacao <= 10.0 && itemPesoNF > 0) {
-          valorVP = roundMoney(itemPesoNF * cotacao);
-        } else if (cotacao > 10.0) {
-          valorVP = roundMoney(itemCaixas * cotacao);
+        if (s.items && Array.isArray(s.items) && s.items.length > 0) {
+          valorVP = s.items.reduce((acc, it) => {
+            const itKg = Number(it.kg) || 0;
+            const bw = Number(it.boxWeightKg) || 25;
+            const itVol = Number(it.quantity) || (itKg > 0 && bw > 0 ? itKg / bw : 0);
+            const q = Number(it.dailyQuote) || 0;
+            if (q > 0) {
+              const isQKg = (q > 0 && q <= 10.0) || (it.unit && it.unit.includes('Granel')) || bw === 1;
+              return acc + (isQKg ? (itKg * q) : (itVol * q));
+            }
+            if (Number(it.valorTotalVP) > 0) return acc + Number(it.valorTotalVP);
+            if (Number(it.total) > 0) return acc + Number(it.total);
+            return acc;
+          }, 0);
+        } else if (Number(s.valorTotalVP) > 0) {
+          valorVP = Number(s.valorTotalVP);
         } else {
-          valorVP = Number(s.valorTotalVP) > 0 ? roundMoney(s.valorTotalVP) : itemValorNF;
+          let cotacao = Number(s.dailyQuote) || 0;
+          if (!cotacao && s.notes) {
+            const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
+            if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
+          }
+          if (cotacao > 0 && cotacao <= 10.0 && itemPesoNF > 0) {
+            valorVP = roundMoney(itemPesoNF * cotacao);
+          } else if (cotacao > 10.0) {
+            valorVP = roundMoney(itemCaixas * cotacao);
+          } else {
+            valorVP = itemValorNF;
+          }
         }
+        valorVP = roundMoney(valorVP);
 
         totalVendaAReceber = roundMoney(totalVendaAReceber + valorVP);
 
         const nfNumber = s.nfFile ? s.nfFile.replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
-
         const comm = calculateCommission(valorVP, s.feeValue);
+
+        // Nome / resumo dos produtos
+        let productLabel = 'Cenoura';
+        if (s.items && s.items.length > 1) {
+          productLabel = `${s.items.length} produtos (${s.items.map(it => it.product).join(' + ')})`;
+        } else if (s.items && s.items.length === 1) {
+          productLabel = s.items[0].product;
+        }
 
         return {
           vp: s.id,
           dataVP: s.saleDate ? s.saleDate.split('-').reverse().join('/') : '-',
           nf: nfNumber,
           dataNF: s.saleDate ? s.saleDate.split('-').reverse().join('/') : '-',
-          product: s.items?.[0]?.product || 'Cenoura (Caixa 29kg)',
-          unit: s.items?.[0]?.unit || 'Caixas (29kg)',
+          product: productLabel,
+          unit: isBatata ? 'Sacas (25kg)' : (s.items?.[0]?.unit || 'Caixas (29kg)'),
+          items: s.items || [],
           pesoNF: itemPesoNF,
           pesoColheita: itemPesoNF,
           cxs: itemCaixas,
           precoKg: itemPrecoKg,
           valorNF: itemValorNF,
           funrural: itemFunrural,
-          cotacao: cotacao,
+          cotacao: s.items?.[0]?.dailyQuote ? Number(s.items[0].dailyQuote) : (Number(s.dailyQuote) || 0),
           valorVP: valorVP,
           liquido: itemLiquido,
           taxaComissao: comm.taxaPercentual,
           comissao: comm.comissao,
           liquidoProdutor: comm.liquidoProdutor,
-          venc: s.notes?.match(/Vencimento:\s*([^\s|]+)/i)?.[1] || 'Em aberto',
+          venc: s.dueDate ? s.dueDate.split('-').reverse().join('/') : (s.notes?.match(/Vencimento:\s*([^\s|]+)/i)?.[1] || 'Em aberto'),
           status: s.status
         };
       });

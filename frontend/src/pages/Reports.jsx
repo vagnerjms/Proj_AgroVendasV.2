@@ -843,7 +843,7 @@ export default function Reports({ setCurrentPage }) {
                           <th className="py-2 px-2">Data NF</th>
                           <th className="py-2 px-3 text-right">Peso NF (kg)</th>
                           <th className="py-2 px-3 text-right">Peso Colheita (kg)</th>
-                          <th className="py-2 px-3 text-right">Caixas (29kg)</th>
+                          <th className="py-2 px-3 text-right">Volumes / Caixas</th>
                           <th className="py-2 px-3 text-right">Preço/kg NF</th>
                           <th className="py-2 px-3 text-right">Valor Total NF</th>
                           <th className="py-2 px-3 text-right">FUNRURAL (1,63%)</th>
@@ -859,7 +859,7 @@ export default function Reports({ setCurrentPage }) {
                           <tr key={rIdx} className="hover:bg-gray-50/70 transition-colors">
                             <td className="py-2 px-3">
                               <div className="font-bold text-[#173e27]">{it.vp}</div>
-                              <div className="text-[10px] text-gray-500 font-medium truncate max-w-[140px]" title={it.product}>
+                              <div className="text-[10px] text-gray-600 font-semibold truncate max-w-[220px]" title={it.product}>
                                 {it.product}
                               </div>
                             </td>
@@ -869,7 +869,7 @@ export default function Reports({ setCurrentPage }) {
                             <td className="py-2 px-3 text-right text-gray-600">{formatNumber(it.pesoNF, 0)} kg</td>
                             <td className="py-2 px-3 text-right font-bold text-gray-900">{formatNumber(it.pesoColheita, 0)} kg</td>
                             <td className="py-2 px-3 text-right font-bold text-gray-900">
-                              {formatNumber(it.cxs, 2)} {it.unit?.includes('Sacas') ? 'sc' : 'cx'}
+                              {formatNumber(it.cxs, 2)} {it.unit?.toLowerCase().includes('saca') || it.product?.toLowerCase().includes('batata') ? 'sc' : 'cx'}
                             </td>
                             <td className="py-2 px-3 text-right text-gray-700">{it.precoKg > 0 ? `R$ ${it.precoKg.toFixed(2)}` : '-'}</td>
                             <td className="py-2 px-3 text-right font-bold text-gray-900">{formatCurrency(it.valorNF)}</td>

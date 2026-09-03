@@ -11,7 +11,13 @@ import {
   Truck,
   FileSpreadsheet,
   Edit,
-  Trash2
+  Trash2,
+  Camera,
+  Image,
+  Paperclip,
+  Eye,
+  ExternalLink,
+  Upload
 } from 'lucide-react';
 import { formatNumber, formatDate } from '../utils/formatters';
 import { api } from '../services/api';
@@ -40,8 +46,13 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
     impurityPct: 1.0,
     status: 'Divergente',
     weightChoice: 'dest', // 'dest' | 'origin'
-    applyWeightToSale: true
+    applyWeightToSale: true,
+    ticketImage: ''
   });
+
+  // Ticket Image upload and preview states
+  const [uploadingTicket, setUploadingTicket] = useState(false);
+  const [previewImage, setPreviewImage] = useState(null);
 
   // New Romaneio Modal
   const [showNewModal, setShowNewModal] = useState(false);
@@ -54,7 +65,8 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
     destWeightKg: 44600,
     humidityPct: 14.0,
     impurityPct: 1.0,
-    tolerancePct: 0.25
+    tolerancePct: 0.25,
+    ticketImage: ''
   });
 
   const fetchSlips = async () => {
@@ -127,6 +139,48 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
     return () => clearTimeout(timer);
   };
 
+  const handleTicketUpload = async (e, isEdit = true) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setUploadingTicket(true);
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const fname = data.filename || file.name;
+        if (isEdit) {
+          setEditForm(prev => ({ ...prev, ticketImage: fname }));
+        } else {
+          setNewForm(prev => ({ ...prev, ticketImage: fname }));
+        }
+        showNotification('Imagem do romaneio anexada com sucesso!');
+      } else {
+        showErrorNotification('Erro ao enviar imagem do romaneio.');
+      }
+    } catch (err) {
+      console.error(err);
+      showErrorNotification('Falha no upload da imagem.');
+    } finally {
+      setUploadingTicket(false);
+    }
+  };
+
+  const handleRemoveTicketImage = (isEdit = true) => {
+    if (isEdit) {
+      setEditForm(prev => ({ ...prev, ticketImage: '' }));
+    } else {
+      setNewForm(prev => ({ ...prev, ticketImage: '' }));
+    }
+    showNotification('Imagem do romaneio removida.');
+  };
+
   const handleOpenEdit = (slip) => {
     setEditingSlip(slip);
     setEditForm({
@@ -139,7 +193,8 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
       impurityPct: slip.impurityPct || 1.0,
       status: slip.status || 'Divergente',
       weightChoice: 'dest',
-      applyWeightToSale: true
+      applyWeightToSale: true,
+      ticketImage: slip.ticketImage || slip.attachment || ''
     });
   };
 
@@ -356,6 +411,16 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
                       <div className="font-semibold text-gray-800 flex items-center gap-1.5">
                         <Truck className="w-3.5 h-3.5 text-gray-400" />
                         <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-[11px] font-bold">{s.truckPlate}</span>
+                        {(s.ticketImage || s.attachment) && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewImage(s.ticketImage || s.attachment)}
+                            className="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-1 rounded-md transition-colors cursor-pointer"
+                            title="Visualizar foto do romaneio"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                       <div className="text-gray-500 text-[11px] mt-0.5">{s.driverName}</div>
                     </td>
@@ -560,6 +625,78 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
               </select>
             </div>
 
+            {/* Upload da Imagem do Romaneio */}
+            <div className="space-y-1.5 pt-1">
+              <label className="block text-xs font-semibold text-gray-700">
+                📸 Imagem do Romaneio / Ticket de Balança
+              </label>
+
+              {editForm.ticketImage ? (
+                <div className="flex items-center justify-between p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <div className="flex items-center gap-2.5 overflow-hidden">
+                    {editForm.ticketImage.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
+                      <img 
+                        src={`/uploads/${editForm.ticketImage}`} 
+                        alt="Romaneio" 
+                        className="w-11 h-11 object-cover rounded-lg border border-emerald-300 shadow-xs cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => window.open(`/uploads/${editForm.ticketImage}`, '_blank')}
+                        title="Clique para ampliar"
+                      />
+                    ) : (
+                      <div className="w-11 h-11 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-800 shrink-0">
+                        <Paperclip className="w-5 h-5" />
+                      </div>
+                    )}
+                    <div className="truncate text-xs">
+                      <div className="font-bold text-emerald-950 truncate max-w-[240px]">
+                        {editForm.ticketImage}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => window.open(`/uploads/${editForm.ticketImage}`, '_blank')}
+                        className="text-[11px] text-emerald-700 hover:underline flex items-center gap-1 mt-0.5 font-medium cursor-pointer"
+                      >
+                        <Eye className="w-3 h-3" />
+                        Visualizar imagem
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Botão X para excluir imagem */}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTicketImage(true)}
+                    className="text-red-500 hover:text-red-700 hover:bg-red-100 p-1.5 rounded-full transition-colors cursor-pointer shrink-0"
+                    title="Excluir imagem do romaneio"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className="border-2 border-dashed border-gray-300 hover:border-emerald-600 bg-gray-50/70 hover:bg-emerald-50/20 rounded-xl p-3.5 flex flex-col items-center justify-center cursor-pointer transition-all group text-center">
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => handleTicketUpload(e, true)}
+                    disabled={uploadingTicket}
+                    className="hidden"
+                  />
+                  {uploadingTicket ? (
+                    <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 py-1">
+                      <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                      <span>Enviando imagem do romaneio...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 group-hover:text-emerald-800 font-semibold">
+                      <Camera className="w-4 h-4 text-gray-400 group-hover:text-emerald-700" />
+                      <span>Clique para anexar a foto do romaneio</span>
+                    </div>
+                  )}
+                  <span className="text-[10px] text-gray-400 mt-1">Formatos aceitos: JPG, PNG, WEBP ou PDF</span>
+                </label>
+              )}
+            </div>
+
             <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
               <button
                 type="button"
@@ -740,6 +877,78 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
               </div>
             </div>
 
+            {/* Upload da Imagem do Romaneio */}
+            <div className="space-y-1.5 pt-1">
+              <label className="block text-xs font-semibold text-gray-700">
+                📸 Imagem do Romaneio / Ticket de Balança
+              </label>
+
+              {newForm.ticketImage ? (
+                <div className="flex items-center justify-between p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl">
+                  <div className="flex items-center gap-2.5 overflow-hidden">
+                    {newForm.ticketImage.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
+                      <img 
+                        src={`/uploads/${newForm.ticketImage}`} 
+                        alt="Romaneio" 
+                        className="w-10 h-10 object-cover rounded-lg border border-emerald-300 shadow-xs cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => window.open(`/uploads/${newForm.ticketImage}`, '_blank')}
+                        title="Clique para ampliar"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-800 shrink-0">
+                        <Paperclip className="w-5 h-5" />
+                      </div>
+                    )}
+                    <div className="truncate text-xs">
+                      <div className="font-bold text-emerald-950 truncate max-w-[220px]">
+                        {newForm.ticketImage}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => window.open(`/uploads/${newForm.ticketImage}`, '_blank')}
+                        className="text-[10px] text-emerald-700 hover:underline flex items-center gap-1 mt-0.5 font-medium cursor-pointer"
+                      >
+                        <Eye className="w-3 h-3" />
+                        Visualizar imagem
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Botão X para excluir imagem */}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTicketImage(false)}
+                    className="text-red-500 hover:text-red-700 hover:bg-red-100 p-1.5 rounded-full transition-colors cursor-pointer shrink-0"
+                    title="Excluir imagem do romaneio"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className="border-2 border-dashed border-gray-300 hover:border-emerald-600 bg-gray-50/70 hover:bg-emerald-50/20 rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer transition-all group text-center">
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => handleTicketUpload(e, false)}
+                    disabled={uploadingTicket}
+                    className="hidden"
+                  />
+                  {uploadingTicket ? (
+                    <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700 py-1">
+                      <div className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                      <span>Enviando imagem...</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-xs text-gray-600 group-hover:text-emerald-800 font-semibold">
+                      <Camera className="w-4 h-4 text-gray-400 group-hover:text-emerald-700" />
+                      <span>Clique para anexar imagem do romaneio</span>
+                    </div>
+                  )}
+                  <span className="text-[10px] text-gray-400 mt-0.5">Formatos: JPG, PNG, WEBP ou PDF</span>
+                </label>
+              )}
+            </div>
+
             <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
               <button
                 type="button"
@@ -759,6 +968,68 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Modal Lightbox: Visualizar Foto do Romaneio em Alta Resolução */}
+      {previewImage && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setPreviewImage(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-2xl w-full p-4 shadow-2xl overflow-hidden space-y-3"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+              <div className="flex items-center gap-2">
+                <Camera className="w-4 h-4 text-emerald-700" />
+                <span className="text-xs font-bold text-gray-900">Comprovante de Romaneio do Caminhão</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <a
+                  href={`/uploads/${previewImage}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-emerald-700 hover:text-emerald-900 font-semibold flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-emerald-50 transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Abrir original</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewImage(null)}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center bg-gray-900/5 rounded-xl p-2 min-h-[260px] max-h-[70vh] overflow-auto">
+              {previewImage.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
+                <img 
+                  src={`/uploads/${previewImage}`} 
+                  alt="Romaneio do Caminhão" 
+                  className="max-h-[65vh] w-auto object-contain rounded-lg shadow-sm"
+                />
+              ) : (
+                <div className="text-center p-6 space-y-2">
+                  <Paperclip className="w-12 h-12 text-gray-400 mx-auto" />
+                  <div className="text-xs font-semibold text-gray-700">{previewImage}</div>
+                  <a
+                    href={`/uploads/${previewImage}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 bg-[#091b2e] text-white text-xs font-bold px-4 py-2 rounded-lg"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Baixar / Abrir Documento</span>
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

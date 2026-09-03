@@ -93,7 +93,9 @@ router.post('/', async (req, res) => {
       weightDifferencePct: diffPct,
       tolerancePct: Number(body.tolerancePct) || 0.25,
       status: isDiv ? 'Divergente' : 'Aprovado',
-      resolutionNotes: body.resolutionNotes || ''
+      resolutionNotes: body.resolutionNotes || '',
+      ticketImage: body.ticketImage || body.attachment || '',
+      attachment: body.attachment || body.ticketImage || ''
     });
 
     await newSlip.save();
@@ -198,7 +200,7 @@ router.put('/:id', async (req, res) => {
     const allowed = [
       'client', 'product', 'truckPlate', 'driverName', 'date', 'originWeightKg',
       'destWeightKg', 'humidityPct', 'impurityPct', 'discountKg', 'tolerancePct',
-      'status', 'resolutionNotes'
+      'status', 'resolutionNotes', 'ticketImage', 'attachment'
     ];
     const updateData = {};
     for (const key of allowed) {

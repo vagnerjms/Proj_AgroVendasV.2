@@ -88,7 +88,9 @@ const WeighingSlipSchema = new mongoose.Schema({
   tolerancePct: { type: Number, default: 0.25 },
   status: { type: String, default: 'Aprovado' },
   resolutionNotes: { type: String, default: '' },
-  resolvedAt: { type: Date, default: null }
+  resolvedAt: { type: Date, default: null },
+  ticketImage: { type: String, default: '' },
+  attachment: { type: String, default: '' }
 });
 WeighingSlipSchema.index({ saleId: 1 });
 WeighingSlipSchema.index({ client: 1, date: -1 });

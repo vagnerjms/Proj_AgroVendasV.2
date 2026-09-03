@@ -404,6 +404,9 @@ router.post('/:id/settle', async (req, res) => {
     sale.paymentStatus = 'Recebido';
     sale.paidAmount = sale.totalOperation;
     sale.status = 'Concluído';
+    if (req.body && req.body.evidenceFile !== undefined) {
+      sale.evidenceFile = req.body.evidenceFile;
+    }
     await sale.save();
 
     // Disparar Webhook para atualizar status no n8n / Calendar

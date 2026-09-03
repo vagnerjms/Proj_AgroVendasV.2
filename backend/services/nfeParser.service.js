@@ -1,6 +1,11 @@
 const fs = require('fs');
 const xml2js = require('xml2js');
-const { PDFParse } = require('pdf-parse');
+let pdfParseLib = null;
+try {
+  pdfParseLib = require('pdf-parse');
+} catch (e) {
+  console.warn('Aviso: módulo pdf-parse não carregado antecipadamente:', e.message);
+}
 const { TAX_RATES } = require('../constants');
 
 class NfeParserService {
@@ -22,30 +27,35 @@ class NfeParserService {
     const dataBuffer = fs.readFileSync(filePath);
     let text = '';
 
+    // Safely extract text across any pdf-parse version
     try {
-      if (typeof PDFParse === 'function') {
-        const res = await PDFParse(dataBuffer);
-        text = res.text || '';
-      } else {
-        const pdfInstance = new PDFParse({ data: dataBuffer });
-        const pdfResult = await pdfInstance.getText();
-        text = pdfResult.text || '';
+      if (!pdfParseLib) {
+        pdfParseLib = require('pdf-parse');
+      }
+
+      if (typeof pdfParseLib === 'function') {
+        const res = await pdfParseLib(dataBuffer);
+        text = res?.text || '';
+      } else if (pdfParseLib?.default && typeof pdfParseLib.default === 'function') {
+        const res = await pdfParseLib.default(dataBuffer);
+        text = res?.text || '';
+      } else if (pdfParseLib?.PDFParse) {
+        try {
+          const instance = new pdfParseLib.PDFParse({ data: dataBuffer });
+          const res = await instance.getText();
+          text = res?.text || '';
+        } catch (eInst) {
+          const res = await pdfParseLib.PDFParse(dataBuffer);
+          text = res?.text || '';
+        }
       }
     } catch (e) {
-      console.warn('Tentativa alternativa de extração de texto PDF:', e.message);
-      try {
-        const pdfAlt = require('pdf-parse');
-        if (typeof pdfAlt === 'function') {
-          const res = await pdfAlt(dataBuffer);
-          text = res.text || '';
-        }
-      } catch (err2) {
-        console.error('Falha geral no pdf-parse:', err2);
-      }
+      console.error('Erro na extração de texto do PDF:', e);
+      throw new Error(`Falha ao ler texto do PDF: ${e.message}`);
     }
 
     if (!text || text.trim().length === 0) {
-      throw new Error('Não foi possível extrair o texto legível deste arquivo PDF.');
+      throw new Error('Não foi possível extrair o texto legível deste arquivo PDF. Certifique-se de que é um PDF com texto selecionável (não apenas uma imagem escaneada sem OCR).');
     }
 
     // 1. Extrair Chave de Acesso (44 dígitos)

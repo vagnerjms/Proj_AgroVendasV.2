@@ -188,39 +188,41 @@ class NfeParserService {
 
     // 8. Extrair Tabela de Itens / Produtos (Multi-Produtos)
     const items = [];
-    const lines = text.split(/[\r\n]+/);
 
-    // Regex para linhas da tabela de produtos do DANFE / NFA-e
-    // Ex: 01 HORTIFRUTIGRANJEIROS - BATATA ESPECIAL 07019000 40 5101 SC 840,0000 80,00 67.200,00 ...
-    const itemRowRegex = /^(?:(\d{1,3})\s+)?([A-ZÀ-Ú0-9\s\-–\.\/]+?)\s+(\d{8})\s+(\d{2,3})\s+(\d{4})\s+([A-Z]{2,3})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/i;
-    const fallbackItemRegex = /^(?:(\d{1,3})\s+)?([A-ZÀ-Ú0-9\s\-–\.\/]{3,60}?)\s+(SC|CX|KG|UN|TON|SACAS|CAIXAS|QUILOS)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/i;
+    // Global Regex para linhas de itens no DANFE / NFA-e
+    // Ex: 01 HORTIFRUTIGRANJEIROS - BATATA ESPECIAL 07019000 40 5101 SC 840,0000 80,00 67.200,00
+    const globalItemRegex = /(?:^|\r|\n)\s*(\d{1,3})\s+([A-ZÀ-Ú0-9\s\-–\.\/]+?)\s+(\d{8})\s+(\d{1,4})\s+(\d{4})\s+([A-Z]{2,3})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/gi;
+    let m;
+    while ((m = globalItemRegex.exec(text)) !== null) {
+      const rawProdDesc = m[2].trim();
+      const unitRaw = m[6].toUpperCase();
+      const qty = parseFloat(m[7].replace(/\./g, '').replace(',', '.'));
+      const unitPrice = parseFloat(m[8].replace(/\./g, '').replace(',', '.'));
+      const totalVal = parseFloat(m[9].replace(/\./g, '').replace(',', '.'));
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      const m1 = trimmed.match(itemRowRegex);
-      if (m1) {
-        const rawProdDesc = m1[2].trim();
-        const unitRaw = m1[6].toUpperCase();
-        const qty = parseFloat(m1[7].replace(/\./g, '').replace(',', '.'));
-        const unitPrice = parseFloat(m1[8].replace(/\./g, '').replace(',', '.'));
-        const totalVal = parseFloat(m1[9].replace(/\./g, '').replace(',', '.'));
-
-        if (qty > 0 && totalVal > 0) {
-          items.push(NfeParserService._buildProductItem(rawProdDesc, unitRaw, qty, unitPrice, totalVal));
-        }
-        continue;
+      if (qty > 0 && totalVal > 0) {
+        items.push(NfeParserService._buildProductItem(rawProdDesc, unitRaw, qty, unitPrice, totalVal));
       }
+    }
 
-      const m2 = trimmed.match(fallbackItemRegex);
-      if (m2) {
-        const rawProdDesc = m2[2].trim();
-        const unitRaw = m2[3].toUpperCase();
-        const qty = parseFloat(m2[4].replace(/\./g, '').replace(',', '.'));
-        const unitPrice = parseFloat(m2[5].replace(/\./g, '').replace(',', '.'));
-        const totalVal = parseFloat(m2[6].replace(/\./g, '').replace(',', '.'));
+    // Se a busca global não encontrou itens, tentar linha por linha
+    if (items.length === 0) {
+      const lines = text.split(/[\r\n]+/);
+      const fallbackItemRegex = /(\d{1,3})?\s*([A-ZÀ-Ú0-9\s\-–\.\/]{3,60}?)\s+(SC|CX|KG|UN|TON|SACAS|CAIXAS|QUILOS)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)/i;
 
-        if (qty > 0 && totalVal > 0) {
-          items.push(NfeParserService._buildProductItem(rawProdDesc, unitRaw, qty, unitPrice, totalVal));
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const m2 = trimmed.match(fallbackItemRegex);
+        if (m2) {
+          const rawProdDesc = m2[2].trim();
+          const unitRaw = m2[3].toUpperCase();
+          const qty = parseFloat(m2[4].replace(/\./g, '').replace(',', '.'));
+          const unitPrice = parseFloat(m2[5].replace(/\./g, '').replace(',', '.'));
+          const totalVal = parseFloat(m2[6].replace(/\./g, '').replace(',', '.'));
+
+          if (qty > 0 && totalVal > 0) {
+            items.push(NfeParserService._buildProductItem(rawProdDesc, unitRaw, qty, unitPrice, totalVal));
+          }
         }
       }
     }
@@ -229,14 +231,14 @@ class NfeParserService {
     if (items.length === 0) {
       const volMatch = text.match(/QUANTIDADE[\s\S]*?([\d.,]+)\s+([A-Z\s]+)/i);
       let totalQty = volMatch ? parseFloat(volMatch[1].replace(/\./g, '').replace(',', '.')) : 1;
-      let prodName = volMatch && volMatch[2] ? volMatch[2].trim() : 'Produto Agrícola';
+      let prodName = volMatch && volMatch[2] ? volMatch[2].trim() : 'Batata Especial';
       if (prodName.includes('BATATA')) prodName = 'Batata Especial';
 
-      let boxW = 29;
-      let unit = 'Caixas (29kg)';
-      if (prodName.toLowerCase().includes('batata')) {
-        boxW = 50;
-        unit = 'Sacas (50kg)';
+      let boxW = 50;
+      let unit = 'Sacas (50kg)';
+      if (prodName.toLowerCase().includes('cenoura')) {
+        boxW = 29;
+        unit = 'Caixas (29kg)';
       } else if (prodName.toLowerCase().includes('beterraba')) {
         boxW = 20;
         unit = 'Caixas (20kg)';
@@ -322,16 +324,25 @@ class NfeParserService {
     let boxWeightKg = 29;
 
     if (descLower.includes('batata')) {
-      productName = productName.toUpperCase().includes('BATATA') ? productName : `Batata — ${productName}`;
+      if (descLower.includes('especial')) {
+        productName = 'Batata Especial';
+      } else if (descLower.includes('miuda') || descLower.includes('miúda')) {
+        productName = 'Batata Miúda Lavada';
+      } else {
+        productName = 'Batata Especial';
+      }
       unit = 'Sacas (50kg)';
       boxWeightKg = 50;
     } else if (descLower.includes('cenoura')) {
+      productName = 'Cenoura';
       unit = 'Caixas (29kg)';
       boxWeightKg = 29;
     } else if (descLower.includes('beterraba')) {
+      productName = 'Beterraba';
       unit = 'Caixas (20kg)';
       boxWeightKg = 20;
     } else if (descLower.includes('cebola')) {
+      productName = 'Cebola';
       if (rawUnit === 'KG' || descLower.includes('granel')) {
         unit = 'Granel (kg)';
         boxWeightKg = 1;

@@ -524,21 +524,23 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       if (data.items && data.items.length > 0) {
         const importedItems = data.items.map((it, idx) => {
           const rawName = (it.product || '').toLowerCase();
-          const matchedCatalogProd = products.find(p => 
-            rawName.includes(p.name.toLowerCase()) || 
-            p.name.toLowerCase().includes(rawName) ||
-            (rawName.includes('cenoura') && p.name.includes('Cenoura')) ||
-            (rawName.includes('cebola') && p.name.includes('Cebola')) ||
-            (rawName.includes('beterraba') && p.name.includes('Beterraba')) ||
-            (rawName.includes('batata') && p.name.includes('Batata'))
-          );
+          const matchedCatalogProd = products.find(p => {
+            const pL = p.name.toLowerCase();
+            return pL === rawName ||
+              (rawName.includes('especial') && pL.includes('especial')) ||
+              (rawName.includes('miuda') && pL.includes('miuda')) ||
+              (rawName.includes('miúda') && pL.includes('miúda')) ||
+              (rawName.includes('cenoura') && pL.includes('cenoura')) ||
+              (rawName.includes('cebola') && pL.includes('cebola')) ||
+              (rawName.includes('beterraba') && pL.includes('beterraba'));
+          });
 
-          const resolvedProdName = matchedCatalogProd?.name || it.product || 'Produto Agrícola';
-          const resolvedUnit = matchedCatalogProd?.defaultUnit || it.unit || 'Caixas (29kg)';
-          const boxW = matchedCatalogProd?.unitKg || it.boxWeightKg || (resolvedUnit.includes('Granel') ? 1 : 29);
+          const resolvedProdName = matchedCatalogProd?.name || it.product || 'Batata Especial';
+          const resolvedUnit = it.unit || matchedCatalogProd?.defaultUnit || 'Sacas (50kg)';
+          const boxW = it.boxWeightKg || matchedCatalogProd?.unitKg || (resolvedUnit.includes('50kg') ? 50 : (resolvedUnit.includes('20kg') ? 20 : (resolvedUnit.includes('Granel') ? 1 : 29)));
           const itemKg = it.kg || (it.quantity ? it.quantity * boxW : 0);
-          const itemPrice = it.price ? Number(it.price).toFixed(4) : '';
-          const itemTotNf = it.total ? Number(it.total).toFixed(2) : (itemKg > 0 && itemPrice ? (itemKg * Number(itemPrice)).toFixed(2) : '');
+          const itemPricePerKg = it.pricePerKg ? Number(it.pricePerKg).toFixed(4) : (itemKg > 0 && it.total ? (Number(it.total) / itemKg).toFixed(4) : (it.price ? Number(it.price).toFixed(4) : ''));
+          const itemTotNf = it.total ? Number(it.total).toFixed(2) : (itemKg > 0 && itemPricePerKg ? (itemKg * Number(itemPricePerKg)).toFixed(2) : '');
 
           return {
             id: Date.now() + idx,
@@ -546,7 +548,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
             unit: resolvedUnit,
             boxWeightKg: boxW,
             totalKg: itemKg ? String(itemKg) : '',
-            pricePerKg: itemPrice,
+            pricePerKg: itemPricePerKg,
             totalNf: itemTotNf,
             dailyQuote: ''
           };

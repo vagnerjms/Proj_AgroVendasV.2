@@ -49,7 +49,7 @@ const COLUMN_DEFINITIONS = [
   { id: 'nfeDate', label: 'Data da NF' },
   { id: 'client', label: 'Destinatário (Cliente)' },
   { id: 'totalKg', label: 'Peso (kg) / Caixas' },
-  { id: 'valorTotalVP', label: 'Valor Total de VP' },
+  { id: 'valorTotalVP', label: 'Valor Total Comercial' },
   { id: 'totalOperation', label: 'Valor Total da NF' },
   { id: 'funrural', label: '(-) FUNRURAL (1,63%)' },
   { id: 'net', label: '(=) Líquido a Receber' },
@@ -501,8 +501,8 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
               <option value="nfeDate_asc">Data da NF (Mais Antiga Primeiro)</option>
               <option value="client_asc">Cliente (A → Z)</option>
               <option value="client_desc">Cliente (Z → A)</option>
-              <option value="valorTotalVP_desc">Valor Total de VP (Maior → Menor)</option>
-              <option value="valorTotalVP_asc">Valor Total de VP (Menor → Maior)</option>
+              <option value="valorTotalVP_desc">Valor Total Comercial (Maior → Menor)</option>
+              <option value="valorTotalVP_asc">Valor Total Comercial (Menor → Maior)</option>
               <option value="totalOperation_desc">Valor Total NF (Maior → Menor)</option>
               <option value="totalOperation_asc">Valor Total NF (Menor → Maior)</option>
               <option value="net_desc">Líquido a Receber (Maior → Menor)</option>
@@ -675,10 +675,10 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                   <th 
                     onClick={() => handleSortChange('valorTotalVP')}
                     className="py-3.5 px-4 text-right cursor-pointer select-none hover:bg-gray-100/80 group transition-colors text-blue-950 font-bold bg-blue-50/30"
-                    title="Clique para ordenar por Valor Total de VP"
+                    title="Clique para ordenar por Valor Total Comercial"
                   >
                     <div className="flex items-center justify-end">
-                      <span>Valor Total de VP</span>
+                      <span>Valor Total Comercial</span>
                       {renderSortIndicator('valorTotalVP')}
                     </div>
                   </th>

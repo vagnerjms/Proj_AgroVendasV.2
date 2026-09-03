@@ -441,6 +441,11 @@ router.post('/sync-all-webhooks', async (req, res) => {
       count++;
     }
     res.json({ success: true, count, message: `${count} eventos de vendas foram disparados para o webhook do n8n / Google Calendar!` });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao sincronizar todas as vendas via webhook' });
+  }
+});
+
 // POST /api/sales/repair-database (Repara vendas corrompidas por distorção de casas decimais)
 router.post('/repair-database', async (req, res) => {
   try {

@@ -209,8 +209,8 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
             unit: it.unit || (isGr ? 'Granel (kg)' : (isBatata ? 'Sacas (25kg)' : 'Caixas (29kg)')),
             boxWeightKg: bw,
             totalKg: kg ? String(kg) : '',
-            pricePerKg: pKg ? Number(pKg).toFixed(4) : '',
-            totalNf: it.total ? Number(it.total).toFixed(2) : '',
+            pricePerKg: pKg ? Number(Number(pKg).toFixed(4)).toString() : '',
+            totalNf: it.total ? Number(Number(it.total).toFixed(2)).toString() : '',
             dailyQuote: it.dailyQuote ? String(it.dailyQuote) : (editingSale.dailyQuote ? String(editingSale.dailyQuote) : '')
           };
         });
@@ -223,7 +223,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
           unit: 'Caixas (29kg)',
           boxWeightKg: 29,
           totalKg: editingSale.totalKg ? String(editingSale.totalKg) : '',
-          pricePerKg: editingSale.totalKg > 0 && editingSale.totalOperation ? (editingSale.totalOperation / editingSale.totalKg).toFixed(4) : '',
+          pricePerKg: editingSale.totalKg > 0 && editingSale.totalOperation ? Number((editingSale.totalOperation / editingSale.totalKg).toFixed(4)).toString() : '',
           totalNf: editingSale.totalOperation ? String(editingSale.totalOperation) : '',
           dailyQuote: editingSale.dailyQuote ? String(editingSale.dailyQuote) : ''
         }]);
@@ -247,10 +247,10 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   const parseNum = (val) => {
     if (val === '' || val === null || val === undefined) return 0;
     if (typeof val === 'number') return isNaN(val) ? 0 : val;
-    const str = String(val).trim();
+    let str = String(val).trim().replace(/R\$\s?/, '').replace(/\s+/g, '');
     if (str === '') return 0;
 
-    // Se possui pontos e vírgulas: formato brasileiro "68.000,00"
+    // Se possui pontos e vírgulas: formato brasileiro "68.000,00" ou "1.250.000,50"
     if (str.includes('.') && str.includes(',')) {
       const clean = str.replace(/\./g, '').replace(',', '.');
       const n = parseFloat(clean);
@@ -260,6 +260,13 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     // Se possui apenas vírgula: "68000,00" ou "3,40"
     if (str.includes(',')) {
       const n = parseFloat(str.replace(',', '.'));
+      return isNaN(n) ? 0 : n;
+    }
+
+    // Se possui ponto como separador de milhar brasileiro: "20.000", "68.000", "56.360", "28.180" (blocos de 3 dígitos)
+    if (/^\d{1,3}(\.\d{3})+$/.test(str)) {
+      const clean = str.replace(/\./g, '');
+      const n = parseFloat(clean);
       return isNaN(n) ? 0 : n;
     }
 
@@ -317,17 +324,21 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
 
       if (field === 'totalKg') {
         if (kg > 0 && p > 0) {
-          it.totalNf = (kg * p).toFixed(2);
+          const tot = Number((kg * p).toFixed(2));
+          it.totalNf = tot > 0 ? tot.toFixed(2) : '';
         } else if (kg > 0 && nf > 0) {
-          it.pricePerKg = (nf / kg).toFixed(4);
+          const unitP = Number((nf / kg).toFixed(4));
+          it.pricePerKg = unitP > 0 ? unitP.toString() : '';
         }
       } else if (field === 'pricePerKg') {
-        if (kg > 0) {
-          it.totalNf = (kg * p).toFixed(2);
+        if (kg > 0 && p > 0) {
+          const tot = Number((kg * p).toFixed(2));
+          it.totalNf = tot > 0 ? tot.toFixed(2) : '';
         }
       } else if (field === 'totalNf') {
-        if (kg > 0 && nf >= 0) {
-          it.pricePerKg = (nf / kg).toFixed(4);
+        if (kg > 0 && nf > 0) {
+          const unitP = Number((nf / kg).toFixed(4));
+          it.pricePerKg = unitP > 0 ? unitP.toString() : '';
         }
       } else if (field === 'unit') {
         if (value.includes('Granel') || value.includes('(kg)')) {
@@ -554,8 +565,9 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
           const resolvedUnit = it.unit || matchedCatalogProd?.defaultUnit || 'Sacas (25kg)';
           const boxW = it.boxWeightKg || matchedCatalogProd?.unitKg || (resolvedUnit.includes('25kg') ? 25 : (resolvedUnit.includes('20kg') ? 20 : (resolvedUnit.includes('Granel') ? 1 : 29)));
           const itemKg = it.kg || (it.quantity ? it.quantity * boxW : 0);
-          const itemPricePerKg = it.pricePerKg ? Number(it.pricePerKg).toFixed(4) : (itemKg > 0 && it.total ? (Number(it.total) / itemKg).toFixed(4) : (it.price ? Number(it.price).toFixed(4) : ''));
-          const itemTotNf = it.total ? Number(it.total).toFixed(2) : (itemKg > 0 && itemPricePerKg ? (itemKg * Number(itemPricePerKg)).toFixed(2) : '');
+          const rawPrice = it.pricePerKg ? Number(it.pricePerKg) : (itemKg > 0 && it.total ? (Number(it.total) / itemKg) : (it.price ? Number(it.price) : 0));
+          const itemPricePerKg = rawPrice > 0 ? Number(rawPrice.toFixed(4)).toString() : '';
+          const itemTotNf = it.total ? Number(Number(it.total).toFixed(2)).toString() : (itemKg > 0 && rawPrice > 0 ? (itemKg * rawPrice).toFixed(2) : '');
 
           return {
             id: Date.now() + idx,

@@ -441,8 +441,108 @@ router.post('/sync-all-webhooks', async (req, res) => {
       count++;
     }
     res.json({ success: true, count, message: `${count} eventos de vendas foram disparados para o webhook do n8n / Google Calendar!` });
+// POST /api/sales/repair-database (Repara vendas corrompidas por distorção de casas decimais)
+router.post('/repair-database', async (req, res) => {
+  try {
+    const { repairCorruptedSales } = require('../scripts/repair_corrupted_sales');
+    const sales = await Sale.find({});
+    let fixedCount = 0;
+
+    for (const sale of sales) {
+      let needsUpdate = false;
+      let newItems = [];
+      let calculatedTotalNF = 0;
+      let calculatedTotalVP = 0;
+
+      if (sale.items && sale.items.length > 0) {
+        newItems = sale.items.map(it => {
+          let kg = Number(it.kg) || 0;
+          let pKg = Number(it.pricePerKg) || 0;
+          let total = Number(it.total) || 0;
+          let bw = Number(it.boxWeightKg) || 29;
+          let q = Number(it.dailyQuote) || 0;
+          let vp = Number(it.valorTotalVP) || 0;
+
+          const expectedTotal = kg * pKg;
+          if (expectedTotal > 0 && total > 500000 && (total / expectedTotal >= 90)) {
+            total = expectedTotal;
+            needsUpdate = true;
+          } else if (expectedTotal > 0 && total === 0) {
+            total = expectedTotal;
+          }
+
+          const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
+          const vol = isGr ? kg : (bw > 0 ? (kg / bw) : 0);
+          const isQKg = (q > 0 && q <= 10.0) || isGr;
+          const expectedVP = q > 0 ? (isQKg ? (kg * q) : (vol * q)) : total;
+
+          if (vp > 500000 && expectedVP > 0 && (vp / expectedVP >= 90)) {
+            vp = expectedVP;
+            needsUpdate = true;
+          } else if (expectedVP > 0 && (!vp || vp === 0)) {
+            vp = expectedVP;
+          }
+
+          calculatedTotalNF += total;
+          calculatedTotalVP += (vp > 0 ? vp : total);
+
+          return {
+            ...(it.toObject ? it.toObject() : it),
+            kg: roundMoney(kg),
+            pricePerKg: pKg,
+            total: roundMoney(total),
+            valorTotalVP: roundMoney(vp)
+          };
+        });
+      }
+
+      let currentTotalOp = Number(sale.totalOperation) || 0;
+      let finalTotalOp = currentTotalOp;
+
+      if (calculatedTotalNF > 0 && (currentTotalOp > 500000 || currentTotalOp === 0 || Math.abs(currentTotalOp - calculatedTotalNF) > 100000)) {
+        finalTotalOp = calculatedTotalNF;
+        needsUpdate = true;
+      } else if (currentTotalOp > 500000) {
+        finalTotalOp = currentTotalOp / 1000;
+        needsUpdate = true;
+      }
+
+      let finalValorVP = Number(sale.valorTotalVP) || 0;
+      if (calculatedTotalVP > 0 && (finalValorVP > 500000 || finalValorVP === 0 || Math.abs(finalValorVP - calculatedTotalVP) > 100000)) {
+        finalValorVP = calculatedTotalVP;
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        const fiscal = calculateFiscalDeductions(finalTotalOp);
+        const commission = calculateCommission(finalValorVP > 0 ? finalValorVP : finalTotalOp, sale.feeValue || 3);
+
+        const updateData = {
+          totalOperation: roundMoney(finalTotalOp),
+          valorTotalVP: roundMoney(finalValorVP),
+          funruralTotal: fiscal.funruralTotal,
+          previdenciaSocial: fiscal.previdencia,
+          rat: fiscal.rat,
+          senar: fiscal.senar,
+          totalCommission: commission.comissao
+        };
+
+        if (newItems.length > 0) {
+          updateData.items = newItems;
+        }
+
+        if (sale.paidAmount && (sale.paidAmount > 500000 || sale.paymentStatus === 'Recebido')) {
+          updateData.paidAmount = roundMoney(finalTotalOp);
+        }
+
+        await Sale.updateOne({ _id: sale._id }, { $set: updateData });
+        fixedCount++;
+      }
+    }
+
+    res.json({ success: true, fixedCount, message: `${fixedCount} vendas com valores corrompidos foram normalizadas e reparadas com sucesso!` });
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao sincronizar todas as vendas via webhook' });
+    res.status(500).json({ error: `Erro ao reparar banco de dados: ${err.message}` });
   }
 });
 

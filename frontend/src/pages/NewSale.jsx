@@ -740,19 +740,19 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
 
     try {
       const formattedItems = saleItems.map(it => {
-        const kg = Number(it.totalKg) || 0;
-        const bw = Number(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : 29);
+        const kg = parseNum(it.totalKg);
+        const bw = parseNum(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : (it.unit?.includes('25kg') || it.product?.toLowerCase().includes('batata') ? 25 : 29));
         const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
         const vol = isGr ? kg : (bw > 0 ? (kg / bw) : 0);
-        const p = Number(it.pricePerKg) || 0;
-        const itNf = it.totalNf !== '' ? Number(it.totalNf) : (kg * p);
-        const q = Number(it.dailyQuote) || 0;
+        const p = parseNum(it.pricePerKg);
+        const itNf = it.totalNf !== '' && it.totalNf !== undefined ? parseNum(it.totalNf) : (kg * p);
+        const q = parseNum(it.dailyQuote);
         const isQKg = (q > 0 && q <= 10.0) || isGr;
         const itVP = q > 0 ? (isQKg ? (kg * q) : (vol * q)) : itNf;
 
         return {
           product: it.product || 'Produto Agrícola',
-          unit: it.unit || 'Caixas (29kg)',
+          unit: it.unit || (isGr ? 'Granel (kg)' : (it.product?.toLowerCase().includes('batata') ? 'Sacas (25kg)' : 'Caixas (29kg)')),
           boxWeightKg: bw,
           kg: kg,
           quantity: vol,

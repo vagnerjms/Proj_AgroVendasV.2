@@ -284,7 +284,7 @@ router.put('/:id', async (req, res) => {
     const body = req.body;
     const allowedFields = [
       'operationType', 'saleDate', 'client', 'clientDocument', 'origin', 'destCity',
-      'destUF', 'notes', 'nfFile', 'nfeKey', 'evidenceFile', 'freightType', 'carrierName',
+      'destUF', 'notes', 'nfFile', 'nfeKey', 'evidenceFile', 'paymentProofFile', 'freightType', 'carrierName',
       'truckPlate', 'driverName', 'driverCPF', 'items', 'feeType', 'feeValue',
       'dailyQuote', 'valorTotalVP', 'totalVolumes', 'totalKg', 'totalOperation', 
       'totalCommission', 'status', 'paymentStatus', 'paymentTerms', 'paymentTermDays', 
@@ -404,6 +404,9 @@ router.post('/:id/settle', async (req, res) => {
     sale.paymentStatus = 'Recebido';
     sale.paidAmount = sale.totalOperation;
     sale.status = 'Concluído';
+    if (req.body && req.body.paymentProofFile !== undefined) {
+      sale.paymentProofFile = req.body.paymentProofFile;
+    }
     if (req.body && req.body.evidenceFile !== undefined) {
       sale.evidenceFile = req.body.evidenceFile;
     }

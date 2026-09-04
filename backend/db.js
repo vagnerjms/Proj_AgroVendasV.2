@@ -18,6 +18,7 @@ const SaleSchema = new mongoose.Schema({
   nfeKey: { type: String, default: '' },
   nfeDate: { type: String, default: '' },
   evidenceFile: { type: String, default: null },
+  paymentProofFile: { type: String, default: null },
   freightType: { type: String, default: 'FOB (Retira na Origem)' },
   carrierName: { type: String, default: '' },
   truckPlate: { type: String, default: '' },

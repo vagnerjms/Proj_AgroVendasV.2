@@ -122,15 +122,15 @@ export default function AgendaAlerts({ setCurrentPage }) {
         const data = await res.json();
         const fname = data.filename || file.name;
         
-        // Atualiza a venda no backend com o arquivo de comprovante
+        // Atualiza a venda no backend com o arquivo de comprovante de liquidação (sem sobrescrever a imagem da venda)
         const updateRes = await fetch(`/api/sales/${saleId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ evidenceFile: fname })
+          body: JSON.stringify({ paymentProofFile: fname })
         });
         
         if (updateRes.ok) {
-          showNotification(`Comprovante anexado à venda ${saleId} com sucesso!`);
+          showNotification(`Comprovante de liquidação anexado à venda ${saleId} com sucesso!`);
           fetchSales();
         } else {
           alert('Erro ao vincular comprovante à venda.');
@@ -148,16 +148,16 @@ export default function AgendaAlerts({ setCurrentPage }) {
 
   const handleRemoveEvidence = async (saleId, e) => {
     e?.stopPropagation?.();
-    if (!window.confirm(`Deseja excluir o comprovante anexado da venda ${saleId}?`)) return;
+    if (!window.confirm(`Deseja excluir o comprovante de liquidação anexado da venda ${saleId}?`)) return;
 
     try {
       const res = await fetch(`/api/sales/${saleId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ evidenceFile: null })
+        body: JSON.stringify({ paymentProofFile: null })
       });
       if (res.ok) {
-        showNotification(`Comprovante da venda ${saleId} removido com sucesso.`);
+        showNotification(`Comprovante de liquidação da venda ${saleId} removido com sucesso.`);
         fetchSales();
       } else {
         alert('Erro ao remover comprovante.');
@@ -500,25 +500,25 @@ export default function AgendaAlerts({ setCurrentPage }) {
                           </button>
                         )}
 
-                        {/* Comprovante de Pagamento (Upload / Preview / Excluir) */}
-                        {item.evidenceFile ? (
+                        {/* Comprovante de Pagamento / Liquidação (Upload / Preview / Excluir) */}
+                        {item.paymentProofFile ? (
                           <div className="inline-flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-lg p-0.5">
                             <button
                               type="button"
-                              onClick={() => setPreviewEvidence(item.evidenceFile)}
+                              onClick={() => setPreviewEvidence(item.paymentProofFile)}
                               className="text-blue-700 hover:text-blue-900 px-1.5 py-1 text-[10px] font-bold flex items-center gap-1 hover:underline cursor-pointer"
-                              title="Visualizar comprovante anexado"
+                              title="Visualizar comprovante de liquidação anexado"
                             >
                               <Paperclip className="w-3 h-3 text-blue-600" />
                               <span className="hidden sm:inline">Comprovante</span>
                             </button>
                             
-                            {/* Botão X para excluir o comprovante */}
+                            {/* Botão X para excluir o comprovante de liquidação */}
                             <button
                               type="button"
                               onClick={(e) => handleRemoveEvidence(item.id, e)}
                               className="text-red-500 hover:text-red-700 hover:bg-red-100 p-1 rounded-md transition-colors cursor-pointer"
-                              title="Excluir comprovante"
+                              title="Excluir comprovante de liquidação"
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>
@@ -528,7 +528,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
                             className={`p-1.5 rounded-lg border border-dashed border-gray-300 hover:border-emerald-600 bg-gray-50 hover:bg-emerald-50/50 text-gray-500 hover:text-emerald-800 cursor-pointer transition-all flex items-center gap-1 text-[10px] font-semibold ${
                               uploadingSaleId === item.id ? 'opacity-50 pointer-events-none' : ''
                             }`}
-                            title="Anexar comprovante de pagamento / PIX"
+                            title="Anexar comprovante de liquidação / PIX"
                           >
                             <input
                               type="file"

@@ -1038,10 +1038,19 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
               </div>
               {viewSale.evidenceFile && (
                 <div>
-                  <span className="text-gray-500 block">Anexo da Venda (Comprovante):</span>
+                  <span className="text-gray-500 block">Anexo da Venda (Imagem / Carga):</span>
                   <a href={`/uploads/${viewSale.evidenceFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 hover:underline font-mono flex items-center gap-1" title={getCleanFileName(viewSale.evidenceFile)}>
                     <Paperclip className="w-3 h-3" />
                     <span className="truncate max-w-[260px]">{getCleanFileName(viewSale.evidenceFile)}</span>
+                  </a>
+                </div>
+              )}
+              {viewSale.paymentProofFile && (
+                <div>
+                  <span className="text-gray-500 block">Comprovante de Liquidação (Pagamento):</span>
+                  <a href={`/uploads/${viewSale.paymentProofFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:underline font-mono flex items-center gap-1" title={getCleanFileName(viewSale.paymentProofFile)}>
+                    <Paperclip className="w-3 h-3" />
+                    <span className="truncate max-w-[260px]">{getCleanFileName(viewSale.paymentProofFile)}</span>
                   </a>
                 </div>
               )}

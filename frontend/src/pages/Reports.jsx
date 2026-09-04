@@ -20,7 +20,9 @@ import {
   CloudUpload,
   FileDown,
   Settings,
-  AlertTriangle
+  AlertTriangle,
+  Clock,
+  Paperclip
 } from 'lucide-react';
 import { formatCurrency, formatNumber } from '../utils/formatters';
 import { api } from '../services/api';
@@ -91,6 +93,18 @@ export default function Reports({ setCurrentPage }) {
     totalLiquidoProdutor: 0
   });
 
+  // Métricas Consolidadas de Liquidação Financeira
+  const allFilteredItens = filteredLojas.flatMap(s => s.itens || []);
+  const valorTotalGeralVP = allFilteredItens.reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0) || currentTotal.totalVendaAReceber;
+  const valorTotalLiquidado = allFilteredItens
+    .filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido')
+    .reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
+  const valorTotalALiquidar = allFilteredItens
+    .filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido')
+    .reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
+  const totalVPsLiquidadas = allFilteredItens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').length;
+  const totalVPsALiquidar = allFilteredItens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').length;
+
   const saveWebhookConfig = (e) => {
     e.preventDefault();
     localStorage.setItem('agrovenda_n8n_drive_webhook', webhookUrl);
@@ -150,6 +164,17 @@ export default function Reports({ setCurrentPage }) {
     const lojaLabel = selectedLoja === 'ALL' ? 'Todas as Lojas' : selectedLoja;
     const periodoLabel = `${startDate || 'Início'} até ${endDate || 'Atual'}`;
 
+    const allReportItens = stores.flatMap(s => s.itens || []);
+    const valorTotalComercial = allReportItens.reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0) || total.totalVendaAReceber;
+    const valorLiquidado = allReportItens
+      .filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido')
+      .reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
+    const valorALiquidar = allReportItens
+      .filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido')
+      .reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
+    const vpsLiquidadas = allReportItens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').length;
+    const vpsALiquidar = allReportItens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').length;
+
     let excelContent = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
       <head>
@@ -173,22 +198,24 @@ export default function Reports({ setCurrentPage }) {
       </head>
       <body>
         <table>
-          <tr><td colspan="11" class="titulo">🌾 AGROVENDA — RELATÓRIO CONSOLIDADO FILTRADO</td></tr>
-          <tr><td colspan="11" style="color: #555;">Gerado em: ${hojeFormatado} | <b>Filtro Loja:</b> ${lojaLabel} | <b>Período:</b> ${periodoLabel}</td></tr>
+          <tr><td colspan="13" class="titulo">🌾 AGROVENDA — RELATÓRIO CONSOLIDADO FILTRADO</td></tr>
+          <tr><td colspan="13" style="color: #555;">Gerado em: ${hojeFormatado} | <b>Filtro Loja:</b> ${lojaLabel} | <b>Período:</b> ${periodoLabel}</td></tr>
         </table>
         <br/>
         <table>
           <tr>
             <td colspan="2" class="card-label">TOTAL FATURADO (NF)</td>
             <td colspan="3" class="card-label">TOTAL COMERCIAL (VP)</td>
-            <td colspan="3" class="card-label">(-) FUNRURAL (1,63%)</td>
-            <td colspan="3" class="card-label">(=) LÍQUIDO PRODUTOR</td>
+            <td colspan="3" class="card-label" style="background-color: #ecfdf5; color: #065f46;">VALOR LIQUIDADO (PAGO)</td>
+            <td colspan="3" class="card-label" style="background-color: #fffbeb; color: #92400e;">VALOR A LIQUIDAR (ABERTO)</td>
+            <td colspan="2" class="card-label">(-) FUNRURAL (1,63%)</td>
           </tr>
           <tr>
             <td colspan="2" class="card-valor" style="color: #091b2e;">${formatMoeda(total.valorTotalNF)}</td>
-            <td colspan="3" class="card-valor" style="color: #1e3a8a;">${formatMoeda(total.totalVendaAReceber)}</td>
-            <td colspan="3" class="card-valor" style="color: #dc2626;">-${formatMoeda(total.funrural)}</td>
-            <td colspan="3" class="card-valor" style="color: #15803d;">${formatMoeda(total.totalLiquidoProdutor)}</td>
+            <td colspan="3" class="card-valor" style="color: #1e3a8a;">${formatMoeda(valorTotalComercial)}</td>
+            <td colspan="3" class="card-valor" style="color: #15803d; background-color: #f0fdf4;">${formatMoeda(valorLiquidado)}</td>
+            <td colspan="3" class="card-valor" style="color: #b45309; background-color: #fffdf5;">${formatMoeda(valorALiquidar)}</td>
+            <td colspan="2" class="card-valor" style="color: #dc2626;">-${formatMoeda(total.funrural)}</td>
           </tr>
         </table>
         <br/>
@@ -300,6 +327,45 @@ export default function Reports({ setCurrentPage }) {
       }
       excelContent += `</table>`;
     }
+
+    // QUADRO FINAL CONSOLIDADO: FECHAMENTO FINANCEIRO E STATUS DE LIQUIDAÇÃO
+    excelContent += `
+      <br/><br/>
+      <table style="border: 2px solid #091b2e; margin-top: 25px; background-color: #ffffff;">
+        <tr>
+          <td colspan="13" style="font-size: 13pt; font-weight: bold; background-color: #091b2e; color: #ffffff; text-align: center; padding: 10px;">
+            RESUMO FINANCEIRO &amp; STATUS DE LIQUIDAÇÃO
+          </td>
+        </tr>
+        <tr style="background-color: #f8fafc; font-weight: bold; font-size: 10pt; text-align: center;">
+          <td colspan="4" class="card-label" style="background-color: #eff6ff; color: #1e3a8a; padding: 8px;">
+            VALOR TOTAL COMERCIAL (VP)
+          </td>
+          <td colspan="4" class="card-label" style="background-color: #ecfdf5; color: #065f46; padding: 8px;">
+            VALOR TOTAL LIQUIDADO (RECEBIDO)
+          </td>
+          <td colspan="5" class="card-label" style="background-color: #fffbeb; color: #92400e; padding: 8px;">
+            VALOR A LIQUIDAR (EM ABERTO)
+          </td>
+        </tr>
+        <tr style="font-size: 14pt; font-weight: bold; text-align: center;">
+          <td colspan="4" style="color: #1e3a8a; background-color: #f0f9ff; padding: 12px; border-bottom: 1px solid #cbd5e1;">
+            ${formatMoeda(valorTotalComercial)}
+          </td>
+          <td colspan="4" style="color: #15803d; background-color: #f0fdf4; padding: 12px; border-bottom: 1px solid #cbd5e1;">
+            ${formatMoeda(valorLiquidado)}
+          </td>
+          <td colspan="5" style="color: #b45309; background-color: #fffdf5; padding: 12px; border-bottom: 1px solid #cbd5e1;">
+            ${formatMoeda(valorALiquidar)}
+          </td>
+        </tr>
+        <tr style="font-size: 9pt; color: #475569; background-color: #f8fafc; text-align: center;">
+          <td colspan="4" style="padding: 6px;">Total de ${allReportItens.length} Vendas (VPs) filtradas no período</td>
+          <td colspan="4" style="padding: 6px; color: #166534; font-weight: bold;">${vpsLiquidadas} VPs Liquidadas / Confirmadas</td>
+          <td colspan="5" style="padding: 6px; color: #9a3412; font-weight: bold;">${vpsALiquidar} VPs Pendentes de Liquidação</td>
+        </tr>
+      </table>
+    `;
 
     excelContent += `</body></html>`;
     return excelContent;
@@ -677,6 +743,63 @@ export default function Reports({ setCurrentPage }) {
           </button>
         </div>
 
+      </div>
+
+      {/* Cards de Resumo Financeiro & Status de Liquidação */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 print:grid-cols-3">
+        {/* Card Valor Total */}
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-blue-200 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider block">
+              Valor Total Comercial (VP)
+            </span>
+            <span className="text-xl sm:text-2xl font-black text-blue-950 mt-1 block">
+              {formatCurrency(valorTotalGeralVP)}
+            </span>
+            <span className="text-[10px] text-gray-500 font-medium">
+              {allFilteredItens.length} vendas (VPs) no filtro
+            </span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-800 shrink-0">
+            <DollarSign className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Card Valor Liquidado */}
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-emerald-200 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider block">
+              Valor Total Liquidado
+            </span>
+            <span className="text-xl sm:text-2xl font-black text-emerald-800 mt-1 block">
+              {formatCurrency(valorTotalLiquidado)}
+            </span>
+            <span className="text-[10px] text-emerald-700 font-medium">
+              {totalVPsLiquidadas} VPs recebidas / quitadas
+            </span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Card Valor a Liquidar */}
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-amber-200 shadow-sm flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wider block">
+              Valor a Liquidar (Em Aberto)
+            </span>
+            <span className="text-xl sm:text-2xl font-black text-amber-900 mt-1 block">
+              {formatCurrency(valorTotalALiquidar)}
+            </span>
+            <span className="text-[10px] text-amber-700 font-medium">
+              {totalVPsALiquidar} VPs pendentes de recebimento
+            </span>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+            <Clock className="w-5 h-5" />
+          </div>
+        </div>
       </div>
 
       {/* Tab Switcher */}

@@ -155,6 +155,8 @@ router.get('/stores-summary', async (req, res) => {
           liquidoProdutor: comm.liquidoProdutor,
           venc: s.dueDate ? s.dueDate.split('-').reverse().join('/') : (s.notes?.match(/Vencimento:\s*([^\s|]+)/i)?.[1] || 'Em aberto'),
           status: s.status,
+          paymentStatus: s.paymentStatus || (s.status === 'Concluído' ? 'Recebido' : 'A Receber'),
+          paidAmount: Number(s.paidAmount) || (s.paymentStatus === 'Recebido' || s.status === 'Concluído' ? valorVP : 0),
           evidenceFile: cleanEvidence || cleanNfFile || '-',
           nfFile: cleanNfFile || '-'
         };
@@ -162,6 +164,8 @@ router.get('/stores-summary', async (req, res) => {
 
       const totalComissaoLoja = roundMoney(itens.reduce((a, b) => a + b.comissao, 0));
       const totalLiquidoProdutorLoja = roundMoney(itens.reduce((a, b) => a + b.liquidoProdutor, 0));
+      const valorLiquidadoLoja = roundMoney(itens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').reduce((a, b) => a + b.valorVP, 0));
+      const valorALiquidarLoja = roundMoney(itens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').reduce((a, b) => a + b.valorVP, 0));
 
       return {
         loja: clientName,
@@ -177,6 +181,8 @@ router.get('/stores-summary', async (req, res) => {
         liquidoNF: roundMoney(valorTotalNF - funrural),
         totalComissao: totalComissaoLoja,
         totalLiquidoProdutor: totalLiquidoProdutorLoja,
+        valorLiquidado: valorLiquidadoLoja,
+        valorALiquidar: valorALiquidarLoja,
         itens
       };
     });
@@ -193,7 +199,9 @@ router.get('/stores-summary', async (req, res) => {
       totalVendaAReceber: roundMoney(stores.reduce((a, b) => a + b.totalVendaAReceber, 0)),
       liquidoNF: roundMoney(stores.reduce((a, b) => a + b.liquidoNF, 0)),
       totalComissao: roundMoney(stores.reduce((a, b) => a + b.totalComissao, 0)),
-      totalLiquidoProdutor: roundMoney(stores.reduce((a, b) => a + b.totalLiquidoProdutor, 0))
+      totalLiquidoProdutor: roundMoney(stores.reduce((a, b) => a + b.totalLiquidoProdutor, 0)),
+      valorTotalLiquidado: roundMoney(stores.reduce((a, b) => a + (b.valorLiquidado || 0), 0)),
+      valorTotalALiquidar: roundMoney(stores.reduce((a, b) => a + (b.valorALiquidar || 0), 0))
     };
 
     res.json({ stores, totalGeral });

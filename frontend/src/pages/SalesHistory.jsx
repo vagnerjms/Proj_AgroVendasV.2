@@ -306,6 +306,23 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
     }
   };
 
+  const handleUnsettle = async (saleId) => {
+    if (!window.confirm(`Deseja reverter a liquidação da venda ${saleId} (retornar para status 'A Receber')?`)) return;
+    try {
+      const res = await fetch(`/api/sales/${saleId}/unsettle`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        showNotification(`Liquidação da venda ${saleId} revertida com sucesso!`);
+        fetchSales();
+      } else {
+        showErrorNotification(data.error || 'Não foi possível reverter a liquidação.');
+      }
+    } catch (err) {
+      console.error(err);
+      showErrorNotification('Erro de rede ao reverter liquidação.');
+    }
+  };
+
   // Helper calculation for Valor Total de VP (Comercial)
   const getValorTotalVP = (sale) => {
     // 1. Prioritize multi-item sum if sale.items exists
@@ -937,14 +954,22 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                               <Edit className="w-3.5 h-3.5" />
                             </button>
 
-                            {/* Liquidar */}
-                            {sale.paymentStatus !== 'Recebido' && (
+                            {/* Liquidar ou Reverter */}
+                            {sale.paymentStatus !== 'Recebido' ? (
                               <button
                                 onClick={() => handleSettle(sale.id)}
                                 className="text-amber-700 hover:bg-amber-50 p-1.5 rounded transition-colors"
                                 title="Dar baixa / Registrar recebimento"
                               >
                                 <DollarSign className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleUnsettle(sale.id)}
+                                className="text-emerald-700 hover:text-amber-700 hover:bg-amber-50 p-1.5 rounded transition-colors"
+                                title="Reverter liquidação / Voltar para 'A Receber'"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
                               </button>
                             )}
 

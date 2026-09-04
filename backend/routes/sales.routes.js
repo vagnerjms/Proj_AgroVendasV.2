@@ -418,6 +418,26 @@ router.post('/:id/settle', async (req, res) => {
   }
 });
 
+// POST /api/sales/:id/unsettle (Reverter liquidação para 'A Receber')
+router.post('/:id/unsettle', async (req, res) => {
+  try {
+    const sale = await Sale.findOne({ id: req.params.id });
+    if (!sale) return res.status(404).json({ error: 'Venda não encontrada' });
+
+    sale.paymentStatus = 'A Receber';
+    sale.paidAmount = 0;
+    sale.status = sale.nfFile ? 'Faturado' : 'Pendente NF';
+    await sale.save();
+
+    // Disparar Webhook para atualizar status no n8n / Calendar
+    sendSaleWebhook('sale.updated', sale);
+
+    res.json({ success: true, sale });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao reverter liquidação da venda' });
+  }
+});
+
 // POST /api/sales/:id/sync-calendar (Manual sync trigger for a specific sale)
 router.post('/:id/sync-calendar', async (req, res) => {
   try {

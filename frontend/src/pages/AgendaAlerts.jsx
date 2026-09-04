@@ -19,7 +19,8 @@ import {
   ExternalLink,
   Camera,
   Image,
-  Upload
+  Upload,
+  RotateCcw
 } from 'lucide-react';
 import { formatCurrency, formatNumber } from '../utils/formatters';
 
@@ -86,6 +87,23 @@ export default function AgendaAlerts({ setCurrentPage }) {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleUnsettle = async (saleId) => {
+    if (!window.confirm(`Deseja reverter a liquidação da venda ${saleId} (retornar para status 'A Receber')?`)) return;
+    try {
+      const res = await fetch(`/api/sales/${saleId}/unsettle`, { method: 'POST' });
+      if (res.ok) {
+        showNotification(`Liquidação da venda ${saleId} revertida com sucesso! Status alterado para 'A Receber'.`);
+        fetchSales();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Erro ao reverter liquidação.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Erro de conexão ao reverter liquidação.');
     }
   };
 
@@ -469,9 +487,17 @@ export default function AgendaAlerts({ setCurrentPage }) {
                             Liquidar
                           </button>
                         ) : (
-                          <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
-                            Liquidado
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleUnsettle(item.id)}
+                            className="text-[10px] text-emerald-800 hover:text-amber-900 font-bold bg-emerald-50 hover:bg-amber-100 px-2.5 py-1 rounded-md border border-emerald-200 hover:border-amber-300 transition-all cursor-pointer group flex items-center gap-1 shadow-2xs"
+                            title="Clique para reverter liquidação (voltar para 'A Receber')"
+                          >
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 group-hover:hidden" />
+                            <RotateCcw className="w-3 h-3 text-amber-700 hidden group-hover:inline" />
+                            <span className="group-hover:hidden">Liquidado</span>
+                            <span className="hidden group-hover:inline">Reverter</span>
+                          </button>
                         )}
 
                         {/* Comprovante de Pagamento (Upload / Preview / Excluir) */}

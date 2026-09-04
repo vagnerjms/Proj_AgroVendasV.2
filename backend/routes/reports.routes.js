@@ -165,9 +165,10 @@ router.get('/stores-summary', async (req, res) => {
           venc: s.dueDate ? s.dueDate.split('-').reverse().join('/') : (s.notes?.match(/Vencimento:\s*([^\s|]+)/i)?.[1] || 'Em aberto'),
           status: s.status,
           paymentStatus: s.paymentStatus || (s.status === 'Concluído' ? 'Recebido' : 'A Receber'),
-          paidAmount: Number(s.paidAmount) || (s.paymentStatus === 'Recebido' || s.status === 'Concluído' ? valorVP : 0),
-          evidenceFile: cleanEvidence || cleanNfFile || '-',
-          nfFile: cleanNfFile || '-'
+          evidenceFile: cleanEvidence || '-',
+          rawEvidenceFile: s.evidenceFile || null,
+          nfFile: cleanNfFile || '-',
+          rawNfFile: s.nfFile || null
         };
       });
 

@@ -375,7 +375,7 @@ export default function Reports({ setCurrentPage }) {
 
       for (const item of (s.itens || [])) {
         const unitLabel = item.unit?.toLowerCase().includes('saca') || item.product?.toLowerCase().includes('batata') ? 'sc' : 'cx';
-        const fileAttached = item.evidenceFile && item.evidenceFile !== '-' ? item.evidenceFile : (item.nfFile && item.nfFile !== '-' ? item.nfFile : '-');
+        const fileAttached = item.evidenceFile && item.evidenceFile !== '-' ? item.evidenceFile : '-';
         const isSettled = item.paymentStatus === 'Recebido' || item.status === 'Concluído' || item.status === 'Recebido';
         const itemLiquidado = isSettled ? Number(item.valorVP) : 0;
         const itemALiquidar = !isSettled ? Number(item.valorVP) : 0;
@@ -1164,7 +1164,7 @@ export default function Reports({ setCurrentPage }) {
                               <td className="py-2 px-3 text-center">
                                 {it.evidenceFile && it.evidenceFile !== '-' ? (
                                   <a
-                                    href={`/uploads/${it.evidenceFile}`}
+                                    href={`/uploads/${it.rawEvidenceFile || it.evidenceFile}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded transition-colors max-w-[130px] truncate"

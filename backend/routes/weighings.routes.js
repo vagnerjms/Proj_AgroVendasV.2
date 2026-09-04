@@ -51,8 +51,8 @@ router.post('/', async (req, res) => {
     const origin = Number(body.originWeightKg) || 0;
     const dest = Number(body.destWeightKg) || 0;
     const diff = Math.abs(origin - dest);
-    const diffPct = origin > 0 ? Number(((diff / origin) * 100).toFixed(2)) : 0;
-    const isDiv = diffPct > (Number(body.tolerancePct) || 0.25);
+    const tolerance = Math.min(Math.max(Number(body.tolerancePct) || 0.25, 0), 2.0);
+    const isDiv = diffPct > tolerance;
 
     let slipId = '';
     let saleRef = body.saleId || '';

@@ -17,7 +17,33 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage: storage });
+const ALLOWED_MIMES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+  'application/xml',
+  'text/xml',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv'
+];
+
+const fileFilter = (req, file, cb) => {
+  if (ALLOWED_MIMES.includes(file.mimetype) || file.originalname.match(/\.(jpe?g|png|webp|pdf|xml|xls|xlsx|csv)$/i)) {
+    cb(null, true);
+  } else {
+    cb(new Error(`Tipo de arquivo não permitido: ${file.mimetype || file.originalname}`), false);
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB
+  }
+});
 
 module.exports = {
   upload,

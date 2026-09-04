@@ -225,8 +225,26 @@ router.get('/stores-summary', async (req, res) => {
 router.post('/trigger-n8n', requireAuth, async (req, res) => {
   try {
     const { webhookUrl, startDate, endDate, selectedLoja, selectedProducer, activeTab, excelHtml, filteredStores, currentTotal } = req.body;
-    if (!webhookUrl) {
+    if (!webhookUrl || typeof webhookUrl !== 'string') {
       return res.status(400).json({ error: 'URL do Webhook do n8n não informada' });
+    }
+
+    try {
+      const parsedUrl = new URL(webhookUrl);
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        return res.status(400).json({ error: 'Protocolo de URL inválido para webhook (apenas http e https são permitidos)' });
+      }
+      const hostname = parsedUrl.hostname.toLowerCase();
+      // Block common internal/cloud metadata addresses
+      if (
+        hostname === '169.254.169.254' ||
+        hostname === 'metadata.google.internal' ||
+        hostname.endsWith('.internal')
+      ) {
+        return res.status(400).json({ error: 'Endereço de webhook restrito por segurança (SSRF)' });
+      }
+    } catch (urlErr) {
+      return res.status(400).json({ error: 'URL de Webhook inválida' });
     }
 
     const safeLoja = (!selectedLoja || selectedLoja === 'ALL') ? 'Geral' : selectedLoja.replace(/[^a-zA-Z0-9]/g, '_');

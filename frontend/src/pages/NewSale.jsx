@@ -1551,7 +1551,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Remetente (Produtor Rural)</label>
                 <input
                   type="text"
-                  placeholder="Ex: BRUNO PERES ROMEIRO (Fazenda São Gotardo/MG)"
+                  placeholder="Ex: BRUNO PERES ROMEIRO (Campo Alegre de Goiás/GO)"
                   value={origin}
                   onChange={(e) => setOrigin(e.target.value)}
                   className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#091b2e]"

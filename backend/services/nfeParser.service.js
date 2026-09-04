@@ -5,6 +5,7 @@ try {
   pdfParseLib = require('pdf-parse');
 } catch (e) {
   console.warn('Aviso: módulo pdf-parse não carregado antecipadamente:', e.message);
+}
 const { TAX_RATES } = require('../constants');
 const { normalizeProducerOrigin } = require('../utils/producer');
 

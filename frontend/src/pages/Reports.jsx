@@ -30,11 +30,12 @@ import { api } from '../services/api';
 export default function Reports({ setCurrentPage }) {
   const [activeTab, setActiveTab] = useState('geral'); // 'geral' | 'comissoes'
   const [selectedLoja, setSelectedLoja] = useState('ALL');
+  const [selectedProducer, setSelectedProducer] = useState('ALL');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [periodPreset, setPeriodPreset] = useState('ALL');
   const [loading, setLoading] = useState(true);
-  const [reportData, setReportData] = useState({ stores: [], totalGeral: {} });
+  const [reportData, setReportData] = useState({ stores: [], totalGeral: {}, producers: [] });
   const [expandedLojas, setExpandedLojas] = useState({});
 
   // Integração com Google Drive / n8n Webhook
@@ -60,38 +61,82 @@ export default function Reports({ setCurrentPage }) {
     totalLiquidoProdutor: 0
   };
 
-  const filteredLojas = stores.filter(
-    l => selectedLoja === 'ALL' || l.loja === selectedLoja
-  );
+  // Lista de produtores disponíveis para filtro
+  const availableProducers = (reportData.producers && reportData.producers.length > 0)
+    ? reportData.producers
+    : [...new Set(stores.flatMap(s => (s.itens || []).map(it => it.producer || it.origin)).filter(Boolean))].sort();
 
-  // Dynamic totals: if ALL, uses rawTotalGeral; if a specific store is selected, recalculates from filteredLojas
-  const currentTotal = selectedLoja === 'ALL' ? rawTotalGeral : filteredLojas.reduce((acc, row) => ({
-    nfs: acc.nfs + (row.nfs || 0),
-    pedidosVenda: acc.pedidosVenda + (row.pedidosVenda || 0),
-    pedidosSemNF: acc.pedidosSemNF + (row.pedidosSemNF || 0),
-    pesoNF: acc.pesoNF + (row.pesoNF || 0),
-    pesoColheita: acc.pesoColheita + (row.pesoColheita || 0),
-    cxsVendidas: acc.cxsVendidas + (row.cxsVendidas || 0),
-    valorTotalNF: acc.valorTotalNF + (row.valorTotalNF || 0),
-    funrural: acc.funrural + (row.funrural || 0),
-    totalVendaAReceber: acc.totalVendaAReceber + (row.totalVendaAReceber || 0),
-    liquidoNF: acc.liquidoNF + (row.liquidoNF || 0),
-    totalComissao: acc.totalComissao + (row.totalComissao || 0),
-    totalLiquidoProdutor: acc.totalLiquidoProdutor + (row.totalLiquidoProdutor || 0)
-  }), {
-    nfs: 0,
-    pedidosVenda: 0,
-    pedidosSemNF: 0,
-    pesoNF: 0,
-    pesoColheita: 0,
-    cxsVendidas: 0,
-    valorTotalNF: 0,
-    funrural: 0,
-    totalVendaAReceber: 0,
-    liquidoNF: 0,
-    totalComissao: 0,
-    totalLiquidoProdutor: 0
-  });
+  // Filtragem dinâmica por Loja e por Produtor
+  const filteredLojas = stores
+    .filter(l => selectedLoja === 'ALL' || l.loja === selectedLoja)
+    .map(store => {
+      if (selectedProducer === 'ALL') return store;
+      const matchingItens = (store.itens || []).filter(it => (it.producer === selectedProducer || it.origin === selectedProducer));
+      if (matchingItens.length === 0) return null;
+
+      const nfs = matchingItens.filter(it => it.status === 'Faturado' || (it.nf && it.nf !== 'Pendente')).length;
+      const pedidosSemNF = matchingItens.length - nfs;
+      const pesoNF = matchingItens.reduce((acc, it) => acc + (Number(it.pesoNF) || 0), 0);
+      const cxsVendidas = matchingItens.reduce((acc, it) => acc + (Number(it.cxs) || 0), 0);
+      const valorTotalNF = matchingItens.reduce((acc, it) => acc + (Number(it.valorNF) || 0), 0);
+      const funrural = matchingItens.reduce((acc, it) => acc + (Number(it.funrural) || 0), 0);
+      const totalVendaAReceber = matchingItens.reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
+      const totalComissao = matchingItens.reduce((acc, it) => acc + (Number(it.comissao) || 0), 0);
+      const totalLiquidoProdutor = matchingItens.reduce((acc, it) => acc + (Number(it.liquidoProdutor) || 0), 0);
+      const valorLiquidado = matchingItens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
+      const valorALiquidar = matchingItens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
+
+      return {
+        ...store,
+        pedidosVenda: matchingItens.length,
+        nfs,
+        pedidosSemNF,
+        pesoNF,
+        pesoColheita: pesoNF,
+        cxsVendidas: Number(cxsVendidas.toFixed(2)),
+        valorTotalNF,
+        funrural,
+        totalVendaAReceber,
+        liquidoNF: valorTotalNF - funrural,
+        totalComissao,
+        totalLiquidoProdutor,
+        valorLiquidado,
+        valorALiquidar,
+        itens: matchingItens
+      };
+    })
+    .filter(Boolean);
+
+  // Dynamic totals: recalculates based on filteredLojas
+  const currentTotal = (selectedLoja === 'ALL' && selectedProducer === 'ALL')
+    ? rawTotalGeral
+    : filteredLojas.reduce((acc, row) => ({
+        nfs: acc.nfs + (row.nfs || 0),
+        pedidosVenda: acc.pedidosVenda + (row.pedidosVenda || 0),
+        pedidosSemNF: acc.pedidosSemNF + (row.pedidosSemNF || 0),
+        pesoNF: acc.pesoNF + (row.pesoNF || 0),
+        pesoColheita: acc.pesoColheita + (row.pesoColheita || 0),
+        cxsVendidas: acc.cxsVendidas + (row.cxsVendidas || 0),
+        valorTotalNF: acc.valorTotalNF + (row.valorTotalNF || 0),
+        funrural: acc.funrural + (row.funrural || 0),
+        totalVendaAReceber: acc.totalVendaAReceber + (row.totalVendaAReceber || 0),
+        liquidoNF: acc.liquidoNF + (row.liquidoNF || 0),
+        totalComissao: acc.totalComissao + (row.totalComissao || 0),
+        totalLiquidoProdutor: acc.totalLiquidoProdutor + (row.totalLiquidoProdutor || 0)
+      }), {
+        nfs: 0,
+        pedidosVenda: 0,
+        pedidosSemNF: 0,
+        pesoNF: 0,
+        pesoColheita: 0,
+        cxsVendidas: 0,
+        valorTotalNF: 0,
+        funrural: 0,
+        totalVendaAReceber: 0,
+        liquidoNF: 0,
+        totalComissao: 0,
+        totalLiquidoProdutor: 0
+      });
 
   // Métricas Consolidadas de Liquidação Financeira
   const allFilteredItens = filteredLojas.flatMap(s => s.itens || []);
@@ -130,6 +175,7 @@ export default function Reports({ setCurrentPage }) {
         startDate: startDate || null,
         endDate: endDate || null,
         selectedLoja: selectedLoja,
+        selectedProducer: selectedProducer,
         activeTab: activeTab,
         excelHtml: excelHtml,
         filteredStores: filteredLojas,
@@ -162,6 +208,7 @@ export default function Reports({ setCurrentPage }) {
     const formatNum = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     const lojaLabel = selectedLoja === 'ALL' ? 'Todas as Lojas' : selectedLoja;
+    const produtorLabel = selectedProducer === 'ALL' ? 'Todos os Produtores' : selectedProducer;
     const periodoLabel = `${startDate || 'Início'} até ${endDate || 'Atual'}`;
 
     const allReportItens = stores.flatMap(s => s.itens || []);
@@ -198,8 +245,8 @@ export default function Reports({ setCurrentPage }) {
       </head>
       <body>
         <table>
-          <tr><td colspan="13" class="titulo">🌾 AGROVENDA — RELATÓRIO CONSOLIDADO FILTRADO</td></tr>
-          <tr><td colspan="13" style="color: #555;">Gerado em: ${hojeFormatado} | <b>Filtro Loja:</b> ${lojaLabel} | <b>Período:</b> ${periodoLabel}</td></tr>
+          <tr><td colspan="14" class="titulo">🌾 AGROVENDA — RELATÓRIO CONSOLIDADO FILTRADO</td></tr>
+          <tr><td colspan="14" style="color: #555;">Gerado em: ${hojeFormatado} | <b>Filtro Loja:</b> ${lojaLabel} | <b>Filtro Produtor:</b> ${produtorLabel} | <b>Período:</b> ${periodoLabel}</td></tr>
         </table>
         <br/>
         <table>
@@ -208,14 +255,14 @@ export default function Reports({ setCurrentPage }) {
             <td colspan="3" class="card-label">TOTAL COMERCIAL (VP)</td>
             <td colspan="3" class="card-label" style="background-color: #ecfdf5; color: #065f46;">VALOR LIQUIDADO (PAGO)</td>
             <td colspan="3" class="card-label" style="background-color: #fffbeb; color: #92400e;">VALOR A LIQUIDAR (ABERTO)</td>
-            <td colspan="2" class="card-label">(-) FUNRURAL (1,63%)</td>
+            <td colspan="3" class="card-label">(-) FUNRURAL (1,63%)</td>
           </tr>
           <tr>
             <td colspan="2" class="card-valor" style="color: #091b2e;">${formatMoeda(total.valorTotalNF)}</td>
             <td colspan="3" class="card-valor" style="color: #1e3a8a;">${formatMoeda(valorTotalComercial)}</td>
             <td colspan="3" class="card-valor" style="color: #15803d; background-color: #f0fdf4;">${formatMoeda(valorLiquidado)}</td>
             <td colspan="3" class="card-valor" style="color: #b45309; background-color: #fffdf5;">${formatMoeda(valorALiquidar)}</td>
-            <td colspan="2" class="card-valor" style="color: #dc2626;">-${formatMoeda(total.funrural)}</td>
+            <td colspan="3" class="card-valor" style="color: #dc2626;">-${formatMoeda(total.funrural)}</td>
           </tr>
         </table>
         <br/>
@@ -274,7 +321,7 @@ export default function Reports({ setCurrentPage }) {
       </table>
       <br/><br/>
       <table>
-        <tr><td colspan="13" style="font-size: 12pt; font-weight: bold; background-color: #e2e8f0;">DETALHAMENTO INDIVIDUAL DAS VENDAS POR LOJA (VPs)</td></tr>
+        <tr><td colspan="14" style="font-size: 12pt; font-weight: bold; background-color: #e2e8f0;">DETALHAMENTO INDIVIDUAL DAS VENDAS POR LOJA (VPs)</td></tr>
       </table>
     `;
 
@@ -283,12 +330,13 @@ export default function Reports({ setCurrentPage }) {
         <br/>
         <table>
           <tr class="loja-header">
-            <td colspan="7">Loja: ${s.loja} (${s.pedidosVenda} VPs)</td>
+            <td colspan="8">Loja: ${s.loja} (${s.pedidosVenda} VPs)</td>
             <td colspan="3" style="text-align: right;">Total NF: ${formatMoeda(s.valorTotalNF)}</td>
             <td colspan="3" style="text-align: right;">Total VP: ${formatMoeda(s.totalVendaAReceber)}</td>
           </tr>
           <tr style="background-color: #f8fafc; font-weight: bold; font-size: 9pt; text-align: center;">
             <td>Nº VP</td>
+            <td>Produtor / Origem</td>
             <td>Produto(s)</td>
             <td>Data</td>
             <td>Nº NF</td>
@@ -310,6 +358,7 @@ export default function Reports({ setCurrentPage }) {
         excelContent += `
           <tr>
             <td class="num-centro"><b>${item.vp}</b></td>
+            <td class="texto-loja" style="font-size: 8.5pt; color: #1e3a8a;">${item.producer || item.origin || 'Produtor Rural'}</td>
             <td class="texto-loja" style="font-size: 8.5pt; font-weight: bold; color: #1e293b;">${item.product || 'Produto'}</td>
             <td class="num-centro">${item.dataVP || '-'}</td>
             <td class="num-centro">${item.nf || 'Pendente'}</td>
@@ -375,25 +424,28 @@ export default function Reports({ setCurrentPage }) {
   const handleDownloadExcelDirect = () => {
     const excelContent = buildExcelContent();
     const safeLoja = selectedLoja === 'ALL' ? 'Geral' : selectedLoja.replace(/[^a-zA-Z0-9]/g, '_');
+    const safeProd = selectedProducer === 'ALL' ? '' : `_${selectedProducer.replace(/[^a-zA-Z0-9]/g, '_')}`;
     const blob = new Blob([excelContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Relatorio_AgroVenda_${safeLoja}_${new Date().toISOString().split('T')[0]}.xls`;
+    a.download = `Relatorio_AgroVenda_${safeLoja}${safeProd}_${new Date().toISOString().split('T')[0]}.xls`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
-  const fetchLiveReport = async (sDate = startDate, eDate = endDate) => {
+  const fetchLiveReport = async (sDate = startDate, eDate = endDate, prod = selectedProducer) => {
     const finalStart = (typeof sDate === 'string') ? sDate : (typeof startDate === 'string' ? startDate : '');
     const finalEnd = (typeof eDate === 'string') ? eDate : (typeof endDate === 'string' ? endDate : '');
+    const finalProd = (typeof prod === 'string') ? prod : (typeof selectedProducer === 'string' ? selectedProducer : '');
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (finalStart) params.append('startDate', finalStart);
       if (finalEnd) params.append('endDate', finalEnd);
+      if (finalProd && finalProd !== 'ALL') params.append('producer', finalProd);
       const url = `/api/reports/stores-summary${params.toString() ? `?${params.toString()}` : ''}`;
       
       const res = await fetch(url);
@@ -486,7 +538,7 @@ export default function Reports({ setCurrentPage }) {
             {activeTab === 'geral' ? 'Relatório Geral — NFs e VPs por Loja' : 'Relatório Completo — Fechamento com Comissões'}
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Agregação dinâmica em tempo real das {currentTotal.pedidosVenda || 0} vendas {selectedLoja !== 'ALL' ? `de ${selectedLoja}` : 'cadastradas no banco de dados'}.
+            Agregação dinâmica em tempo real das {currentTotal.pedidosVenda || 0} vendas {selectedLoja !== 'ALL' ? `de ${selectedLoja}` : ''} {selectedProducer !== 'ALL' ? `• Produtor: ${selectedProducer}` : ''} {selectedLoja === 'ALL' && selectedProducer === 'ALL' ? 'cadastradas no banco de dados' : ''}.
           </p>
           {(startDate || endDate) && (
             <div className="hidden print:block text-xs font-bold text-gray-800 mt-1">
@@ -496,6 +548,7 @@ export default function Reports({ setCurrentPage }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 print:hidden">
+          {/* Seletor de Loja */}
           <select
             value={selectedLoja}
             onChange={(e) => setSelectedLoja(e.target.value)}
@@ -504,6 +557,18 @@ export default function Reports({ setCurrentPage }) {
             <option value="ALL">Todas as {stores.length} Lojas ({rawTotalGeral.pedidosVenda || 0} Pedidos)</option>
             {stores.map(l => (
               <option key={l.loja} value={l.loja}>{l.loja} ({l.pedidosVenda} Pedidos)</option>
+            ))}
+          </select>
+
+          {/* Seletor de Produtor */}
+          <select
+            value={selectedProducer}
+            onChange={(e) => setSelectedProducer(e.target.value)}
+            className="bg-white border border-gray-300 text-xs rounded-lg px-3 py-2 outline-none font-semibold text-gray-800 shadow-sm"
+          >
+            <option value="ALL">Todos os Produtores ({availableProducers.length})</option>
+            {availableProducers.map(p => (
+              <option key={p} value={p}>{p}</option>
             ))}
           </select>
 
@@ -992,6 +1057,9 @@ export default function Reports({ setCurrentPage }) {
                               <div className="text-[10px] text-gray-600 font-semibold truncate max-w-[220px]" title={it.product}>
                                 {it.product}
                               </div>
+                              <div className="text-[10px] text-blue-800 font-medium truncate max-w-[220px]" title={`Produtor: ${it.producer || it.origin}`}>
+                                🌾 {it.producer || it.origin || 'Produtor Rural'}
+                              </div>
                             </td>
                             <td className="py-2 px-2 text-gray-600">{it.dataVP}</td>
                             <td className="py-2 px-3 font-semibold text-gray-800">{it.nf}</td>
@@ -1248,6 +1316,9 @@ export default function Reports({ setCurrentPage }) {
                               <div className="font-bold text-[#173e27]">{it.vp}</div>
                               <div className="text-[10px] text-gray-500 font-medium truncate max-w-[140px]" title={it.product}>
                                 {it.product}
+                              </div>
+                              <div className="text-[10px] text-blue-800 font-medium truncate max-w-[140px]" title={`Produtor: ${it.producer || it.origin}`}>
+                                🌾 {it.producer || it.origin || 'Produtor Rural'}
                               </div>
                             </td>
                             <td className="py-2 px-2 text-gray-600">{it.dataVP}</td>

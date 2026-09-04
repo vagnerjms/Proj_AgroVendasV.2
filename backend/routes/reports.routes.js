@@ -10,7 +10,7 @@ router.use(requireAuth);
 // GET /api/reports/stores-summary
 router.get('/stores-summary', async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, producer } = req.query;
     let query = {};
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     const validStart = (typeof startDate === 'string' && dateRegex.test(startDate.trim())) ? startDate.trim() : null;
@@ -24,7 +24,13 @@ router.get('/stores-summary', async (req, res) => {
       query.saleDate = { $lte: validEnd };
     }
 
+    if (producer && producer !== 'ALL') {
+      query.origin = producer;
+    }
+
     const allSales = await Sale.find(query).sort({ saleDate: 1 }).lean();
+    const rawProducers = await Sale.distinct('origin');
+    const producers = rawProducers.filter(p => p && p.trim()).sort();
 
     const clientGroups = {};
     for (const s of allSales) {
@@ -132,12 +138,15 @@ router.get('/stores-summary', async (req, res) => {
 
         const cleanEvidence = s.evidenceFile ? s.evidenceFile.replace(/^\d{10,15}(-\d+)?-/, '') : '';
         const cleanNfFile = s.nfFile ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '') : '';
+        const produtorNome = s.origin || (s.notes?.match(/Produtor:\s*([^|]+)/i)?.[1]?.trim()) || 'Produtor Rural';
 
         return {
           vp: s.id,
           dataVP: s.saleDate ? s.saleDate.split('-').reverse().join('/') : '-',
           nf: nfNumber,
           dataNF: s.saleDate ? s.saleDate.split('-').reverse().join('/') : '-',
+          producer: produtorNome,
+          origin: s.origin || produtorNome,
           product: productLabel,
           unit: isBatata ? 'Sacas (25kg)' : (s.items?.[0]?.unit || 'Caixas (29kg)'),
           items: s.items || [],
@@ -204,7 +213,7 @@ router.get('/stores-summary', async (req, res) => {
       valorTotalALiquidar: roundMoney(stores.reduce((a, b) => a + (b.valorALiquidar || 0), 0))
     };
 
-    res.json({ stores, totalGeral });
+    res.json({ stores, totalGeral, producers });
   } catch (err) {
     console.error('Erro ao gerar relatório consolidado:', err);
     res.status(500).json({ error: 'Erro ao processar relatório' });
@@ -214,7 +223,7 @@ router.get('/stores-summary', async (req, res) => {
 // POST /api/reports/trigger-n8n - Dispara webhook do n8n para gerar e salvar no Google Drive
 router.post('/trigger-n8n', requireAuth, async (req, res) => {
   try {
-    const { webhookUrl, startDate, endDate, selectedLoja, activeTab, excelHtml, filteredStores, currentTotal } = req.body;
+    const { webhookUrl, startDate, endDate, selectedLoja, selectedProducer, activeTab, excelHtml, filteredStores, currentTotal } = req.body;
     if (!webhookUrl) {
       return res.status(400).json({ error: 'URL do Webhook do n8n não informada' });
     }
@@ -332,6 +341,7 @@ router.post('/trigger-n8n', requireAuth, async (req, res) => {
         startDate: startDate || null,
         endDate: endDate || null,
         selectedLoja: selectedLoja || 'ALL',
+        selectedProducer: selectedProducer || 'ALL',
         activeTab: activeTab || 'geral'
       },
       stores: storesSummary,

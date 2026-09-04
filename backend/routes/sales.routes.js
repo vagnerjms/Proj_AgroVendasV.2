@@ -8,6 +8,7 @@ const { uploadDir } = require('../middlewares/upload');
 const { sendSaleWebhook } = require('../services/webhook.service');
 const { escapeRegex } = require('../utils/security');
 const { requireAuth, requirePermission } = require('../middlewares/auth');
+const { normalizeProducerOrigin } = require('../utils/producer');
 
 // GET /api/sales/agenda-events (Recebíveis formatados por Data de Vencimento para n8n & Google Calendar - Endpoint Público de Feed)
 router.get('/agenda-events', async (req, res) => {
@@ -180,6 +181,7 @@ router.post('/', async (req, res) => {
 
     const valorVP = roundMoney(body.valorTotalVP);
     const commission = calculateCommission(valorVP, body.feeValue);
+    const normalizedOrigin = await normalizeProducerOrigin(body.origin || '', body.notes || '');
 
     const newSale = new Sale({
       id: newId,
@@ -187,7 +189,7 @@ router.post('/', async (req, res) => {
       saleDate: body.saleDate || new Date().toISOString().split('T')[0],
       client: body.client || "Cliente Geral",
       clientDocument: body.clientDocument || "",
-      origin: body.origin || "",
+      origin: normalizedOrigin,
       destCity: body.destCity || "",
       destUF: body.destUF || "",
       notes: body.notes || "",
@@ -296,6 +298,13 @@ router.put('/:id', async (req, res) => {
       if (body[key] !== undefined) {
         updateFields[key] = body[key];
       }
+    }
+
+    if (body.origin !== undefined || body.notes !== undefined) {
+      updateFields.origin = await normalizeProducerOrigin(
+        body.origin !== undefined ? body.origin : existing.origin,
+        body.notes !== undefined ? body.notes : existing.notes
+      );
     }
 
     // Recalculate FUNRURAL only if totalOperation is explicitly updated

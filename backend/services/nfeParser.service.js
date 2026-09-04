@@ -5,8 +5,8 @@ try {
   pdfParseLib = require('pdf-parse');
 } catch (e) {
   console.warn('Aviso: módulo pdf-parse não carregado antecipadamente:', e.message);
-}
 const { TAX_RATES } = require('../constants');
+const { normalizeProducerOrigin } = require('../utils/producer');
 
 class NfeParserService {
   /**
@@ -293,7 +293,7 @@ class NfeParserService {
         city: emitCity,
         uf: emitUF,
         address: emitAddress,
-        originText: emitName ? `${emitName} (${emitCity || 'Fazenda'}/${emitUF || 'MG'})` : 'Produtor Rural'
+        originText: await normalizeProducerOrigin(emitName ? `${emitName} (${emitCity || 'Fazenda'}/${emitUF || 'MG'})` : 'Produtor Rural', emitName)
       },
       dest: {
         name: destName || 'Cliente Comprador',
@@ -553,7 +553,7 @@ class NfeParserService {
         city: emitCity,
         uf: emitUF,
         address: emitAddress,
-        originText: emitName ? (emitCity ? `${emitName} (${emitCity}/${emitUF})` : emitName) : (emitCity ? `Fazenda / Silo - ${emitCity}/${emitUF}` : '')
+        originText: await normalizeProducerOrigin(emitName ? (emitCity ? `${emitName} (${emitCity}/${emitUF})` : emitName) : (emitCity ? `Fazenda / Silo - ${emitCity}/${emitUF}` : ''), emitName)
       },
       dest: {
         name: destName,

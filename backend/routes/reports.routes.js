@@ -3,6 +3,8 @@ const router = express.Router();
 const { Sale } = require('../db');
 const { requireAuth } = require('../middlewares/auth');
 const { roundMoney, calculateFiscalDeductions, calculateCommission } = require('../utils/money');
+const { normalizeProducerOrigin } = require('../utils/producer');
+const { escapeRegex } = require('../utils/security');
 
 // Protect all reports endpoints with JWT authentication
 router.use(requireAuth);
@@ -25,12 +27,25 @@ router.get('/stores-summary', async (req, res) => {
     }
 
     if (producer && producer !== 'ALL') {
-      query.origin = producer;
+      const baseName = producer.replace(/\s*\(.*\)/, '').trim();
+      if (baseName.length >= 4) {
+        const escapedBase = escapeRegex ? escapeRegex(baseName) : baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        query.origin = { $regex: new RegExp(escapedBase, 'i') };
+      } else {
+        query.origin = producer;
+      }
     }
 
     const allSales = await Sale.find(query).sort({ saleDate: 1 }).lean();
     const rawProducers = await Sale.distinct('origin');
-    const producers = rawProducers.filter(p => p && p.trim()).sort();
+    const producerSet = new Set();
+    for (const p of rawProducers) {
+      if (p && p.trim()) {
+        const norm = await normalizeProducerOrigin(p);
+        producerSet.add(norm);
+      }
+    }
+    const producers = Array.from(producerSet).sort();
 
     const clientGroups = {};
     for (const s of allSales) {

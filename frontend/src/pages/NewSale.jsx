@@ -1548,14 +1548,46 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Remetente (Produtor Rural)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-gray-700">Remetente (Produtor Rural)</label>
+                  <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                    Padronização Automática
+                  </span>
+                </div>
                 <input
                   type="text"
-                  placeholder="Ex: BRUNO PERES ROMEIRO (Campo Alegre de Goiás/GO)"
+                  list="producers-datalist"
+                  placeholder="Selecione ou digite o Produtor Rural..."
                   value={origin}
                   onChange={(e) => setOrigin(e.target.value)}
-                  className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-[#091b2e]"
+                  className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none font-semibold focus:ring-2 focus:ring-[#091b2e]"
                 />
+                <datalist id="producers-datalist">
+                  <option value="BRUNO PERES ROMEIRO (Campo Alegre de Goiás/GO)" />
+                  <option value="CARLOS CESAR CANTELE (NOVA PONTE/MG)" />
+                  {clients
+                    .filter(c => (c.type || '').toLowerCase().includes('produtor') || c.type === 'Produtor Rural')
+                    .map(c => {
+                      const formatted = `${c.name}${c.city ? ` (${c.city}/${c.uf || c.state || 'MG'})` : ''}`;
+                      return <option key={c.id || c._id} value={formatted} />;
+                    })}
+                </datalist>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setOrigin('BRUNO PERES ROMEIRO (Campo Alegre de Goiás/GO)')}
+                    className={`text-[10px] px-2 py-0.5 rounded font-bold transition-all border ${origin.includes('BRUNO PERES') ? 'bg-[#091b2e] text-white border-[#091b2e]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-300'}`}
+                  >
+                    🌾 Bruno Peres Romeiro
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOrigin('CARLOS CESAR CANTELE (NOVA PONTE/MG)')}
+                    className={`text-[10px] px-2 py-0.5 rounded font-bold transition-all border ${origin.includes('CANTELE') ? 'bg-[#091b2e] text-white border-[#091b2e]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-300'}`}
+                  >
+                    🌾 Carlos Cesar Cantele
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">

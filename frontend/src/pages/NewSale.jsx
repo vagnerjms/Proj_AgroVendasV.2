@@ -21,7 +21,7 @@ import {
   Clock,
   Store
 } from 'lucide-react';
-import { formatCurrency, formatKg, formatNumber } from '../utils/formatters';
+import { formatCurrency, formatKg, formatNumber, getCleanFileName } from '../utils/formatters';
 import { calculateSummary, calculateFunrural } from '../utils/calculations';
 
 export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, onCancelEdit }) {
@@ -1396,9 +1396,9 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
               <div className="flex flex-wrap items-center gap-2">
                 {/* Botão 1: Importar NF-e (XML/PDF) */}
                 {nfFile ? (
-                  <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-lg text-xs">
-                    <FileText className="w-3.5 h-3.5 text-emerald-700" />
-                    <span className="font-bold text-emerald-950 max-w-[150px] truncate" title={nfFile}>{nfFile}</span>
+                  <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-lg text-xs" title={`Arquivo: ${getCleanFileName(nfFile)}`}>
+                    <FileText className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                    <span className="font-bold text-emerald-950 max-w-[180px] truncate" title={getCleanFileName(nfFile)}>{getCleanFileName(nfFile)}</span>
                     <button
                       type="button"
                       onClick={() => {
@@ -1406,7 +1406,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                         setNfeKey('');
                         setXmlSuccess(false);
                       }}
-                      className="ml-1 text-red-600 hover:text-red-800 p-0.5 rounded transition-colors font-bold"
+                      className="ml-1 text-red-600 hover:text-red-800 p-0.5 rounded transition-colors font-bold cursor-pointer"
                       title="Excluir / Desanexar Nota Fiscal"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -1422,13 +1422,13 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
 
                 {/* Botão 2: Anexo Venda (Comprovantes, Canhotos, Fotos) */}
                 {evidenceFile ? (
-                  <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-300 px-2.5 py-1 rounded-lg text-xs">
-                    <Paperclip className="w-3.5 h-3.5 text-blue-700" />
-                    <span className="font-bold text-blue-950 max-w-[150px] truncate" title={evidenceFile}>{evidenceFile}</span>
+                  <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-300 px-2.5 py-1 rounded-lg text-xs" title={`Anexo: ${getCleanFileName(evidenceFile)}`}>
+                    <Paperclip className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                    <span className="font-bold text-blue-950 max-w-[180px] truncate" title={getCleanFileName(evidenceFile)}>{getCleanFileName(evidenceFile)}</span>
                     <button
                       type="button"
                       onClick={() => setEvidenceFile(null)}
-                      className="ml-1 text-red-600 hover:text-red-800 p-0.5 rounded transition-colors font-bold"
+                      className="ml-1 text-red-600 hover:text-red-800 p-0.5 rounded transition-colors font-bold cursor-pointer"
                       title="Remover anexo da venda"
                     >
                       <Trash2 className="w-3.5 h-3.5" />

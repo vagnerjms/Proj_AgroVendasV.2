@@ -25,7 +25,7 @@ import {
   Check,
   Paperclip
 } from 'lucide-react';
-import { formatCurrency, formatDate, formatKg, formatNumber } from '../utils/formatters';
+import { formatCurrency, formatDate, formatKg, formatNumber, getCleanFileName } from '../utils/formatters';
 import ContractModal from '../components/ContractModal';
 
 const DEFAULT_COLUMNS = {
@@ -802,8 +802,8 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                       {visibleColumns.id && (
                         <td className="py-3 px-4">
                           <div className="font-bold text-gray-900 font-mono">{sale.id}</div>
-                          <div className="text-gray-400 text-[11px]">
-                            {sale.nfFile ? sale.nfFile.replace('.pdf', '') : 'Pendente NF'}
+                          <div className="text-gray-400 text-[11px] truncate max-w-[160px]" title={getCleanFileName(sale.nfFile)}>
+                            {sale.nfFile ? getCleanFileName(sale.nfFile).replace('.pdf', '') : 'Pendente NF'}
                           </div>
                         </td>
                       )}
@@ -824,8 +824,8 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                               <div className="font-semibold text-gray-800">
                                 {formatDate(sale.nfeDate || sale.saleDate)}
                               </div>
-                              <div className="text-emerald-700 font-mono text-[10px]">
-                                {sale.nfFile ? sale.nfFile.replace('.pdf', '') : (sale.nfeKey ? `...${sale.nfeKey.slice(-6)}` : 'Emitida')}
+                              <div className="text-emerald-700 font-mono text-[10px] truncate max-w-[160px]" title={getCleanFileName(sale.nfFile)}>
+                                {sale.nfFile ? getCleanFileName(sale.nfFile).replace('.pdf', '') : (sale.nfeKey ? `...${sale.nfeKey.slice(-6)}` : 'Emitida')}
                               </div>
                             </>
                           ) : (
@@ -1028,9 +1028,9 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
               <div>
                 <span className="text-gray-500 block">Documento Fiscal:</span>
                 {viewSale.nfFile ? (
-                  <a href={`/uploads/${viewSale.nfFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:underline font-mono flex items-center gap-1">
+                  <a href={`/uploads/${viewSale.nfFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:underline font-mono flex items-center gap-1" title={getCleanFileName(viewSale.nfFile)}>
                     <FileText className="w-3 h-3" />
-                    <span>{viewSale.nfFile}</span>
+                    <span className="truncate max-w-[260px]">{getCleanFileName(viewSale.nfFile)}</span>
                   </a>
                 ) : (
                   <span className="font-semibold text-gray-400">Pendente de emissão</span>
@@ -1039,9 +1039,9 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
               {viewSale.evidenceFile && (
                 <div>
                   <span className="text-gray-500 block">Anexo da Venda (Comprovante):</span>
-                  <a href={`/uploads/${viewSale.evidenceFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 hover:underline font-mono flex items-center gap-1">
+                  <a href={`/uploads/${viewSale.evidenceFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 hover:underline font-mono flex items-center gap-1" title={getCleanFileName(viewSale.evidenceFile)}>
                     <Paperclip className="w-3 h-3" />
-                    <span>{viewSale.evidenceFile}</span>
+                    <span className="truncate max-w-[260px]">{getCleanFileName(viewSale.evidenceFile)}</span>
                   </a>
                 </div>
               )}

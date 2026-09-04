@@ -43,3 +43,8 @@ export const calculateFunrural = (totalOperation) => {
     funruralTotal: total * TAX_RATES.FUNRURAL_TOTAL
   };
 };
+
+export const getCleanFileName = (fileName) => {
+  if (!fileName) return '';
+  return String(fileName).replace(/^\d{10,15}(-\d+)?-/, '');
+};

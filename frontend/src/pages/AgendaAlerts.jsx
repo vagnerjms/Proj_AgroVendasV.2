@@ -22,7 +22,7 @@ import {
   Upload,
   RotateCcw
 } from 'lucide-react';
-import { formatCurrency, formatNumber } from '../utils/formatters';
+import { formatCurrency, formatNumber, getCleanFileName } from '../utils/formatters';
 
 export default function AgendaAlerts({ setCurrentPage }) {
   const [sales, setSales] = useState([]);
@@ -210,7 +210,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
   // Process schedule list
   const scheduleList = sales.map(s => {
     const dueDateObj = parseDueDate(s);
-    const nfNumber = s.nfFile ? s.nfFile.replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
+    const nfNumber = s.nfFile ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '').replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
     
     // Extract Cotação and VP Value
     let cotacao = Number(s.dailyQuote) || 0;

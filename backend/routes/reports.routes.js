@@ -110,7 +110,7 @@ router.get('/stores-summary', async (req, res) => {
 
         totalVendaAReceber = roundMoney(totalVendaAReceber + valorVP);
 
-        const nfNumber = s.nfFile ? s.nfFile.replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
+        const nfNumber = s.nfFile ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '').replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
         const comm = calculateCommission(valorVP, s.feeValue);
 
         // Nome / discriminação dos produtos

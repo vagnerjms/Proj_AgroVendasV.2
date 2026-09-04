@@ -107,9 +107,25 @@ export default function Reports({ setCurrentPage }) {
     })
     .filter(Boolean);
 
+  // Métricas Consolidadas de Liquidação Financeira
+  const allFilteredItens = filteredLojas.flatMap(s => s.itens || []);
+  const valorTotalGeralVP = allFilteredItens.reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0) || rawTotalGeral.totalVendaAReceber;
+  const valorTotalLiquidado = allFilteredItens
+    .filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido')
+    .reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
+  const valorTotalALiquidar = allFilteredItens
+    .filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido')
+    .reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
+  const totalVPsLiquidadas = allFilteredItens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').length;
+  const totalVPsALiquidar = allFilteredItens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').length;
+
   // Dynamic totals: recalculates based on filteredLojas
   const currentTotal = (selectedLoja === 'ALL' && selectedProducer === 'ALL')
-    ? rawTotalGeral
+    ? {
+        ...rawTotalGeral,
+        valorTotalLiquidado: rawTotalGeral.valorTotalLiquidado ?? valorTotalLiquidado,
+        valorTotalALiquidar: rawTotalGeral.valorTotalALiquidar ?? valorTotalALiquidar
+      }
     : filteredLojas.reduce((acc, row) => ({
         nfs: acc.nfs + (row.nfs || 0),
         pedidosVenda: acc.pedidosVenda + (row.pedidosVenda || 0),
@@ -122,7 +138,9 @@ export default function Reports({ setCurrentPage }) {
         totalVendaAReceber: acc.totalVendaAReceber + (row.totalVendaAReceber || 0),
         liquidoNF: acc.liquidoNF + (row.liquidoNF || 0),
         totalComissao: acc.totalComissao + (row.totalComissao || 0),
-        totalLiquidoProdutor: acc.totalLiquidoProdutor + (row.totalLiquidoProdutor || 0)
+        totalLiquidoProdutor: acc.totalLiquidoProdutor + (row.totalLiquidoProdutor || 0),
+        valorTotalLiquidado: acc.valorTotalLiquidado + (row.valorLiquidado || 0),
+        valorTotalALiquidar: acc.valorTotalALiquidar + (row.valorALiquidar || 0)
       }), {
         nfs: 0,
         pedidosVenda: 0,
@@ -135,20 +153,10 @@ export default function Reports({ setCurrentPage }) {
         totalVendaAReceber: 0,
         liquidoNF: 0,
         totalComissao: 0,
-        totalLiquidoProdutor: 0
+        totalLiquidoProdutor: 0,
+        valorTotalLiquidado: 0,
+        valorTotalALiquidar: 0
       });
-
-  // Métricas Consolidadas de Liquidação Financeira
-  const allFilteredItens = filteredLojas.flatMap(s => s.itens || []);
-  const valorTotalGeralVP = allFilteredItens.reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0) || currentTotal.totalVendaAReceber;
-  const valorTotalLiquidado = allFilteredItens
-    .filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido')
-    .reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
-  const valorTotalALiquidar = allFilteredItens
-    .filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido')
-    .reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
-  const totalVPsLiquidadas = allFilteredItens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').length;
-  const totalVPsALiquidar = allFilteredItens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').length;
 
   const saveWebhookConfig = (e) => {
     e.preventDefault();
@@ -239,26 +247,28 @@ export default function Reports({ setCurrentPage }) {
           .num-direita { text-align: right; }
           .funrural { text-align: right; color: #b91c1c; font-weight: 500; }
           .destaque-vp { font-weight: bold; color: #1e3a8a; background-color: #f0f9ff; text-align: right; }
+          .valor-pago { font-weight: bold; color: #15803d; background-color: #f0fdf4; text-align: right; }
+          .valor-aberto { font-weight: bold; color: #b45309; background-color: #fffdf5; text-align: right; }
           .linha-total { background-color: #bfe2a5; font-weight: bold; border-top: 2px solid #166534; }
           .loja-header { background-color: #173e27; color: #ffffff; font-weight: bold; }
         </style>
       </head>
       <body>
         <table>
-          <tr><td colspan="14" class="titulo">🌾 AGROVENDA — RELATÓRIO CONSOLIDADO FILTRADO</td></tr>
-          <tr><td colspan="14" style="color: #555;">Gerado em: ${hojeFormatado} | <b>Filtro Loja:</b> ${lojaLabel} | <b>Filtro Produtor:</b> ${produtorLabel} | <b>Período:</b> ${periodoLabel}</td></tr>
+          <tr><td colspan="15" class="titulo">🌾 AGROVENDA — RELATÓRIO CONSOLIDADO FILTRADO</td></tr>
+          <tr><td colspan="15" style="color: #555;">Gerado em: ${hojeFormatado} | <b>Filtro Loja:</b> ${lojaLabel} | <b>Filtro Produtor:</b> ${produtorLabel} | <b>Período:</b> ${periodoLabel}</td></tr>
         </table>
         <br/>
         <table>
           <tr>
-            <td colspan="2" class="card-label">TOTAL FATURADO (NF)</td>
+            <td colspan="3" class="card-label">TOTAL FATURADO (NF)</td>
             <td colspan="3" class="card-label">TOTAL COMERCIAL (VP)</td>
             <td colspan="3" class="card-label" style="background-color: #ecfdf5; color: #065f46;">VALOR LIQUIDADO (PAGO)</td>
             <td colspan="3" class="card-label" style="background-color: #fffbeb; color: #92400e;">VALOR A LIQUIDAR (ABERTO)</td>
             <td colspan="3" class="card-label">(-) FUNRURAL (1,63%)</td>
           </tr>
           <tr>
-            <td colspan="2" class="card-valor" style="color: #091b2e;">${formatMoeda(total.valorTotalNF)}</td>
+            <td colspan="3" class="card-valor" style="color: #091b2e;">${formatMoeda(total.valorTotalNF)}</td>
             <td colspan="3" class="card-valor" style="color: #1e3a8a;">${formatMoeda(valorTotalComercial)}</td>
             <td colspan="3" class="card-valor" style="color: #15803d; background-color: #f0fdf4;">${formatMoeda(valorLiquidado)}</td>
             <td colspan="3" class="card-valor" style="color: #b45309; background-color: #fffdf5;">${formatMoeda(valorALiquidar)}</td>
@@ -279,6 +289,8 @@ export default function Reports({ setCurrentPage }) {
               <th>Valor Total NF (R$)</th>
               <th>FUNRURAL (R$)</th>
               <th style="background-color: #1e40af;">Total Comercial VP (R$)</th>
+              <th style="background-color: #166534;">Valor Liquidado (R$)</th>
+              <th style="background-color: #b45309;">Valor a Liquidar (R$)</th>
               <th style="background-color: #14532d;">Líquido NF (R$)</th>
             </tr>
           </thead>
@@ -298,6 +310,8 @@ export default function Reports({ setCurrentPage }) {
           <td class="num-direita"><b>${formatMoeda(s.valorTotalNF)}</b></td>
           <td class="funrural">-${formatMoeda(s.funrural)}</td>
           <td class="destaque-vp">${formatMoeda(s.totalVendaAReceber)}</td>
+          <td class="valor-pago">${formatMoeda(s.valorLiquidado)}</td>
+          <td class="valor-aberto">${formatMoeda(s.valorALiquidar)}</td>
           <td class="num-direita">${formatMoeda(s.liquidoNF || (s.valorTotalNF - s.funrural))}</td>
         </tr>
       `;
@@ -315,13 +329,15 @@ export default function Reports({ setCurrentPage }) {
           <td class="num-direita">${formatMoeda(total.valorTotalNF)}</td>
           <td class="funrural" style="font-weight: bold;">-${formatMoeda(total.funrural)}</td>
           <td class="destaque-vp" style="background-color: #83c457;">${formatMoeda(total.totalVendaAReceber)}</td>
+          <td class="valor-pago" style="background-color: #a7f3d0; font-weight: bold;">${formatMoeda(valorLiquidado)}</td>
+          <td class="valor-aberto" style="background-color: #fde68a; font-weight: bold;">${formatMoeda(valorALiquidar)}</td>
           <td class="num-direita" style="background-color: #aedb8e; font-weight: bold;">${formatMoeda(total.liquidoNF || (total.valorTotalNF - total.funrural))}</td>
         </tr>
         </tbody>
       </table>
       <br/><br/>
       <table>
-        <tr><td colspan="14" style="font-size: 12pt; font-weight: bold; background-color: #e2e8f0;">DETALHAMENTO INDIVIDUAL DAS VENDAS POR LOJA (VPs)</td></tr>
+        <tr><td colspan="17" style="font-size: 12pt; font-weight: bold; background-color: #e2e8f0;">DETALHAMENTO INDIVIDUAL DAS VENDAS POR LOJA (VPs)</td></tr>
       </table>
     `;
 
@@ -330,9 +346,11 @@ export default function Reports({ setCurrentPage }) {
         <br/>
         <table>
           <tr class="loja-header">
-            <td colspan="8">Loja: ${s.loja} (${s.pedidosVenda} VPs)</td>
+            <td colspan="7">Loja: ${s.loja} (${s.pedidosVenda} VPs)</td>
             <td colspan="3" style="text-align: right;">Total NF: ${formatMoeda(s.valorTotalNF)}</td>
             <td colspan="3" style="text-align: right;">Total VP: ${formatMoeda(s.totalVendaAReceber)}</td>
+            <td colspan="2" style="text-align: right; background-color: #14532d;">Liquidado: ${formatMoeda(s.valorLiquidado)}</td>
+            <td colspan="2" style="text-align: right; background-color: #92400e;">A Liquidar: ${formatMoeda(s.valorALiquidar)}</td>
           </tr>
           <tr style="background-color: #f8fafc; font-weight: bold; font-size: 9pt; text-align: center;">
             <td>Nº VP</td>
@@ -347,7 +365,10 @@ export default function Reports({ setCurrentPage }) {
             <td>FUNRURAL</td>
             <td>Cotação</td>
             <td>Valor VP</td>
+            <td>Valor Liquidado</td>
+            <td>Valor a Liquidar</td>
             <td>Vencimento</td>
+            <td>Status / Pagamento</td>
             <td>Arquivo (Imagem Anexa)</td>
           </tr>
       `;
@@ -355,6 +376,11 @@ export default function Reports({ setCurrentPage }) {
       for (const item of (s.itens || [])) {
         const unitLabel = item.unit?.toLowerCase().includes('saca') || item.product?.toLowerCase().includes('batata') ? 'sc' : 'cx';
         const fileAttached = item.evidenceFile && item.evidenceFile !== '-' ? item.evidenceFile : (item.nfFile && item.nfFile !== '-' ? item.nfFile : '-');
+        const isSettled = item.paymentStatus === 'Recebido' || item.status === 'Concluído' || item.status === 'Recebido';
+        const itemLiquidado = isSettled ? Number(item.valorVP) : 0;
+        const itemALiquidar = !isSettled ? Number(item.valorVP) : 0;
+        const statusPagamento = isSettled ? 'Liquidado (Pago)' : (item.status === 'Faturado' ? 'A Liquidar (Faturado)' : 'A Liquidar');
+
         excelContent += `
           <tr>
             <td class="num-centro"><b>${item.vp}</b></td>
@@ -369,12 +395,33 @@ export default function Reports({ setCurrentPage }) {
             <td class="funrural">-${formatMoeda(item.funrural)}</td>
             <td class="num-centro">${formatMoeda(item.cotacao)}</td>
             <td class="destaque-vp">${formatMoeda(item.valorVP)}</td>
+            <td class="valor-pago">${formatMoeda(itemLiquidado)}</td>
+            <td class="valor-aberto">${formatMoeda(itemALiquidar)}</td>
             <td class="num-centro">${item.venc || '-'}</td>
+            <td class="num-centro" style="font-size: 8.5pt; font-weight: bold; color: ${isSettled ? '#15803d' : '#b45309'};">${statusPagamento}</td>
             <td class="num-centro" style="font-size: 8.5pt; color: #1e3a8a; font-weight: 500;">${fileAttached || '-'}</td>
           </tr>
         `;
       }
-      excelContent += `</table>`;
+
+      // Rodapé da loja com soma de cada coluna
+      excelContent += `
+        <tr class="linha-total">
+          <td colspan="5" class="texto-loja">TOTAL ${s.loja}</td>
+          <td class="num-direita">${formatNum(s.pesoNF)} kg</td>
+          <td class="num-direita">${formatNum(s.cxsVendidas)}</td>
+          <td class="num-centro">-</td>
+          <td class="num-direita">${formatMoeda(s.valorTotalNF)}</td>
+          <td class="funrural">-${formatMoeda(s.funrural)}</td>
+          <td class="num-centro">-</td>
+          <td class="destaque-vp">${formatMoeda(s.totalVendaAReceber)}</td>
+          <td class="valor-pago">${formatMoeda(s.valorLiquidado)}</td>
+          <td class="valor-aberto">${formatMoeda(s.valorALiquidar)}</td>
+          <td class="num-centro">-</td>
+          <td class="num-centro" style="font-weight: bold;">${s.itens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').length} / ${s.itens.length} Pagos</td>
+          <td class="num-centro">-</td>
+        </tr>
+      </table>`;
     }
 
     // QUADRO FINAL CONSOLIDADO: FECHAMENTO FINANCEIRO E STATUS DE LIQUIDAÇÃO
@@ -382,36 +429,36 @@ export default function Reports({ setCurrentPage }) {
       <br/><br/>
       <table style="border: 2px solid #091b2e; margin-top: 25px; background-color: #ffffff;">
         <tr>
-          <td colspan="13" style="font-size: 13pt; font-weight: bold; background-color: #091b2e; color: #ffffff; text-align: center; padding: 10px;">
+          <td colspan="17" style="font-size: 13pt; font-weight: bold; background-color: #091b2e; color: #ffffff; text-align: center; padding: 10px;">
             RESUMO FINANCEIRO &amp; STATUS DE LIQUIDAÇÃO
           </td>
         </tr>
         <tr style="background-color: #f8fafc; font-weight: bold; font-size: 10pt; text-align: center;">
-          <td colspan="4" class="card-label" style="background-color: #eff6ff; color: #1e3a8a; padding: 8px;">
+          <td colspan="6" class="card-label" style="background-color: #eff6ff; color: #1e3a8a; padding: 8px;">
             VALOR TOTAL COMERCIAL (VP)
           </td>
-          <td colspan="4" class="card-label" style="background-color: #ecfdf5; color: #065f46; padding: 8px;">
+          <td colspan="5" class="card-label" style="background-color: #ecfdf5; color: #065f46; padding: 8px;">
             VALOR TOTAL LIQUIDADO (RECEBIDO)
           </td>
-          <td colspan="5" class="card-label" style="background-color: #fffbeb; color: #92400e; padding: 8px;">
+          <td colspan="6" class="card-label" style="background-color: #fffbeb; color: #92400e; padding: 8px;">
             VALOR A LIQUIDAR (EM ABERTO)
           </td>
         </tr>
         <tr style="font-size: 14pt; font-weight: bold; text-align: center;">
-          <td colspan="4" style="color: #1e3a8a; background-color: #f0f9ff; padding: 12px; border-bottom: 1px solid #cbd5e1;">
+          <td colspan="6" style="color: #1e3a8a; background-color: #f0f9ff; padding: 12px; border-bottom: 1px solid #cbd5e1;">
             ${formatMoeda(valorTotalComercial)}
           </td>
-          <td colspan="4" style="color: #15803d; background-color: #f0fdf4; padding: 12px; border-bottom: 1px solid #cbd5e1;">
+          <td colspan="5" style="color: #15803d; background-color: #f0fdf4; padding: 12px; border-bottom: 1px solid #cbd5e1;">
             ${formatMoeda(valorLiquidado)}
           </td>
-          <td colspan="5" style="color: #b45309; background-color: #fffdf5; padding: 12px; border-bottom: 1px solid #cbd5e1;">
+          <td colspan="6" style="color: #b45309; background-color: #fffdf5; padding: 12px; border-bottom: 1px solid #cbd5e1;">
             ${formatMoeda(valorALiquidar)}
           </td>
         </tr>
         <tr style="font-size: 9pt; color: #475569; background-color: #f8fafc; text-align: center;">
-          <td colspan="4" style="padding: 6px;">Total de ${allReportItens.length} Vendas (VPs) filtradas no período</td>
-          <td colspan="4" style="padding: 6px; color: #166534; font-weight: bold;">${vpsLiquidadas} VPs Liquidadas / Confirmadas</td>
-          <td colspan="5" style="padding: 6px; color: #9a3412; font-weight: bold;">${vpsALiquidar} VPs Pendentes de Liquidação</td>
+          <td colspan="6" style="padding: 6px;">Total de ${allReportItens.length} Vendas (VPs) filtradas no período</td>
+          <td colspan="5" style="padding: 6px; color: #166534; font-weight: bold;">${vpsLiquidadas} VPs Liquidadas / Confirmadas</td>
+          <td colspan="6" style="padding: 6px; color: #9a3412; font-weight: bold;">${vpsALiquidar} VPs Pendentes de Liquidação</td>
         </tr>
       </table>
     `;
@@ -926,7 +973,9 @@ export default function Reports({ setCurrentPage }) {
                     <th className="py-2.5 px-3 text-right">CXS Vendidas</th>
                     <th className="py-2.5 px-3 text-right">Valor Total NF (R$)</th>
                     <th className="py-2.5 px-3 text-right">FUNRURAL (R$)</th>
-                    <th className="py-2.5 px-3 text-right bg-[#1a4364]">Total Venda à Receber (R$)</th>
+                    <th className="py-2.5 px-3 text-right bg-[#1a4364]">Total Comercial (VP)</th>
+                    <th className="py-2.5 px-3 text-right bg-[#166534]">Valor Liquidado (R$)</th>
+                    <th className="py-2.5 px-3 text-right bg-[#b45309]">Valor a Liquidar (R$)</th>
                     <th className="py-2.5 px-3 text-right bg-[#143753]">Líquido NF (R$)</th>
                   </tr>
                 </thead>
@@ -956,6 +1005,12 @@ export default function Reports({ setCurrentPage }) {
                       <td className="py-3 px-3 text-right font-black text-[#1a4364] bg-sky-50/40">
                         {formatCurrency(row.totalVendaAReceber)}
                       </td>
+                      <td className="py-3 px-3 text-right font-black text-emerald-800 bg-emerald-50/60">
+                        {formatCurrency(row.valorLiquidado)}
+                      </td>
+                      <td className="py-3 px-3 text-right font-black text-amber-900 bg-amber-50/60">
+                        {formatCurrency(row.valorALiquidar)}
+                      </td>
                       <td className="py-3 px-3 text-right font-black text-emerald-950 bg-emerald-50/40">
                         {formatCurrency(row.liquidoNF)}
                       </td>
@@ -977,6 +1032,12 @@ export default function Reports({ setCurrentPage }) {
                     <td className="py-3 px-3 text-right font-black text-red-900">-{formatCurrency(currentTotal.funrural)}</td>
                     <td className="py-3 px-3 text-right font-black text-green-950 bg-[#83c457]">
                       {formatCurrency(currentTotal.totalVendaAReceber)}
+                    </td>
+                    <td className="py-3 px-3 text-right font-black text-emerald-950 bg-[#a7f3d0]">
+                      {formatCurrency(currentTotal.valorTotalLiquidado)}
+                    </td>
+                    <td className="py-3 px-3 text-right font-black text-amber-950 bg-[#fde68a]">
+                      {formatCurrency(currentTotal.valorTotalALiquidar)}
                     </td>
                     <td className="py-3 px-3 text-right font-black text-emerald-950 bg-[#aedb8e]">
                       {formatCurrency(currentTotal.liquidoNF)}
@@ -1016,10 +1077,13 @@ export default function Reports({ setCurrentPage }) {
                         NF: <strong className="text-gray-900">{formatCurrency(lojaGroup.valorTotalNF)}</strong>
                       </span>
                       <span className="text-gray-500">
-                        Líquido: <strong className="text-emerald-800">{formatCurrency(lojaGroup.liquidoNF)}</strong>
+                        VP: <strong className="text-blue-900">{formatCurrency(lojaGroup.totalVendaAReceber)}</strong>
                       </span>
                       <span className="text-gray-500">
-                        VP: <strong className="text-blue-900">{formatCurrency(lojaGroup.totalVendaAReceber)}</strong>
+                        Liquidado: <strong className="text-emerald-800">{formatCurrency(lojaGroup.valorLiquidado)}</strong>
+                      </span>
+                      <span className="text-gray-500">
+                        A Liquidar: <strong className="text-amber-800">{formatCurrency(lojaGroup.valorALiquidar)}</strong>
                       </span>
                       <span className="print:hidden">
                         {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
@@ -1043,6 +1107,8 @@ export default function Reports({ setCurrentPage }) {
                           <th className="py-2 px-3 text-right">FUNRURAL (1,63%)</th>
                           <th className="py-2 px-3 text-right">Cotação Dia</th>
                           <th className="py-2 px-3 text-right">Valor Total VP</th>
+                          <th className="py-2 px-3 text-right bg-emerald-50 text-emerald-950 font-bold">Valor Liquidado</th>
+                          <th className="py-2 px-3 text-right bg-amber-50 text-amber-950 font-bold">Valor a Liquidar</th>
                           <th className="py-2 px-3 text-right">Líquido da NF</th>
                           <th className="py-2 px-3 text-center">Vencimento</th>
                           <th className="py-2 px-3 text-center">Status</th>
@@ -1050,59 +1116,70 @@ export default function Reports({ setCurrentPage }) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {lojaGroup.itens?.map((it, rIdx) => (
-                          <tr key={rIdx} className="hover:bg-gray-50/70 transition-colors">
-                            <td className="py-2 px-3">
-                              <div className="font-bold text-[#173e27]">{it.vp}</div>
-                              <div className="text-[10px] text-gray-600 font-semibold truncate max-w-[220px]" title={it.product}>
-                                {it.product}
-                              </div>
-                              <div className="text-[10px] text-blue-800 font-medium truncate max-w-[220px]" title={`Produtor: ${it.producer || it.origin}`}>
-                                🌾 {it.producer || it.origin || 'Produtor Rural'}
-                              </div>
-                            </td>
-                            <td className="py-2 px-2 text-gray-600">{it.dataVP}</td>
-                            <td className="py-2 px-3 font-semibold text-gray-800">{it.nf}</td>
-                            <td className="py-2 px-2 text-gray-600">{it.dataNF}</td>
-                            <td className="py-2 px-3 text-right text-gray-600">{formatNumber(it.pesoNF, 0)} kg</td>
-                            <td className="py-2 px-3 text-right font-bold text-gray-900">{formatNumber(it.pesoColheita, 0)} kg</td>
-                            <td className="py-2 px-3 text-right font-bold text-gray-900">
-                              {formatNumber(it.cxs, 2)} {it.unit?.toLowerCase().includes('saca') || it.product?.toLowerCase().includes('batata') ? 'sc' : 'cx'}
-                            </td>
-                            <td className="py-2 px-3 text-right text-gray-700">{it.precoKg > 0 ? `R$ ${it.precoKg.toFixed(2)}` : '-'}</td>
-                            <td className="py-2 px-3 text-right font-bold text-gray-900">{formatCurrency(it.valorNF)}</td>
-                            <td className="py-2 px-3 text-right text-red-600">-{formatCurrency(it.funrural)}</td>
-                            <td className="py-2 px-3 text-right font-semibold text-blue-900">
-                              R$ {it.cotacao.toFixed(2)}/{it.cotacao <= 10.0 ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
-                            </td>
-                            <td className="py-2 px-3 text-right font-black text-blue-950 bg-blue-50/30">{formatCurrency(it.valorVP)}</td>
-                            <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/30">{formatCurrency(it.liquido)}</td>
-                            <td className="py-2 px-3 text-center text-gray-600">{it.venc}</td>
-                            <td className="py-2 px-3 text-center">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                it.status === 'Faturado' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
-                              }`}>
-                                {it.status}
-                              </span>
-                            </td>
-                            <td className="py-2 px-3 text-center">
-                              {it.evidenceFile && it.evidenceFile !== '-' ? (
-                                <a
-                                  href={`/uploads/${it.evidenceFile}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded transition-colors max-w-[130px] truncate"
-                                  title={it.evidenceFile}
-                                >
-                                  <Paperclip className="w-3 h-3 text-blue-600 shrink-0" />
-                                  <span className="truncate">{it.evidenceFile}</span>
-                                </a>
-                              ) : (
-                                <span className="text-gray-400 text-[10px]">-</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
+                        {lojaGroup.itens?.map((it, rIdx) => {
+                          const isSettled = it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido';
+                          const itLiquidado = isSettled ? (Number(it.valorVP) || 0) : 0;
+                          const itALiquidar = !isSettled ? (Number(it.valorVP) || 0) : 0;
+                          return (
+                            <tr key={rIdx} className="hover:bg-gray-50/70 transition-colors">
+                              <td className="py-2 px-3">
+                                <div className="font-bold text-[#173e27]">{it.vp}</div>
+                                <div className="text-[10px] text-gray-600 font-semibold truncate max-w-[220px]" title={it.product}>
+                                  {it.product}
+                                </div>
+                                <div className="text-[10px] text-blue-800 font-medium truncate max-w-[220px]" title={`Produtor: ${it.producer || it.origin}`}>
+                                  🌾 {it.producer || it.origin || 'Produtor Rural'}
+                                </div>
+                              </td>
+                              <td className="py-2 px-2 text-gray-600">{it.dataVP}</td>
+                              <td className="py-2 px-3 font-semibold text-gray-800">{it.nf}</td>
+                              <td className="py-2 px-2 text-gray-600">{it.dataNF}</td>
+                              <td className="py-2 px-3 text-right text-gray-600">{formatNumber(it.pesoNF, 0)} kg</td>
+                              <td className="py-2 px-3 text-right font-bold text-gray-900">{formatNumber(it.pesoColheita, 0)} kg</td>
+                              <td className="py-2 px-3 text-right font-bold text-gray-900">
+                                {formatNumber(it.cxs, 2)} {it.unit?.toLowerCase().includes('saca') || it.product?.toLowerCase().includes('batata') ? 'sc' : 'cx'}
+                              </td>
+                              <td className="py-2 px-3 text-right text-gray-700">{it.precoKg > 0 ? `R$ ${it.precoKg.toFixed(2)}` : '-'}</td>
+                              <td className="py-2 px-3 text-right font-bold text-gray-900">{formatCurrency(it.valorNF)}</td>
+                              <td className="py-2 px-3 text-right text-red-600">-{formatCurrency(it.funrural)}</td>
+                              <td className="py-2 px-3 text-right font-semibold text-blue-900">
+                                R$ {it.cotacao.toFixed(2)}/{it.cotacao <= 10.0 ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
+                              </td>
+                              <td className="py-2 px-3 text-right font-black text-blue-950 bg-blue-50/30">{formatCurrency(it.valorVP)}</td>
+                              <td className="py-2 px-3 text-right font-black text-emerald-800 bg-emerald-50/40">
+                                {itLiquidado > 0 ? formatCurrency(itLiquidado) : <span className="text-gray-400 font-normal">-</span>}
+                              </td>
+                              <td className="py-2 px-3 text-right font-black text-amber-900 bg-amber-50/40">
+                                {itALiquidar > 0 ? formatCurrency(itALiquidar) : <span className="text-gray-400 font-normal">-</span>}
+                              </td>
+                              <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/30">{formatCurrency(it.liquido)}</td>
+                              <td className="py-2 px-3 text-center text-gray-600">{it.venc}</td>
+                              <td className="py-2 px-3 text-center">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  isSettled ? 'bg-emerald-100 text-emerald-800' : (it.status === 'Faturado' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-900')
+                                }`}>
+                                  {isSettled ? 'Liquidado' : it.status}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 text-center">
+                                {it.evidenceFile && it.evidenceFile !== '-' ? (
+                                  <a
+                                    href={`/uploads/${it.evidenceFile}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded transition-colors max-w-[130px] truncate"
+                                    title={it.evidenceFile}
+                                  >
+                                    <Paperclip className="w-3 h-3 text-blue-600 shrink-0" />
+                                    <span className="truncate">{it.evidenceFile}</span>
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-400 text-[10px]">-</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                       <tfoot className="bg-gray-100 font-bold text-xs border-t-2 border-gray-300">
                         <tr>
@@ -1117,8 +1194,12 @@ export default function Reports({ setCurrentPage }) {
                           <td className="py-2.5 px-3 text-right font-bold text-red-600">-{formatCurrency(lojaGroup.funrural)}</td>
                           <td className="py-2.5 px-3 text-right text-gray-400">-</td>
                           <td className="py-2.5 px-3 text-right font-black text-blue-900 bg-blue-100/60">{formatCurrency(lojaGroup.totalVendaAReceber)}</td>
+                          <td className="py-2.5 px-3 text-right font-black text-emerald-950 bg-emerald-100/60">{formatCurrency(lojaGroup.valorLiquidado)}</td>
+                          <td className="py-2.5 px-3 text-right font-black text-amber-950 bg-amber-100/60">{formatCurrency(lojaGroup.valorALiquidar)}</td>
                           <td className="py-2.5 px-3 text-right font-black text-emerald-950 bg-emerald-100/60">{formatCurrency(lojaGroup.liquidoNF)}</td>
-                          <td colSpan={2}></td>
+                          <td colSpan={3} className="py-2.5 px-3 text-center text-gray-600 font-bold text-[10px]">
+                            {lojaGroup.itens?.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').length} / {lojaGroup.itens?.length || 0} Pagos
+                          </td>
                         </tr>
                       </tfoot>
                     </table>
@@ -1196,6 +1277,8 @@ export default function Reports({ setCurrentPage }) {
                     <th className="py-2.5 px-3 text-right">Valor Total NF</th>
                     <th className="py-2.5 px-3 text-right">FUNRURAL</th>
                     <th className="py-2.5 px-3 text-right bg-[#173e27]">Total Comercial (VP)</th>
+                    <th className="py-2.5 px-3 text-right bg-[#14532d]">Valor Liquidado (R$)</th>
+                    <th className="py-2.5 px-3 text-right bg-[#92400e]">Valor a Liquidar (R$)</th>
                     <th className="py-2.5 px-2 text-center">Taxa (%)</th>
                     <th className="py-2.5 px-3 text-right bg-blue-900/80">Comissão (R$)</th>
                     <th className="py-2.5 px-3 text-right bg-emerald-900/90">Líquido Produtor (R$)</th>
@@ -1215,6 +1298,12 @@ export default function Reports({ setCurrentPage }) {
                       <td className="py-3 px-3 text-right text-red-600 font-medium">-{formatCurrency(row.funrural)}</td>
                       <td className="py-3 px-3 text-right font-black text-blue-950 bg-blue-50/40">
                         {formatCurrency(row.totalVendaAReceber)}
+                      </td>
+                      <td className="py-3 px-3 text-right font-black text-emerald-800 bg-emerald-50/50">
+                        {formatCurrency(row.valorLiquidado)}
+                      </td>
+                      <td className="py-3 px-3 text-right font-black text-amber-900 bg-amber-50/50">
+                        {formatCurrency(row.valorALiquidar)}
                       </td>
                       <td className="py-3 px-2 text-center font-bold text-blue-800">3,0%</td>
                       <td className="py-3 px-3 text-right font-black text-blue-900 bg-blue-50/60">
@@ -1238,6 +1327,12 @@ export default function Reports({ setCurrentPage }) {
                     <td className="py-3 px-3 text-right font-black text-red-900">-{formatCurrency(currentTotal.funrural)}</td>
                     <td className="py-3 px-3 text-right font-black text-blue-950 bg-sky-200">
                       {formatCurrency(currentTotal.totalVendaAReceber)}
+                    </td>
+                    <td className="py-3 px-3 text-right font-black text-emerald-950 bg-[#a7f3d0]">
+                      {formatCurrency(currentTotal.valorTotalLiquidado)}
+                    </td>
+                    <td className="py-3 px-3 text-right font-black text-amber-950 bg-[#fde68a]">
+                      {formatCurrency(currentTotal.valorTotalALiquidar)}
                     </td>
                     <td className="py-3 px-2 text-center font-black">3,0%</td>
                     <td className="py-3 px-3 text-right font-black text-blue-950 bg-blue-200">
@@ -1281,6 +1376,12 @@ export default function Reports({ setCurrentPage }) {
                         Total VP: <strong className="text-blue-900">{formatCurrency(lojaGroup.totalVendaAReceber)}</strong>
                       </span>
                       <span className="text-gray-500">
+                        Liquidado: <strong className="text-emerald-800">{formatCurrency(lojaGroup.valorLiquidado)}</strong>
+                      </span>
+                      <span className="text-gray-500">
+                        A Liquidar: <strong className="text-amber-800">{formatCurrency(lojaGroup.valorALiquidar)}</strong>
+                      </span>
+                      <span className="text-gray-500">
                         Comissão (3%): <strong className="text-blue-700">{formatCurrency(lojaGroup.totalComissao)}</strong>
                       </span>
                       <span className="text-gray-500">
@@ -1302,6 +1403,8 @@ export default function Reports({ setCurrentPage }) {
                           <th className="py-2 px-3 text-right">Caixas (29kg)</th>
                           <th className="py-2 px-3 text-right">Cotação Dia</th>
                           <th className="py-2 px-3 text-right">Valor Total VP</th>
+                          <th className="py-2 px-3 text-right bg-emerald-50 text-emerald-950 font-bold">Valor Liquidado</th>
+                          <th className="py-2 px-3 text-right bg-amber-50 text-amber-950 font-bold">Valor a Liquidar</th>
                           <th className="py-2 px-3 text-center">Taxa Com.</th>
                           <th className="py-2 px-3 text-right bg-blue-50/50 font-bold text-blue-900">Comissão (R$)</th>
                           <th className="py-2 px-3 text-right bg-emerald-50/50 font-bold text-emerald-950">Líquido Produtor (R$)</th>
@@ -1310,54 +1413,71 @@ export default function Reports({ setCurrentPage }) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {lojaGroup.itens?.map((it, rIdx) => (
-                          <tr key={rIdx} className="hover:bg-gray-50/70 transition-colors">
-                            <td className="py-2 px-3">
-                              <div className="font-bold text-[#173e27]">{it.vp}</div>
-                              <div className="text-[10px] text-gray-500 font-medium truncate max-w-[140px]" title={it.product}>
-                                {it.product}
-                              </div>
-                              <div className="text-[10px] text-blue-800 font-medium truncate max-w-[140px]" title={`Produtor: ${it.producer || it.origin}`}>
-                                🌾 {it.producer || it.origin || 'Produtor Rural'}
-                              </div>
-                            </td>
-                            <td className="py-2 px-2 text-gray-600">{it.dataVP}</td>
-                            <td className="py-2 px-3 font-semibold text-gray-800">{it.nf}</td>
-                            <td className="py-2 px-3 text-right font-bold text-gray-900">
-                              {formatNumber(it.cxs, 2)} {it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
-                            </td>
-                            <td className="py-2 px-3 text-right font-semibold text-blue-900">
-                              R$ {it.cotacao.toFixed(2)}/{it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
-                            </td>
-                            <td className="py-2 px-3 text-right font-black text-blue-950">{formatCurrency(it.valorVP)}</td>
-                            <td className="py-2 px-3 text-center font-semibold text-gray-700">{it.taxaComissao.toFixed(1)}%</td>
-                            <td className="py-2 px-3 text-right font-black text-blue-900 bg-blue-50/30">
-                              {formatCurrency(it.comissao)}
-                            </td>
-                            <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/30">
-                              {formatCurrency(it.liquidoProdutor)}
-                            </td>
-                            <td className="py-2 px-3 text-center text-gray-600">{it.venc}</td>
-                            <td className="py-2 px-3 text-center">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                it.status === 'Faturado' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
-                              }`}>
-                                {it.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
+                        {lojaGroup.itens?.map((it, rIdx) => {
+                          const isSettled = it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido';
+                          const itLiquidado = isSettled ? (Number(it.valorVP) || 0) : 0;
+                          const itALiquidar = !isSettled ? (Number(it.valorVP) || 0) : 0;
+                          return (
+                            <tr key={rIdx} className="hover:bg-gray-50/70 transition-colors">
+                              <td className="py-2 px-3">
+                                <div className="font-bold text-[#173e27]">{it.vp}</div>
+                                <div className="text-[10px] text-gray-500 font-medium truncate max-w-[140px]" title={it.product}>
+                                  {it.product}
+                                </div>
+                                <div className="text-[10px] text-blue-800 font-medium truncate max-w-[140px]" title={`Produtor: ${it.producer || it.origin}`}>
+                                  🌾 {it.producer || it.origin || 'Produtor Rural'}
+                                </div>
+                              </td>
+                              <td className="py-2 px-2 text-gray-600">{it.dataVP}</td>
+                              <td className="py-2 px-3 font-semibold text-gray-800">{it.nf}</td>
+                              <td className="py-2 px-3 text-right font-bold text-gray-900">
+                                {formatNumber(it.cxs, 2)} {it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
+                              </td>
+                              <td className="py-2 px-3 text-right font-semibold text-blue-900">
+                                R$ {it.cotacao.toFixed(2)}/{it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
+                              </td>
+                              <td className="py-2 px-3 text-right font-black text-blue-950">{formatCurrency(it.valorVP)}</td>
+                              <td className="py-2 px-3 text-right font-black text-emerald-800 bg-emerald-50/40">
+                                {itLiquidado > 0 ? formatCurrency(itLiquidado) : <span className="text-gray-400 font-normal">-</span>}
+                              </td>
+                              <td className="py-2 px-3 text-right font-black text-amber-900 bg-amber-50/40">
+                                {itALiquidar > 0 ? formatCurrency(itALiquidar) : <span className="text-gray-400 font-normal">-</span>}
+                              </td>
+                              <td className="py-2 px-3 text-center font-semibold text-gray-700">{it.taxaComissao.toFixed(1)}%</td>
+                              <td className="py-2 px-3 text-right font-black text-blue-900 bg-blue-50/30">
+                                {formatCurrency(it.comissao)}
+                              </td>
+                              <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/30">
+                                {formatCurrency(it.liquidoProdutor)}
+                              </td>
+                              <td className="py-2 px-3 text-center text-gray-600">{it.venc}</td>
+                              <td className="py-2 px-3 text-center">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                  isSettled ? 'bg-emerald-100 text-emerald-800' : (it.status === 'Faturado' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-900')
+                                }`}>
+                                  {isSettled ? 'Liquidado' : it.status}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                       <tfoot className="bg-gray-100 font-bold text-xs border-t-2 border-gray-300">
                         <tr>
-                          <td colSpan={5} className="py-2.5 px-3 uppercase text-gray-700 font-extrabold">
+                          <td colSpan={3} className="py-2.5 px-3 uppercase text-gray-700 font-extrabold">
                             TOTAL {lojaGroup.loja.split(' ')[0]}
                           </td>
+                          <td className="py-2.5 px-3 text-right font-bold text-gray-900">{formatNumber(lojaGroup.cxsVendidas, 2)}</td>
+                          <td className="py-2.5 px-3 text-right text-gray-400">-</td>
                           <td className="py-2.5 px-3 text-right font-black text-blue-900">{formatCurrency(lojaGroup.totalVendaAReceber)}</td>
+                          <td className="py-2.5 px-3 text-right font-black text-emerald-950 bg-emerald-100/60">{formatCurrency(lojaGroup.valorLiquidado)}</td>
+                          <td className="py-2.5 px-3 text-right font-black text-amber-950 bg-amber-100/60">{formatCurrency(lojaGroup.valorALiquidar)}</td>
                           <td className="py-2.5 px-3 text-center">3,0%</td>
                           <td className="py-2.5 px-3 text-right font-black text-blue-950 bg-blue-100">{formatCurrency(lojaGroup.totalComissao)}</td>
                           <td className="py-2.5 px-3 text-right font-black text-emerald-950 bg-emerald-100">{formatCurrency(lojaGroup.totalLiquidoProdutor)}</td>
-                          <td colSpan={2}></td>
+                          <td colSpan={2} className="py-2.5 px-3 text-center text-gray-600 font-bold text-[10px]">
+                            {lojaGroup.itens?.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').length} / {lojaGroup.itens?.length || 0} Pagos
+                          </td>
                         </tr>
                       </tfoot>
                     </table>

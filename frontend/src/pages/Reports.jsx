@@ -247,7 +247,7 @@ export default function Reports({ setCurrentPage }) {
       </table>
       <br/><br/>
       <table>
-        <tr><td colspan="12" style="font-size: 12pt; font-weight: bold; background-color: #e2e8f0;">DETALHAMENTO INDIVIDUAL DAS VENDAS POR LOJA (VPs)</td></tr>
+        <tr><td colspan="13" style="font-size: 12pt; font-weight: bold; background-color: #e2e8f0;">DETALHAMENTO INDIVIDUAL DAS VENDAS POR LOJA (VPs)</td></tr>
       </table>
     `;
 
@@ -256,7 +256,7 @@ export default function Reports({ setCurrentPage }) {
         <br/>
         <table>
           <tr class="loja-header">
-            <td colspan="6">Loja: ${s.loja} (${s.pedidosVenda} VPs)</td>
+            <td colspan="7">Loja: ${s.loja} (${s.pedidosVenda} VPs)</td>
             <td colspan="3" style="text-align: right;">Total NF: ${formatMoeda(s.valorTotalNF)}</td>
             <td colspan="3" style="text-align: right;">Total VP: ${formatMoeda(s.totalVendaAReceber)}</td>
           </tr>
@@ -273,11 +273,13 @@ export default function Reports({ setCurrentPage }) {
             <td>Cotação</td>
             <td>Valor VP</td>
             <td>Vencimento</td>
+            <td>Arquivo (Imagem Anexa)</td>
           </tr>
       `;
 
       for (const item of (s.itens || [])) {
         const unitLabel = item.unit?.toLowerCase().includes('saca') || item.product?.toLowerCase().includes('batata') ? 'sc' : 'cx';
+        const fileAttached = item.evidenceFile && item.evidenceFile !== '-' ? item.evidenceFile : (item.nfFile && item.nfFile !== '-' ? item.nfFile : '-');
         excelContent += `
           <tr>
             <td class="num-centro"><b>${item.vp}</b></td>
@@ -292,6 +294,7 @@ export default function Reports({ setCurrentPage }) {
             <td class="num-centro">${formatMoeda(item.cotacao)}</td>
             <td class="destaque-vp">${formatMoeda(item.valorVP)}</td>
             <td class="num-centro">${item.venc || '-'}</td>
+            <td class="num-centro" style="font-size: 8.5pt; color: #1e3a8a; font-weight: 500;">${fileAttached || '-'}</td>
           </tr>
         `;
       }
@@ -855,6 +858,7 @@ export default function Reports({ setCurrentPage }) {
                           <th className="py-2 px-3 text-right">Líquido da NF</th>
                           <th className="py-2 px-3 text-center">Vencimento</th>
                           <th className="py-2 px-3 text-center">Status</th>
+                          <th className="py-2 px-3 text-center">Anexo / Imagem</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -889,6 +893,22 @@ export default function Reports({ setCurrentPage }) {
                               }`}>
                                 {it.status}
                               </span>
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              {it.evidenceFile && it.evidenceFile !== '-' ? (
+                                <a
+                                  href={`/uploads/${it.evidenceFile}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded transition-colors max-w-[130px] truncate"
+                                  title={it.evidenceFile}
+                                >
+                                  <Paperclip className="w-3 h-3 text-blue-600 shrink-0" />
+                                  <span className="truncate">{it.evidenceFile}</span>
+                                </a>
+                              ) : (
+                                <span className="text-gray-400 text-[10px]">-</span>
+                              )}
                             </td>
                           </tr>
                         ))}

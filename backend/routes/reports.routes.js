@@ -130,6 +130,9 @@ router.get('/stores-summary', async (req, res) => {
           if (m && m[1]) productLabel = m[1].trim();
         }
 
+        const cleanEvidence = s.evidenceFile ? s.evidenceFile.replace(/^\d{10,15}(-\d+)?-/, '') : '';
+        const cleanNfFile = s.nfFile ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '') : '';
+
         return {
           vp: s.id,
           dataVP: s.saleDate ? s.saleDate.split('-').reverse().join('/') : '-',
@@ -151,7 +154,9 @@ router.get('/stores-summary', async (req, res) => {
           comissao: comm.comissao,
           liquidoProdutor: comm.liquidoProdutor,
           venc: s.dueDate ? s.dueDate.split('-').reverse().join('/') : (s.notes?.match(/Vencimento:\s*([^\s|]+)/i)?.[1] || 'Em aberto'),
-          status: s.status
+          status: s.status,
+          evidenceFile: cleanEvidence || cleanNfFile || '-',
+          nfFile: cleanNfFile || '-'
         };
       });
 

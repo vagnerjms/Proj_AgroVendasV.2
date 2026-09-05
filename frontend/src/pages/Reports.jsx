@@ -364,12 +364,12 @@ export default function Reports({ setCurrentPage }) {
               <th class="hdr-col" style="width: 60px;">Especial</th>
               <th class="hdr-col" style="width: 70px;">Primeira X</th>
               <th class="hdr-col" style="width: 60px;">Diversa</th>
-              <th class="hdr-col" style="width: 55px;">Bolinha</th>
+              <th class="hdr-col" style="width: 80px;">Bolinha / Miúda</th>
               <th class="hdr-col" style="width: 55px;">Florao</th>
               <th class="hdr-col" style="width: 65px;">Esp.</th>
               <th class="hdr-col" style="width: 65px;">Prim. X</th>
               <th class="hdr-col" style="width: 65px;">Div.</th>
-              <th class="hdr-col" style="width: 65px;">Bol.</th>
+              <th class="hdr-col" style="width: 75px;">Bol. / Miúda</th>
               <th class="hdr-col" style="width: 65px;">Flo.</th>
               <th class="hdr-col" style="width: 105px;">Total Particular</th>
               <th class="hdr-col" style="width: 105px;">Total a Receber</th>

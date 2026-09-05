@@ -31,6 +31,13 @@ router.post('/nfe/parse', upload.single('file'), async (req, res) => {
     if (req.file) {
       parsedData.filename = req.file.filename;
     }
+
+    // Auto-cadastra os produtos da NF no Catálogo de Produtos do sistema se ainda não existirem
+    if (parsedData.items && Array.isArray(parsedData.items) && parsedData.items.length > 0) {
+      const { ensureProductsRegistered } = require('../services/product.service');
+      ensureProductsRegistered(parsedData.items).catch(e => console.warn('Aviso ao auto-cadastrar produtos:', e.message));
+    }
+
     res.json(parsedData);
   } catch (err) {
     console.error('Erro ao processar NF-e:', err);

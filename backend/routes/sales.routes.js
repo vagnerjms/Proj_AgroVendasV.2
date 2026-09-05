@@ -226,6 +226,12 @@ router.post('/', async (req, res) => {
 
     await newSale.save();
 
+    // Auto-cadastra os produtos da venda no catálogo se ainda não existirem
+    if (newSale.items && Array.isArray(newSale.items) && newSale.items.length > 0) {
+      const { ensureProductsRegistered } = require('../services/product.service');
+      ensureProductsRegistered(newSale.items).catch(e => console.warn('Aviso ao auto-cadastrar produtos:', e.message));
+    }
+
     // Auto-create matching Weighing Slip (ROM-VPXXX)
     try {
       const slipId = `ROM-${newSale.id}`;
@@ -323,6 +329,11 @@ router.put('/:id', async (req, res) => {
       updateFields,
       { new: true }
     );
+
+    if (updated && updated.items && Array.isArray(updated.items) && updated.items.length > 0) {
+      const { ensureProductsRegistered } = require('../services/product.service');
+      ensureProductsRegistered(updated.items).catch(e => console.warn('Aviso ao auto-cadastrar produtos:', e.message));
+    }
 
     // Cascade update to matching Weighing Slip (ROM-VPXXX)
     if (updated) {

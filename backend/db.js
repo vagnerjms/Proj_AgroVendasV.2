@@ -320,6 +320,14 @@ async function connectDB() {
     }
     // Auto-recalibrate atomic counters on startup to avoid collision
     await recalibrateCounters();
+
+    // Auto-sincroniza todos os produtos das vendas existentes para o catálogo de Produtos
+    try {
+      const { syncAllSalesProducts } = require('./services/product.service');
+      await syncAllSalesProducts();
+    } catch (prodSyncErr) {
+      console.warn('Aviso ao sincronizar catálogo de produtos:', prodSyncErr.message);
+    }
   } catch (seedErr) {
     console.warn('Aviso: erro ao verificar administrador padrão:', seedErr.message);
   }

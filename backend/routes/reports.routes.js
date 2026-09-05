@@ -162,6 +162,8 @@ router.get('/stores-summary', async (req, res) => {
           dataNF: s.saleDate ? s.saleDate.split('-').reverse().join('/') : '-',
           producer: produtorNome,
           origin: s.origin || produtorNome,
+          destUF: s.destUF || '',
+          uf: s.destUF || (s.client?.toUpperCase().includes('RJ') ? 'RJ' : (s.client?.toUpperCase().includes('SP') ? 'SP' : 'MG')),
           product: productLabel,
           unit: isBatata ? 'Sacas (25kg)' : (s.items?.[0]?.unit || 'Caixas (29kg)'),
           items: s.items || [],

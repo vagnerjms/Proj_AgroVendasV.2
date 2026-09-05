@@ -207,261 +207,247 @@ export default function Reports({ setCurrentPage }) {
     }
   };
 
-  // Gerador do HTML/Excel com formatação idêntica à tela e 100% filtrado
+  // Gerador do HTML/Excel com o layout EXATO do modelo corporativo (Cabeçalhos coloridos, 5 Classificações, Cotações e Financeiro)
   const buildExcelContent = () => {
     const stores = filteredLojas;
     const total = currentTotal;
     const hojeFormatado = new Date().toLocaleDateString('pt-BR');
-    const formatMoeda = (v) => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const formatNum = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatMoeda = (v) => {
+      const num = Number(v) || 0;
+      return num > 0 ? 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+    };
+    const formatMoedaTotal = (v) => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatNum = (v) => {
+      const num = Number(v) || 0;
+      return num > 0 ? num.toLocaleString('pt-BR') : '';
+    };
 
-    const lojaLabel = selectedLoja === 'ALL' ? 'Todas as Lojas' : selectedLoja;
-    const produtorLabel = selectedProducer === 'ALL' ? 'Todos os Produtores' : selectedProducer;
-    const periodoLabel = `${startDate || 'Início'} até ${endDate || 'Atual'}`;
+    const extractClassifications = (it) => {
+      const res = {
+        qtd: { esp: 0, prim: 0, div: 0, bol: 0, flo: 0 },
+        val: { esp: 0, prim: 0, div: 0, bol: 0, flo: 0 }
+      };
 
-    const allReportItens = stores.flatMap(s => s.itens || []);
-    const valorTotalComercial = allReportItens.reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0) || total.totalVendaAReceber;
-    const valorLiquidado = allReportItens
-      .filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido')
-      .reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
-    const valorALiquidar = allReportItens
-      .filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido')
-      .reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
-    const vpsLiquidadas = allReportItens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').length;
-    const vpsALiquidar = allReportItens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').length;
+      const rawItems = it.items && Array.isArray(it.items) && it.items.length > 0 ? it.items : null;
+
+      if (rawItems && rawItems.length > 1) {
+        rawItems.forEach(item => {
+          const p = (item.product || '').toLowerCase();
+          const q = Number(item.quantity) || (Number(item.kg) > 0 ? Math.round(Number(item.kg) / (Number(item.boxWeightKg) || 29)) : 0);
+          const quote = Number(item.dailyQuote) || Number(item.price) || (q > 0 && Number(item.total) > 0 ? Number(item.total) / q : 0);
+
+          if (p.includes('primeira') || p.includes('1x') || p.includes('prim')) {
+            res.qtd.prim += q;
+            if (quote > 0) res.val.prim = quote;
+          } else if (p.includes('diversa') || p.includes('div')) {
+            res.qtd.div += q;
+            if (quote > 0) res.val.div = quote;
+          } else if (p.includes('bolinha') || p.includes('bol') || p.includes('baby')) {
+            res.qtd.bol += q;
+            if (quote > 0) res.val.bol = quote;
+          } else if (p.includes('florao') || p.includes('florão') || p.includes('flo') || p.includes('descarte') || p.includes('g2')) {
+            res.qtd.flo += q;
+            if (quote > 0) res.val.flo = quote;
+          } else {
+            res.qtd.esp += q;
+            if (quote > 0) res.val.esp = quote;
+          }
+        });
+      } else if (rawItems && rawItems.length === 1) {
+        const item = rawItems[0];
+        const p = (item.product || '').toLowerCase();
+        const q = Number(item.quantity) || Number(it.cxs) || (Number(it.pesoNF) > 0 ? Math.round(Number(it.pesoNF) / 29) : 0);
+        const quote = Number(item.dailyQuote) || Number(it.cotacao) || 0;
+
+        if (p.includes('primeira') || p.includes('1x')) {
+          res.qtd.prim = q;
+          res.val.prim = quote;
+        } else if (p.includes('diversa') || p.includes('div')) {
+          res.qtd.div = q;
+          res.val.div = quote;
+        } else if (p.includes('bolinha') || p.includes('bol')) {
+          res.qtd.bol = q;
+          res.val.bol = quote;
+        } else if (p.includes('florao') || p.includes('flo')) {
+          res.qtd.flo = q;
+          res.val.flo = quote;
+        } else {
+          res.qtd.esp = q;
+          res.val.esp = quote;
+        }
+      } else {
+        const q = Number(it.cxs) || (Number(it.pesoNF) > 0 ? Math.round(Number(it.pesoNF) / 29) : 0);
+        const quote = Number(it.cotacao) || 0;
+        res.qtd.esp = q;
+        res.val.esp = quote;
+      }
+
+      return res;
+    };
 
     let excelContent = `
       <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
       <head>
         <meta charset="utf-8">
         <style>
-          body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #000; }
-          .titulo { font-size: 16pt; font-weight: bold; color: #091b2e; }
-          .card-label { font-size: 9pt; font-weight: bold; color: #555; background-color: #f1f5f9; text-align: center; border: 1px solid #cbd5e1; }
-          .card-valor { font-size: 13pt; font-weight: bold; text-align: center; border: 1px solid #cbd5e1; }
-          table { border-collapse: collapse; width: 100%; margin-top: 15px; }
-          th { background-color: #091b2e; color: #ffffff; font-weight: bold; border: 1px solid #091b2e; padding: 6px 10px; text-align: center; }
-          td { border: 1px solid #e2e8f0; padding: 5px 8px; font-size: 10pt; }
-          .texto-loja { font-weight: bold; text-align: left; }
-          .num-centro { text-align: center; }
-          .num-direita { text-align: right; }
-          .funrural { text-align: right; color: #b91c1c; font-weight: 500; }
-          .destaque-vp { font-weight: bold; color: #1e3a8a; background-color: #f0f9ff; text-align: right; }
-          .valor-pago { font-weight: bold; color: #15803d; background-color: #f0fdf4; text-align: right; }
-          .valor-aberto { font-weight: bold; color: #b45309; background-color: #fffdf5; text-align: right; }
-          .linha-total { background-color: #bfe2a5; font-weight: bold; border-top: 2px solid #166534; }
-          .loja-header { background-color: #173e27; color: #ffffff; font-weight: bold; }
+          body { font-family: Arial, Calibri, sans-serif; font-size: 9pt; color: #000000; margin: 20px; }
+          table { border-collapse: collapse; margin-bottom: 5px; font-family: Arial, Calibri, sans-serif; }
+          th, td { border: 1px solid #000000; padding: 4px 6px; font-size: 8.5pt; }
+          .hdr-grp-qtd { background-color: #70ad47; color: #000000; font-weight: bold; font-size: 13pt; text-align: center; letter-spacing: 1px; border: 1px solid #000000; }
+          .hdr-grp-val { background-color: #ffc000; color: #000000; font-weight: bold; font-size: 13pt; text-align: center; letter-spacing: 1px; border: 1px solid #000000; }
+          .hdr-grp-fin { background-color: #d9d9d9; color: #000000; font-weight: bold; font-size: 13pt; text-align: center; letter-spacing: 1px; border: 1px solid #000000; }
+          .hdr-col { background-color: #ffffff; color: #000000; font-weight: bold; font-size: 8pt; text-align: center; border: 1px solid #000000; }
+          .cell-center { text-align: center; }
+          .cell-left { text-align: left; }
+          .cell-right { text-align: right; }
+          .row-subtotal { background-color: #ffffff; font-weight: bold; border-top: 2px solid #000000; border-bottom: 2px solid #000000; }
+          .grand-volume { text-align: center; font-size: 18pt; font-weight: bold; color: #000000; margin-top: 10px; margin-bottom: 35px; }
         </style>
       </head>
       <body>
-        <table>
-          <tr><td colspan="15" class="titulo">🌾 AGROVENDA — RELATÓRIO CONSOLIDADO FILTRADO</td></tr>
-          <tr><td colspan="15" style="color: #555;">Gerado em: ${hojeFormatado} | <b>Filtro Loja:</b> ${lojaLabel} | <b>Filtro Produtor:</b> ${produtorLabel} | <b>Período:</b> ${periodoLabel}</td></tr>
-        </table>
-        <br/>
-        <table>
+    `;
+
+    for (const s of stores) {
+      let storeQtdEsp = 0;
+      let storeQtdPrim = 0;
+      let storeQtdDiv = 0;
+      let storeQtdBol = 0;
+      let storeQtdFlo = 0;
+      let storeValParticular = 0;
+      let storeValAReceber = 0;
+      let storeValFunrural = 0;
+      let storeValNF = 0;
+
+      const items = s.itens || [];
+
+      excelContent += `
+        <!-- Badge Data Superior Esquerdo -->
+        <table style="border: none; margin-bottom: 10px;">
           <tr>
-            <td colspan="3" class="card-label">TOTAL FATURADO (NF)</td>
-            <td colspan="3" class="card-label">TOTAL COMERCIAL (VP)</td>
-            <td colspan="3" class="card-label" style="background-color: #ecfdf5; color: #065f46;">VALOR LIQUIDADO (PAGO)</td>
-            <td colspan="3" class="card-label" style="background-color: #fffbeb; color: #92400e;">VALOR A LIQUIDAR (ABERTO)</td>
-            <td colspan="3" class="card-label">(-) FUNRURAL (1,63%)</td>
-          </tr>
-          <tr>
-            <td colspan="3" class="card-valor" style="color: #091b2e;">${formatMoeda(total.valorTotalNF)}</td>
-            <td colspan="3" class="card-valor" style="color: #1e3a8a;">${formatMoeda(valorTotalComercial)}</td>
-            <td colspan="3" class="card-valor" style="color: #15803d; background-color: #f0fdf4;">${formatMoeda(valorLiquidado)}</td>
-            <td colspan="3" class="card-valor" style="color: #b45309; background-color: #fffdf5;">${formatMoeda(valorALiquidar)}</td>
-            <td colspan="3" class="card-valor" style="color: #dc2626;">-${formatMoeda(total.funrural)}</td>
+            <td colspan="3" style="background-color: #001f3f; color: #ffffff; font-weight: bold; font-size: 13pt; text-align: center; padding: 6px 16px; border: 1px solid #001f3f; font-style: italic;">
+              ${hojeFormatado}
+            </td>
+            <td colspan="16" style="border: none;"></td>
           </tr>
         </table>
-        <br/>
+
+        <!-- Tabela Principal da Loja -->
         <table>
           <thead>
-            <tr>
-              <th style="width: 250px;">Loja / Comprador</th>
-              <th>NFs</th>
-              <th>Pedidos Venda</th>
-              <th>Sem NF</th>
-              <th>Peso NF (kg)</th>
-              <th>Peso Colheita (kg)</th>
-              <th>Volumes (cx/sc)</th>
-              <th>Valor Total NF (R$)</th>
-              <th>FUNRURAL (R$)</th>
-              <th style="background-color: #1e40af;">Total Comercial VP (R$)</th>
-              <th style="background-color: #166534;">Valor Liquidado (R$)</th>
-              <th style="background-color: #b45309;">Valor a Liquidar (R$)</th>
-              <th style="background-color: #14532d;">Líquido NF (R$)</th>
+            <!-- Linha de Super-Grupos (QUANTIDADE | VALOR | FINANCEIRO) -->
+            <tr style="height: 28px;">
+              <th colspan="5" style="border: 1px solid #000000; background-color: #ffffff;"></th>
+              <th colspan="5" class="hdr-grp-qtd">QUANTIDADE</th>
+              <th colspan="5" class="hdr-grp-val">VALOR</th>
+              <th colspan="4" class="hdr-grp-fin">FINANCEIRO</th>
+            </tr>
+            <!-- Linha de Colunas -->
+            <tr style="height: 22px;">
+              <th class="hdr-col" style="width: 55px;">Part.</th>
+              <th class="hdr-col" style="width: 80px;">DATA</th>
+              <th class="hdr-col" style="width: 110px;">PRODUTOR</th>
+              <th class="hdr-col" style="width: 120px;">DESTINATARIO</th>
+              <th class="hdr-col" style="width: 35px;">UF</th>
+              <th class="hdr-col" style="width: 60px;">Especial</th>
+              <th class="hdr-col" style="width: 70px;">Primeira X</th>
+              <th class="hdr-col" style="width: 60px;">Diversa</th>
+              <th class="hdr-col" style="width: 55px;">Bolinha</th>
+              <th class="hdr-col" style="width: 55px;">Florao</th>
+              <th class="hdr-col" style="width: 65px;">Esp.</th>
+              <th class="hdr-col" style="width: 65px;">Prim. X</th>
+              <th class="hdr-col" style="width: 65px;">Div.</th>
+              <th class="hdr-col" style="width: 65px;">Bol.</th>
+              <th class="hdr-col" style="width: 65px;">Flo.</th>
+              <th class="hdr-col" style="width: 105px;">Total Particular</th>
+              <th class="hdr-col" style="width: 105px;">Total a Receber</th>
+              <th class="hdr-col" style="width: 85px;">FUNRURAL</th>
+              <th class="hdr-col" style="width: 105px;">Valor Nfe's</th>
             </tr>
           </thead>
           <tbody>
-    `;
-
-    for (const s of stores) {
-      excelContent += `
-        <tr>
-          <td class="texto-loja">${s.loja}</td>
-          <td class="num-centro">${s.nfs}</td>
-          <td class="num-centro"><b>${s.pedidosVenda}</b></td>
-          <td class="num-centro">${s.pedidosSemNF || 0}</td>
-          <td class="num-direita">${formatNum(s.pesoNF)}</td>
-          <td class="num-direita">${formatNum(s.pesoColheita || s.pesoNF)}</td>
-          <td class="num-direita">${formatNum(s.cxsVendidas)}</td>
-          <td class="num-direita"><b>${formatMoeda(s.valorTotalNF)}</b></td>
-          <td class="funrural">-${formatMoeda(s.funrural)}</td>
-          <td class="destaque-vp">${formatMoeda(s.totalVendaAReceber)}</td>
-          <td class="valor-pago">${formatMoeda(s.valorLiquidado)}</td>
-          <td class="valor-aberto">${formatMoeda(s.valorALiquidar)}</td>
-          <td class="num-direita">${formatMoeda(s.liquidoNF || (s.valorTotalNF - s.funrural))}</td>
-        </tr>
-      `;
-    }
-
-    excelContent += `
-        <tr class="linha-total">
-          <td class="texto-loja">TOTAL GERAL (${stores.length} Lojas)</td>
-          <td class="num-centro">${total.nfs}</td>
-          <td class="num-centro">${total.pedidosVenda}</td>
-          <td class="num-centro">${total.pedidosSemNF || 0}</td>
-          <td class="num-direita">${formatNum(total.pesoNF)}</td>
-          <td class="num-direita">${formatNum(total.pesoColheita || total.pesoNF)}</td>
-          <td class="num-direita">${formatNum(total.cxsVendidas)}</td>
-          <td class="num-direita">${formatMoeda(total.valorTotalNF)}</td>
-          <td class="funrural" style="font-weight: bold;">-${formatMoeda(total.funrural)}</td>
-          <td class="destaque-vp" style="background-color: #83c457;">${formatMoeda(total.totalVendaAReceber)}</td>
-          <td class="valor-pago" style="background-color: #a7f3d0; font-weight: bold;">${formatMoeda(valorLiquidado)}</td>
-          <td class="valor-aberto" style="background-color: #fde68a; font-weight: bold;">${formatMoeda(valorALiquidar)}</td>
-          <td class="num-direita" style="background-color: #aedb8e; font-weight: bold;">${formatMoeda(total.liquidoNF || (total.valorTotalNF - total.funrural))}</td>
-        </tr>
-        </tbody>
-      </table>
-      <br/><br/>
-      <table>
-        <tr><td colspan="17" style="font-size: 12pt; font-weight: bold; background-color: #e2e8f0;">DETALHAMENTO INDIVIDUAL DAS VENDAS POR LOJA (VPs)</td></tr>
-      </table>
-    `;
-
-    for (const s of stores) {
-      excelContent += `
-        <br/>
-        <table>
-          <tr class="loja-header">
-            <td colspan="7">Loja: ${s.loja} (${s.pedidosVenda} VPs)</td>
-            <td colspan="3" style="text-align: right;">Total NF: ${formatMoeda(s.valorTotalNF)}</td>
-            <td colspan="3" style="text-align: right;">Total VP: ${formatMoeda(s.totalVendaAReceber)}</td>
-            <td colspan="2" style="text-align: right; background-color: #14532d;">Liquidado: ${formatMoeda(s.valorLiquidado)}</td>
-            <td colspan="2" style="text-align: right; background-color: #92400e;">A Liquidar: ${formatMoeda(s.valorALiquidar)}</td>
-          </tr>
-          <tr style="background-color: #f8fafc; font-weight: bold; font-size: 9pt; text-align: center;">
-            <td>Nº VP</td>
-            <td>Produtor / Origem</td>
-            <td>Produto(s)</td>
-            <td>Data</td>
-            <td>Nº NF</td>
-            <td>Peso NF (kg)</td>
-            <td>Volumes</td>
-            <td>Preço/Kg</td>
-            <td>Valor NF</td>
-            <td>FUNRURAL</td>
-            <td>Cotação</td>
-            <td>Valor VP</td>
-            <td>Valor Liquidado</td>
-            <td>Valor a Liquidar</td>
-            <td>Vencimento</td>
-            <td>Status / Pagamento</td>
-            <td>Arquivo (Imagem Anexa)</td>
-          </tr>
       `;
 
-      for (const item of (s.itens || [])) {
-        const unitLabel = item.unit?.toLowerCase().includes('saca') || item.product?.toLowerCase().includes('batata') ? 'sc' : 'cx';
-        const fileAttached = item.evidenceFile && item.evidenceFile !== '-' ? item.evidenceFile : '-';
-        const isSettled = item.paymentStatus === 'Recebido' || item.status === 'Concluído' || item.status === 'Recebido';
-        const itemLiquidado = isSettled ? Number(item.valorVP) : 0;
-        const itemALiquidar = !isSettled ? Number(item.valorVP) : 0;
-        const statusPagamento = isSettled ? 'Liquidado (Pago)' : (item.status === 'Faturado' ? 'A Liquidar (Faturado)' : 'A Liquidar');
+      for (const item of items) {
+        const c = extractClassifications(item);
+        const partNumber = item.vp ? item.vp.replace(/^VP-?/i, '') : '-';
+        const cleanProducer = (item.producer || item.origin || 'PRODUTOR').replace(/\s*\(.*\)/, '').trim().toUpperCase();
+        const cleanDest = (s.loja || item.client || 'DESTINATARIO').toUpperCase();
+        const uf = item.uf || (s.loja?.includes('RJ') ? 'RJ' : (s.loja?.includes('SP') ? 'SP' : 'MG'));
+
+        const valParticular = Number(item.valorVP) || 0;
+        const valAReceber = Number(item.liquidoProdutor) || Number(item.valorVP) || 0;
+        const valFunrural = Number(item.funrural) || 0;
+        const valNF = Number(item.valorNF) || 0;
+
+        storeQtdEsp += c.qtd.esp;
+        storeQtdPrim += c.qtd.prim;
+        storeQtdDiv += c.qtd.div;
+        storeQtdBol += c.qtd.bol;
+        storeQtdFlo += c.qtd.flo;
+        storeValParticular += valParticular;
+        storeValAReceber += valAReceber;
+        storeValFunrural += valFunrural;
+        storeValNF += valNF;
 
         excelContent += `
-          <tr>
-            <td class="num-centro"><b>${item.vp}</b></td>
-            <td class="texto-loja" style="font-size: 8.5pt; color: #1e3a8a;">${item.producer || item.origin || 'Produtor Rural'}</td>
-            <td class="texto-loja" style="font-size: 8.5pt; font-weight: bold; color: #1e293b;">${item.product || 'Produto'}</td>
-            <td class="num-centro">${item.dataVP || '-'}</td>
-            <td class="num-centro">${item.nf || 'Pendente'}</td>
-            <td class="num-direita">${formatNum(item.pesoNF)} kg</td>
-            <td class="num-direita">${formatNum(item.cxs)} ${unitLabel}</td>
-            <td class="num-direita">${formatMoeda(item.precoKg)}</td>
-            <td class="num-direita">${formatMoeda(item.valorNF)}</td>
-            <td class="funrural">-${formatMoeda(item.funrural)}</td>
-            <td class="num-centro">${formatMoeda(item.cotacao)}</td>
-            <td class="destaque-vp">${formatMoeda(item.valorVP)}</td>
-            <td class="valor-pago">${formatMoeda(itemLiquidado)}</td>
-            <td class="valor-aberto">${formatMoeda(itemALiquidar)}</td>
-            <td class="num-centro">${item.venc || '-'}</td>
-            <td class="num-centro" style="font-size: 8.5pt; font-weight: bold; color: ${isSettled ? '#15803d' : '#b45309'};">${statusPagamento}</td>
-            <td class="num-centro" style="font-size: 8.5pt; color: #1e3a8a; font-weight: 500;">${fileAttached || '-'}</td>
+          <tr style="height: 20px;">
+            <td class="cell-center"><b>${partNumber}</b></td>
+            <td class="cell-center">${item.dataVP || item.dataNF || '-'}</td>
+            <td class="cell-left">${cleanProducer}</td>
+            <td class="cell-left">${cleanDest}</td>
+            <td class="cell-center">${uf}</td>
+            <!-- Quantidades -->
+            <td class="cell-right">${c.qtd.esp > 0 ? c.qtd.esp : ''}</td>
+            <td class="cell-right">${c.qtd.prim > 0 ? c.qtd.prim : ''}</td>
+            <td class="cell-right">${c.qtd.div > 0 ? c.qtd.div : ''}</td>
+            <td class="cell-right">${c.qtd.bol > 0 ? c.qtd.bol : ''}</td>
+            <td class="cell-right">${c.qtd.flo > 0 ? c.qtd.flo : ''}</td>
+            <!-- Preços Unitários -->
+            <td class="cell-right">${c.val.esp > 0 ? formatMoeda(c.val.esp) : ''}</td>
+            <td class="cell-right">${c.val.prim > 0 ? formatMoeda(c.val.prim) : ''}</td>
+            <td class="cell-right">${c.val.div > 0 ? formatMoeda(c.val.div) : ''}</td>
+            <td class="cell-right">${c.val.bol > 0 ? formatMoeda(c.val.bol) : ''}</td>
+            <td class="cell-right">${c.val.flo > 0 ? formatMoeda(c.val.flo) : ''}</td>
+            <!-- Financeiro -->
+            <td class="cell-right" style="font-weight: bold;">${formatMoedaTotal(valParticular)}</td>
+            <td class="cell-right" style="font-weight: bold;">${formatMoedaTotal(valAReceber)}</td>
+            <td class="cell-right">${formatMoedaTotal(valFunrural)}</td>
+            <td class="cell-right">${formatMoedaTotal(valNF)}</td>
           </tr>
         `;
       }
 
-      // Rodapé da loja com soma de cada coluna
-      excelContent += `
-        <tr class="linha-total">
-          <td colspan="5" class="texto-loja">TOTAL ${s.loja}</td>
-          <td class="num-direita">${formatNum(s.pesoNF)} kg</td>
-          <td class="num-direita">${formatNum(s.cxsVendidas)}</td>
-          <td class="num-centro">-</td>
-          <td class="num-direita">${formatMoeda(s.valorTotalNF)}</td>
-          <td class="funrural">-${formatMoeda(s.funrural)}</td>
-          <td class="num-centro">-</td>
-          <td class="destaque-vp">${formatMoeda(s.totalVendaAReceber)}</td>
-          <td class="valor-pago">${formatMoeda(s.valorLiquidado)}</td>
-          <td class="valor-aberto">${formatMoeda(s.valorALiquidar)}</td>
-          <td class="num-centro">-</td>
-          <td class="num-centro" style="font-weight: bold;">${s.itens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').length} / ${s.itens.length} Pagos</td>
-          <td class="num-centro">-</td>
-        </tr>
-      </table>`;
-    }
+      const storeTotalVolumes = storeQtdEsp + storeQtdPrim + storeQtdDiv + storeQtdBol + storeQtdFlo;
 
-    // QUADRO FINAL CONSOLIDADO: FECHAMENTO FINANCEIRO E STATUS DE LIQUIDAÇÃO
-    excelContent += `
-      <br/><br/>
-      <table style="border: 2px solid #091b2e; margin-top: 25px; background-color: #ffffff;">
-        <tr>
-          <td colspan="17" style="font-size: 13pt; font-weight: bold; background-color: #091b2e; color: #ffffff; text-align: center; padding: 10px;">
-            RESUMO FINANCEIRO &amp; STATUS DE LIQUIDAÇÃO
-          </td>
-        </tr>
-        <tr style="background-color: #f8fafc; font-weight: bold; font-size: 10pt; text-align: center;">
-          <td colspan="6" class="card-label" style="background-color: #eff6ff; color: #1e3a8a; padding: 8px;">
-            VALOR TOTAL COMERCIAL (VP)
-          </td>
-          <td colspan="5" class="card-label" style="background-color: #ecfdf5; color: #065f46; padding: 8px;">
-            VALOR TOTAL LIQUIDADO (RECEBIDO)
-          </td>
-          <td colspan="6" class="card-label" style="background-color: #fffbeb; color: #92400e; padding: 8px;">
-            VALOR A LIQUIDAR (EM ABERTO)
-          </td>
-        </tr>
-        <tr style="font-size: 14pt; font-weight: bold; text-align: center;">
-          <td colspan="6" style="color: #1e3a8a; background-color: #f0f9ff; padding: 12px; border-bottom: 1px solid #cbd5e1;">
-            ${formatMoeda(valorTotalComercial)}
-          </td>
-          <td colspan="5" style="color: #15803d; background-color: #f0fdf4; padding: 12px; border-bottom: 1px solid #cbd5e1;">
-            ${formatMoeda(valorLiquidado)}
-          </td>
-          <td colspan="6" style="color: #b45309; background-color: #fffdf5; padding: 12px; border-bottom: 1px solid #cbd5e1;">
-            ${formatMoeda(valorALiquidar)}
-          </td>
-        </tr>
-        <tr style="font-size: 9pt; color: #475569; background-color: #f8fafc; text-align: center;">
-          <td colspan="6" style="padding: 6px;">Total de ${allReportItens.length} Vendas (VPs) filtradas no período</td>
-          <td colspan="5" style="padding: 6px; color: #166534; font-weight: bold;">${vpsLiquidadas} VPs Liquidadas / Confirmadas</td>
-          <td colspan="6" style="padding: 6px; color: #9a3412; font-weight: bold;">${vpsALiquidar} VPs Pendentes de Liquidação</td>
-        </tr>
-      </table>
-    `;
+      // Linha de Subtotal da Loja
+      excelContent += `
+          <tr class="row-subtotal" style="height: 22px;">
+            <td colspan="5" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;"></td>
+            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${storeQtdEsp > 0 ? formatNum(storeQtdEsp) : ''}</td>
+            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${storeQtdPrim > 0 ? formatNum(storeQtdPrim) : ''}</td>
+            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${storeQtdDiv > 0 ? formatNum(storeQtdDiv) : ''}</td>
+            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${storeQtdBol > 0 ? formatNum(storeQtdBol) : ''}</td>
+            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${storeQtdFlo > 0 ? formatNum(storeQtdFlo) : ''}</td>
+            <td colspan="5" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;"></td>
+            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatMoedaTotal(storeValParticular)}</td>
+            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatMoedaTotal(storeValAReceber)}</td>
+            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${formatMoedaTotal(storeValFunrural)}</td>
+            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${formatMoedaTotal(storeValNF)}</td>
+          </tr>
+        </tbody>
+        </table>
+
+        <!-- Totalizador Geral de Caixas Destacado no Rodapé -->
+        <table style="border: none; width: 100%; margin-top: 10px; margin-bottom: 30px;">
+          <tr>
+            <td colspan="19" style="border: none; text-align: center; font-size: 18pt; font-weight: bold; color: #000000;">
+              ${(storeTotalVolumes || Number(s.cxsVendidas) || 0).toLocaleString('pt-BR')}
+            </td>
+          </tr>
+        </table>
+        <br/>
+      `;
+    }
 
     excelContent += `</body></html>`;
     return excelContent;

@@ -217,9 +217,9 @@ export default function Reports({ setCurrentPage }) {
       return num > 0 ? 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
     };
     const formatMoedaTotal = (v) => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const formatNum = (v) => {
-      const num = Number(v) || 0;
-      return num > 0 ? num.toLocaleString('pt-BR') : '';
+    const formatQty = (v) => {
+      const num = Math.round(Number(v) || 0);
+      return num > 0 ? String(num) : '';
     };
 
     // Extrai quantidades e cotações de forma universal para QUALQUER produto (Batata, Cenoura, Cebola, Beterraba, etc.)
@@ -310,11 +310,14 @@ export default function Reports({ setCurrentPage }) {
           .hdr-grp-val { background-color: #ffc000; color: #000000; font-weight: bold; font-size: 13pt; text-align: center; letter-spacing: 1px; border: 1px solid #000000; }
           .hdr-grp-fin { background-color: #d9d9d9; color: #000000; font-weight: bold; font-size: 13pt; text-align: center; letter-spacing: 1px; border: 1px solid #000000; }
           .hdr-col { background-color: #ffffff; color: #000000; font-weight: bold; font-size: 8pt; text-align: center; border: 1px solid #000000; }
-          .cell-center { text-align: center; }
-          .cell-left { text-align: left; }
+          .cell-center { text-align: center; mso-number-format: "\\@"; }
+          .cell-left { text-align: left; mso-number-format: "\\@"; }
           .cell-right { text-align: right; }
+          .cell-qty { mso-number-format: "\\#\\,\\#\\#0"; text-align: right; }
+          .cell-price { mso-number-format: "\\0022R\\$\\0022\\\\ \\#\\,\\#\\#0\\.00"; text-align: right; }
+          .cell-money { mso-number-format: "\\0022R\\$\\0022\\\\ \\#\\,\\#\\#0\\.00"; text-align: right; font-weight: bold; }
           .row-subtotal { background-color: #ffffff; font-weight: bold; border-top: 2px solid #000000; border-bottom: 2px solid #000000; }
-          .grand-volume { text-align: center; font-size: 18pt; font-weight: bold; color: #000000; margin-top: 10px; margin-bottom: 35px; }
+          .grand-volume { text-align: center; font-size: 18pt; font-weight: bold; color: #000000; margin-top: 10px; margin-bottom: 35px; mso-number-format: "\\#\\,\\#\\#0"; }
         </style>
       </head>
       <body>
@@ -337,7 +340,7 @@ export default function Reports({ setCurrentPage }) {
         <!-- Badge Data Superior Esquerdo -->
         <table style="border: none; margin-bottom: 10px;">
           <tr>
-            <td colspan="3" style="background-color: #001f3f; color: #ffffff; font-weight: bold; font-size: 13pt; text-align: center; padding: 6px 16px; border: 1px solid #001f3f; font-style: italic;">
+            <td colspan="3" style="background-color: #001f3f; color: #ffffff; font-weight: bold; font-size: 13pt; text-align: center; padding: 6px 16px; border: 1px solid #001f3f; font-style: italic; mso-number-format: '\\@';">
               ${hojeFormatado}
             </td>
             <td colspan="16" style="border: none;"></td>
@@ -409,23 +412,23 @@ export default function Reports({ setCurrentPage }) {
             <td class="cell-left">${cleanProducer}</td>
             <td class="cell-left">${cleanDest}</td>
             <td class="cell-center">${uf}</td>
-            <!-- Quantidades -->
-            <td class="cell-right">${c.qtd.esp > 0 ? c.qtd.esp : ''}</td>
-            <td class="cell-right">${c.qtd.prim > 0 ? c.qtd.prim : ''}</td>
-            <td class="cell-right">${c.qtd.div > 0 ? c.qtd.div : ''}</td>
-            <td class="cell-right">${c.qtd.bol > 0 ? c.qtd.bol : ''}</td>
-            <td class="cell-right">${c.qtd.flo > 0 ? c.qtd.flo : ''}</td>
+            <!-- Quantidades em formato numérico nativo para evitar que 1800 vire 1.8 -->
+            <td class="cell-qty">${formatQty(c.qtd.esp)}</td>
+            <td class="cell-qty">${formatQty(c.qtd.prim)}</td>
+            <td class="cell-qty">${formatQty(c.qtd.div)}</td>
+            <td class="cell-qty">${formatQty(c.qtd.bol)}</td>
+            <td class="cell-qty">${formatQty(c.qtd.flo)}</td>
             <!-- Preços Unitários -->
-            <td class="cell-right">${c.val.esp > 0 ? formatMoeda(c.val.esp) : ''}</td>
-            <td class="cell-right">${c.val.prim > 0 ? formatMoeda(c.val.prim) : ''}</td>
-            <td class="cell-right">${c.val.div > 0 ? formatMoeda(c.val.div) : ''}</td>
-            <td class="cell-right">${c.val.bol > 0 ? formatMoeda(c.val.bol) : ''}</td>
-            <td class="cell-right">${c.val.flo > 0 ? formatMoeda(c.val.flo) : ''}</td>
+            <td class="cell-price">${formatMoeda(c.val.esp)}</td>
+            <td class="cell-price">${formatMoeda(c.val.prim)}</td>
+            <td class="cell-price">${formatMoeda(c.val.div)}</td>
+            <td class="cell-price">${formatMoeda(c.val.bol)}</td>
+            <td class="cell-price">${formatMoeda(c.val.flo)}</td>
             <!-- Financeiro -->
-            <td class="cell-right" style="font-weight: bold;">${formatMoedaTotal(valParticular)}</td>
-            <td class="cell-right" style="font-weight: bold;">${formatMoedaTotal(valAReceber)}</td>
-            <td class="cell-right">${formatMoedaTotal(valFunrural)}</td>
-            <td class="cell-right">${formatMoedaTotal(valNF)}</td>
+            <td class="cell-money">${formatMoedaTotal(valParticular)}</td>
+            <td class="cell-money">${formatMoedaTotal(valAReceber)}</td>
+            <td class="cell-price">${formatMoedaTotal(valFunrural)}</td>
+            <td class="cell-price">${formatMoedaTotal(valNF)}</td>
           </tr>
         `;
       }
@@ -436,16 +439,16 @@ export default function Reports({ setCurrentPage }) {
       excelContent += `
           <tr class="row-subtotal" style="height: 22px;">
             <td colspan="5" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;"></td>
-            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${storeQtdEsp > 0 ? formatNum(storeQtdEsp) : ''}</td>
-            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${storeQtdPrim > 0 ? formatNum(storeQtdPrim) : ''}</td>
-            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${storeQtdDiv > 0 ? formatNum(storeQtdDiv) : ''}</td>
-            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${storeQtdBol > 0 ? formatNum(storeQtdBol) : ''}</td>
-            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${storeQtdFlo > 0 ? formatNum(storeQtdFlo) : ''}</td>
+            <td class="cell-qty" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatQty(storeQtdEsp)}</td>
+            <td class="cell-qty" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatQty(storeQtdPrim)}</td>
+            <td class="cell-qty" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatQty(storeQtdDiv)}</td>
+            <td class="cell-qty" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatQty(storeQtdBol)}</td>
+            <td class="cell-qty" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatQty(storeQtdFlo)}</td>
             <td colspan="5" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;"></td>
-            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatMoedaTotal(storeValParticular)}</td>
-            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatMoedaTotal(storeValAReceber)}</td>
-            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${formatMoedaTotal(storeValFunrural)}</td>
-            <td class="cell-right" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${formatMoedaTotal(storeValNF)}</td>
+            <td class="cell-money" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${formatMoedaTotal(storeValParticular)}</td>
+            <td class="cell-money" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${formatMoedaTotal(storeValAReceber)}</td>
+            <td class="cell-price" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatMoedaTotal(storeValFunrural)}</td>
+            <td class="cell-price" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatMoedaTotal(storeValNF)}</td>
           </tr>
         </tbody>
         </table>
@@ -453,8 +456,8 @@ export default function Reports({ setCurrentPage }) {
         <!-- Totalizador Geral de Caixas Destacado no Rodapé -->
         <table style="border: none; width: 100%; margin-top: 10px; margin-bottom: 30px;">
           <tr>
-            <td colspan="19" style="border: none; text-align: center; font-size: 18pt; font-weight: bold; color: #000000;">
-              ${(storeTotalVolumes || Number(s.cxsVendidas) || 0).toLocaleString('pt-BR')}
+            <td colspan="19" class="cell-qty" style="border: none; text-align: center; font-size: 18pt; font-weight: bold; color: #000000; mso-number-format: '\\#\\,\\#\\#0';">
+              ${formatQty(storeTotalVolumes || Number(s.cxsVendidas) || 0)}
             </td>
           </tr>
         </table>

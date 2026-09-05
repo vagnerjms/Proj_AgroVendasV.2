@@ -222,78 +222,77 @@ export default function Reports({ setCurrentPage }) {
       return num > 0 ? num.toLocaleString('pt-BR') : '';
     };
 
-    // Extrai quantidades e cotações de forma universal para QUALQUER produto agrícola (Cenoura, Cebola, Batata, Beterraba, Tomate, etc.)
+    // Extrai quantidades e cotações de forma universal para QUALQUER produto (Batata, Cenoura, Cebola, Beterraba, etc.)
     const extractClassifications = (it) => {
       const res = {
         qtd: { esp: 0, prim: 0, div: 0, bol: 0, flo: 0 },
         val: { esp: 0, prim: 0, div: 0, bol: 0, flo: 0 }
       };
 
+      const classifyName = (name) => {
+        const p = (name || '').toLowerCase();
+        // 1. Bolinha / Miúda / Baby (4ª coluna)
+        if (p.includes('bolinha') || p.includes('bol') || p.includes('baby') || p.includes('miuda') || p.includes('miúda') || p.includes('pequena') || p.includes('tipo 4') || p.includes('tipo4')) {
+          return 'bol';
+        }
+        // 2. Primeira X / 1X (2ª coluna)
+        if (p.includes('primeira') || p.includes('1x') || p.includes('prim') || p.includes('tipo 2') || p.includes('tipo2')) {
+          return 'prim';
+        }
+        // 3. Diversa / Média (3ª coluna)
+        if (p.includes('diversa') || p.includes('div') || p.includes('media') || p.includes('média') || p.includes('tipo 3') || p.includes('tipo3') || p.includes('caixa 3') || p.includes('cx3')) {
+          return 'div';
+        }
+        // 4. Florão / Descarte / Refugo (5ª coluna)
+        if (p.includes('florao') || p.includes('florão') || p.includes('flo') || p.includes('descarte') || p.includes('refugo') || p.includes('g2') || p.includes('tipo 5') || p.includes('tipo5')) {
+          return 'flo';
+        }
+        // 5. Especial / G1 / Padrão (1ª coluna)
+        return 'esp';
+      };
+
       const rawItems = it.items && Array.isArray(it.items) && it.items.length > 0 ? it.items : null;
 
       if (rawItems && rawItems.length > 1) {
-        // Ordena ou distribui os itens por tipo/classificação ou posição
-        const slotKeys = ['esp', 'prim', 'div', 'bol', 'flo'];
-        let unassignedIndex = 0;
-
         rawItems.forEach(item => {
+          const slot = classifyName(item.product);
           const p = (item.product || '').toLowerCase();
           const bw = Number(item.boxWeightKg) || (p.includes('batata') ? 25 : (p.includes('granel') ? 1 : 29));
           const q = Number(item.quantity) || (Number(item.kg) > 0 && bw > 0 ? Math.round(Number(item.kg) / bw) : 0);
-          const quote = Number(item.dailyQuote) || Number(item.price) || (q > 0 && Number(item.total) > 0 ? Number(item.total) / q : 0);
+          const quote = Number(item.dailyQuote) || Number(item.price) || (q > 0 && Number(item.valorTotalVP) > 0 ? Number(item.valorTotalVP) / q : (q > 0 && Number(item.total) > 0 ? Number(item.total) / q : Number(it.cotacao) || 0));
 
-          if (p.includes('primeira') || p.includes('1x') || p.includes('prim') || p.includes('media') || p.includes('média') || p.includes('tipo 2') || p.includes('tipo2')) {
-            res.qtd.prim += q;
-            if (quote > 0) res.val.prim = quote;
-          } else if (p.includes('diversa') || p.includes('div') || p.includes('miuda') || p.includes('miúda') || p.includes('tipo 3') || p.includes('tipo3')) {
-            res.qtd.div += q;
-            if (quote > 0) res.val.div = quote;
-          } else if (p.includes('bolinha') || p.includes('bol') || p.includes('baby') || p.includes('pequena') || p.includes('tipo 4') || p.includes('tipo4')) {
-            res.qtd.bol += q;
-            if (quote > 0) res.val.bol = quote;
-          } else if (p.includes('florao') || p.includes('florão') || p.includes('flo') || p.includes('descarte') || p.includes('refugo') || p.includes('g2') || p.includes('tipo 5') || p.includes('tipo5')) {
-            res.qtd.flo += q;
-            if (quote > 0) res.val.flo = quote;
-          } else if (p.includes('especial') || p.includes('g1') || p.includes('tipo 1') || p.includes('tipo1') || p.includes('grauda') || p.includes('graúda') || p.includes('padrao') || p.includes('padrão')) {
-            res.qtd.esp += q;
-            if (quote > 0) res.val.esp = quote;
-          } else {
-            // Se for um item genérico de outro produto (ex: Cebola, Beterraba, etc.), aloca no próximo slot disponível
-            const key = slotKeys[Math.min(unassignedIndex, slotKeys.length - 1)];
-            res.qtd[key] += q;
-            if (quote > 0) res.val[key] = quote;
-            unassignedIndex++;
-          }
+          res.qtd[slot] += q;
+          if (quote > 0) res.val[slot] = quote;
         });
       } else if (rawItems && rawItems.length === 1) {
         const item = rawItems[0];
+        const slot = classifyName(item.product);
         const p = (item.product || '').toLowerCase();
         const bw = Number(item.boxWeightKg) || (p.includes('batata') ? 25 : (p.includes('granel') ? 1 : 29));
         const q = Number(item.quantity) || (Number(item.kg) > 0 && bw > 0 ? Math.round(Number(item.kg) / bw) : (Number(it.cxs) || (Number(it.pesoNF) > 0 ? Math.round(Number(it.pesoNF) / bw) : 0)));
-        const quote = Number(item.dailyQuote) || Number(item.price) || Number(it.cotacao) || 0;
+        const quote = Number(item.dailyQuote) || Number(item.price) || (q > 0 && Number(item.valorTotalVP) > 0 ? Number(item.valorTotalVP) / q : (q > 0 && Number(item.total) > 0 ? Number(item.total) / q : Number(it.cotacao) || 0));
 
-        if (p.includes('primeira') || p.includes('1x') || p.includes('tipo 2')) {
-          res.qtd.prim = q;
-          res.val.prim = quote;
-        } else if (p.includes('diversa') || p.includes('div') || p.includes('tipo 3')) {
-          res.qtd.div = q;
-          res.val.div = quote;
-        } else if (p.includes('bolinha') || p.includes('bol') || p.includes('baby')) {
-          res.qtd.bol = q;
-          res.val.bol = quote;
-        } else if (p.includes('florao') || p.includes('flo') || p.includes('descarte')) {
-          res.qtd.flo = q;
-          res.val.flo = quote;
-        } else {
-          res.qtd.esp = q;
-          res.val.esp = quote;
-        }
+        res.qtd[slot] += q;
+        if (quote > 0) res.val[slot] = quote;
+      } else if (it.product && it.product.includes('+')) {
+        // Fallback: divide string composta como "Batata Especial (600 sc) + Batata Miúda Lavada (120 sc)"
+        const segments = it.product.split('+');
+        segments.forEach(seg => {
+          const slot = classifyName(seg);
+          const qMatch = seg.match(/(\d+[\d.,]*)\s*(sc|cx|kg|saca|caixa)/i) || seg.match(/\((\d+[\d.,]*)/);
+          const q = qMatch ? parseFloat(qMatch[1].replace(/\./g, '').replace(',', '.')) : 0;
+          const quote = Number(it.cotacao) || 0;
+
+          res.qtd[slot] += q;
+          if (quote > 0 && !res.val[slot]) res.val[slot] = quote;
+        });
       } else {
-        // Venda consolidada de produto único (qualquer hortifruti ou grão)
+        // Venda de item único
+        const slot = classifyName(it.product);
         const q = Number(it.cxs) || (Number(it.pesoNF) > 0 ? Math.round(Number(it.pesoNF) / 29) : 0);
         const quote = Number(it.cotacao) || 0;
-        res.qtd.esp = q;
-        res.val.esp = quote;
+        res.qtd[slot] = q;
+        res.val[slot] = quote;
       }
 
       return res;

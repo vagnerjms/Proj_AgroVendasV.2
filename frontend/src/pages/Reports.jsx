@@ -394,7 +394,7 @@ export default function Reports({ setCurrentPage }) {
         const valParticular = calculatedParticular > 0 ? calculatedParticular : (Number(item.valorVP) || 0);
         const valFunrural = Number(item.funrural) || 0;
         const valNF = Number(item.valorNF) || 0;
-        const valAReceber = valParticular > 0 ? (valParticular - valFunrural) : (valNF > 0 ? (valNF - valFunrural) : 0);
+        const valAReceber = valParticular > 0 ? valParticular : (valNF > 0 ? (valNF - valFunrural) : 0);
 
         storeQtdEsp += c.qtd.esp;
         storeQtdPrim += c.qtd.prim;

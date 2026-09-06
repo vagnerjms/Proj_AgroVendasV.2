@@ -390,10 +390,11 @@ export default function Reports({ setCurrentPage }) {
         const cleanDest = (s.loja || item.client || 'DESTINATARIO').toUpperCase();
         const uf = item.uf || (s.loja?.includes('RJ') ? 'RJ' : (s.loja?.includes('SP') ? 'SP' : 'MG'));
 
-        const valParticular = Number(item.valorVP) || 0;
-        const valAReceber = Number(item.liquidoProdutor) || Number(item.valorVP) || 0;
+        const calculatedParticular = (c.qtd.esp * c.val.esp) + (c.qtd.prim * c.val.prim) + (c.qtd.div * c.val.div) + (c.qtd.bol * c.val.bol) + (c.qtd.flo * c.val.flo);
+        const valParticular = calculatedParticular > 0 ? calculatedParticular : (Number(item.valorVP) || 0);
         const valFunrural = Number(item.funrural) || 0;
         const valNF = Number(item.valorNF) || 0;
+        const valAReceber = valParticular > 0 ? (valParticular - valFunrural) : (valNF > 0 ? (valNF - valFunrural) : 0);
 
         storeQtdEsp += c.qtd.esp;
         storeQtdPrim += c.qtd.prim;

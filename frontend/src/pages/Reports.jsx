@@ -217,8 +217,11 @@ export default function Reports({ setCurrentPage }) {
     };
     const formatMoedaTotal = (v) => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const formatQty = (v) => {
-      const num = Math.round(Number(v) || 0);
-      return num > 0 ? String(num) : '';
+      const num = Number(v) || 0;
+      if (num <= 0) return '';
+      return num % 1 === 0 
+        ? String(num) 
+        : num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     };
 
     const cleanProdName = (name) => {
@@ -264,7 +267,7 @@ export default function Reports({ setCurrentPage }) {
           const slot = classifyName(item.product);
           const p = (item.product || '').toLowerCase();
           const bw = Number(item.boxWeightKg) || (p.includes('batata') ? 25 : (p.includes('granel') ? 1 : 29));
-          const q = Number(item.quantity) || (Number(item.kg) > 0 && bw > 0 ? Math.round(Number(item.kg) / bw) : 0);
+          const q = Number(item.quantity) || (Number(item.kg) > 0 && bw > 0 ? Number((Number(item.kg) / bw).toFixed(2)) : 0);
           const quote = Number(item.dailyQuote) || Number(item.price) || (q > 0 && Number(item.valorTotalVP) > 0 ? Number(item.valorTotalVP) / q : (q > 0 && Number(item.total) > 0 ? Number(item.total) / q : Number(it.cotacao) || 0));
 
           res.qtd[slot] += q;
@@ -275,7 +278,7 @@ export default function Reports({ setCurrentPage }) {
         const slot = classifyName(item.product);
         const p = (item.product || '').toLowerCase();
         const bw = Number(item.boxWeightKg) || (p.includes('batata') ? 25 : (p.includes('granel') ? 1 : 29));
-        const q = Number(item.quantity) || (Number(item.kg) > 0 && bw > 0 ? Math.round(Number(item.kg) / bw) : (Number(it.cxs) || (Number(it.pesoNF) > 0 ? Math.round(Number(it.pesoNF) / bw) : 0)));
+        const q = Number(item.quantity) || (Number(item.kg) > 0 && bw > 0 ? Number((Number(item.kg) / bw).toFixed(2)) : (Number(it.cxs) || (Number(it.pesoNF) > 0 ? Number((Number(it.pesoNF) / bw).toFixed(2)) : 0)));
         const quote = Number(item.dailyQuote) || Number(item.price) || (q > 0 && Number(item.valorTotalVP) > 0 ? Number(item.valorTotalVP) / q : (q > 0 && Number(item.total) > 0 ? Number(item.total) / q : Number(it.cotacao) || 0));
 
         res.qtd[slot] += q;
@@ -293,7 +296,7 @@ export default function Reports({ setCurrentPage }) {
         });
       } else {
         const slot = classifyName(it.product);
-        const q = Number(it.cxs) || (Number(it.pesoNF) > 0 ? Math.round(Number(it.pesoNF) / 29) : 0);
+        const q = Number(it.cxs) || (Number(it.pesoNF) > 0 ? Number((Number(it.pesoNF) / 29).toFixed(2)) : 0);
         const quote = Number(it.cotacao) || 0;
         res.qtd[slot] = q;
         res.val[slot] = quote;
@@ -318,7 +321,7 @@ export default function Reports({ setCurrentPage }) {
           const matchedCol = cols.find(c => c.prodName.toLowerCase() === subName.toLowerCase()) || cols[0];
           const p = (sub.product || '').toLowerCase();
           const bw = Number(sub.boxWeightKg) || (p.includes('granel') ? 1 : 29);
-          const q = Number(sub.quantity) || (Number(sub.kg) > 0 && bw > 0 ? Math.round(Number(sub.kg) / bw) : 0);
+          const q = Number(sub.quantity) || (Number(sub.kg) > 0 && bw > 0 ? Number((Number(sub.kg) / bw).toFixed(2)) : 0);
           const quote = Number(sub.dailyQuote) || Number(sub.price) || (q > 0 && Number(sub.valorTotalVP) > 0 ? Number(sub.valorTotalVP) / q : (q > 0 && Number(sub.total) > 0 ? Number(sub.total) / q : Number(it.cotacao) || 0));
 
           if (matchedCol) {
@@ -344,11 +347,11 @@ export default function Reports({ setCurrentPage }) {
         const pName = cleanProdName(it.product || 'Produto');
         const matchedCol = cols.find(c => c.prodName.toLowerCase() === pName.toLowerCase()) || cols[0];
         const bw = (it.unit && it.unit.includes('25')) ? 25 : 29;
-        const q = Number(it.cxs) || (Number(it.pesoNF) > 0 ? Math.round(Number(it.pesoNF) / bw) : 0);
+        const q = Number(it.cxs) || (Number(it.pesoNF) > 0 ? Number((Number(it.pesoNF) / bw).toFixed(2)) : 0);
         const quote = Number(it.cotacao) || (q > 0 && Number(it.valorVP) > 0 ? Number(it.valorVP) / q : 0);
 
         if (matchedCol) {
-          res.qtd[matchedCol.key] = q;
+          res.qtd[matchedCol.key] += q;
           res.val[matchedCol.key] = quote;
         }
       }
@@ -371,11 +374,12 @@ export default function Reports({ setCurrentPage }) {
           .cell-center { text-align: center; mso-number-format: "\\@"; }
           .cell-left { text-align: left; mso-number-format: "\\@"; }
           .cell-right { text-align: right; }
-          .cell-qty { mso-number-format: "\\#\\,\\#\\#0"; text-align: right; }
+          .cell-qty { mso-number-format: "\\#\\,\\#\\#0\\.00"; text-align: right; }
+          .cell-qty-int { mso-number-format: "\\#\\,\\#\\#0"; text-align: right; }
           .cell-price { mso-number-format: "\\0022R\\$\\0022\\\\ \\#\\,\\#\\#0\\.00"; text-align: right; }
           .cell-money { mso-number-format: "\\0022R\\$\\0022\\\\ \\#\\,\\#\\#0\\.00"; text-align: right; font-weight: bold; }
           .row-subtotal { background-color: #ffffff; font-weight: bold; border-top: 2px solid #000000; border-bottom: 2px solid #000000; }
-          .grand-volume { text-align: center; font-size: 18pt; font-weight: bold; color: #000000; margin-top: 10px; margin-bottom: 35px; mso-number-format: "\\#\\,\\#\\#0"; }
+          .grand-volume { text-align: center; font-size: 18pt; font-weight: bold; color: #000000; margin-top: 10px; margin-bottom: 35px; mso-number-format: "\\#\\,\\#\\#0\\.00"; }
         </style>
       </head>
       <body>
@@ -492,7 +496,7 @@ export default function Reports({ setCurrentPage }) {
           storeColQtd[col.key] += (c.qtd[col.key] || 0);
         });
 
-        const valParticular = calculatedParticular > 0 ? calculatedParticular : (Number(item.valorVP) || 0);
+        const valParticular = (Number(item.valorVP) > 0) ? Number(item.valorVP) : (calculatedParticular > 0 ? calculatedParticular : (Number(item.valorNF) || 0));
         const valFunrural = Number(item.funrural) || 0;
         const valNF = Number(item.valorNF) || 0;
         const valAReceber = valParticular > 0 ? valParticular : (valNF > 0 ? (valNF - valFunrural) : 0);
@@ -510,7 +514,11 @@ export default function Reports({ setCurrentPage }) {
             <td class="cell-left">${cleanDest}</td>
             <td class="cell-center">${uf}</td>
             <!-- Quantidades -->
-            ${cols.map(col => `<td class="cell-qty">${formatQty(c.qtd[col.key])}</td>`).join('')}
+            ${cols.map(col => {
+              const qVal = c.qtd[col.key] || 0;
+              const isInt = qVal % 1 === 0;
+              return `<td class="${isInt ? 'cell-qty-int' : 'cell-qty'}">${formatQty(qVal)}</td>`;
+            }).join('')}
             <!-- Preços Unitários -->
             ${cols.map(col => `<td class="cell-price">${formatMoeda(c.val[col.key])}</td>`).join('')}
             <!-- Financeiro -->
@@ -523,12 +531,17 @@ export default function Reports({ setCurrentPage }) {
       }
 
       const storeTotalVolumes = Object.values(storeColQtd).reduce((a, b) => a + b, 0);
+      const isTotalInt = (storeTotalVolumes % 1 === 0);
 
       // Linha de Subtotal da Loja
       excelContent += `
           <tr class="row-subtotal" style="height: 22px;">
             <td colspan="5" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;"></td>
-            ${cols.map(col => `<td class="cell-qty" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatQty(storeColQtd[col.key])}</td>`).join('')}
+            ${cols.map(col => {
+              const qVal = storeColQtd[col.key] || 0;
+              const isInt = qVal % 1 === 0;
+              return `<td class="${isInt ? 'cell-qty-int' : 'cell-qty'}" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatQty(qVal)}</td>`;
+            }).join('')}
             <td colspan="${numCols}" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;"></td>
             <td class="cell-money" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${formatMoedaTotal(storeValParticular)}</td>
             <td class="cell-money" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${formatMoedaTotal(storeValAReceber)}</td>
@@ -541,7 +554,7 @@ export default function Reports({ setCurrentPage }) {
         <!-- Totalizador Geral de Caixas Destacado no Rodapé -->
         <table style="border: none; width: 100%; margin-top: 10px; margin-bottom: 30px;">
           <tr>
-            <td colspan="${totalTableCols}" class="cell-qty" style="border: none; text-align: center; font-size: 18pt; font-weight: bold; color: #000000; mso-number-format: '\\#\\,\\#\\#0';">
+            <td colspan="${totalTableCols}" class="${isTotalInt ? 'cell-qty-int' : 'cell-qty'}" style="border: none; text-align: center; font-size: 18pt; font-weight: bold; color: #000000;">
               ${formatQty(storeTotalVolumes || Number(s.cxsVendidas) || 0)}
             </td>
           </tr>

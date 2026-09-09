@@ -6,7 +6,7 @@ try {
 } catch (e) {
   console.warn('Aviso: módulo pdf-parse não carregado antecipadamente:', e.message);
 }
-const { TAX_RATES } = require('../constants');
+const { TAX_RATES, roundMoney, calculateFiscalDeductions } = require('../utils/money');
 const { normalizeProducerOrigin } = require('../utils/producer');
 
 class NfeParserService {
@@ -25,7 +25,7 @@ class NfeParserService {
    * Parse PDF DANFE & NFA-e files using text extraction, tabular parsing and regex heuristics.
    */
   static async _parsePdf(filePath, originalName) {
-    const dataBuffer = fs.readFileSync(filePath);
+    const dataBuffer = await fs.promises.readFile(filePath);
     let text = '';
 
     // Safely extract text across any pdf-parse version
@@ -273,12 +273,8 @@ class NfeParserService {
 
     const totalKg = items.reduce((acc, it) => acc + (Number(it.kg) || 0), 0);
     const totalVolumes = items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0);
-    const totalOperation = vNF > 0 ? vNF : items.reduce((acc, it) => acc + (Number(it.total) || 0), 0);
-
-    const previdencia = totalOperation * TAX_RATES.PREVIDENCIA;
-    const rat = totalOperation * TAX_RATES.RAT;
-    const senar = totalOperation * TAX_RATES.SENAR;
-    const funruralTotal = totalOperation * TAX_RATES.FUNRURAL_TOTAL;
+    const totalOperation = roundMoney(vNF > 0 ? vNF : items.reduce((acc, it) => acc + (Number(it.total) || 0), 0));
+    const fiscal = calculateFiscalDeductions(totalOperation);
 
     return {
       success: true,
@@ -315,10 +311,10 @@ class NfeParserService {
       totalKg: totalKg,
       items: items,
       funrural: {
-        total: funruralTotal,
-        previdencia: previdencia,
-        rat: rat,
-        senar: senar
+        total: fiscal.funruralTotal,
+        previdencia: fiscal.previdencia,
+        rat: fiscal.rat,
+        senar: fiscal.senar
       }
     };
   }
@@ -363,8 +359,8 @@ class NfeParserService {
       unit = 'Granel (kg)';
       boxWeightKg = 1;
     } else if (rawUnit === 'SC' || rawUnit === 'SACAS') {
-      unit = 'Sacas (60kg)';
-      boxWeightKg = 60;
+      unit = 'Sacas (25kg)';
+      boxWeightKg = 25;
     } else if (rawUnit === 'CX' || rawUnit === 'CAIXAS') {
       unit = 'Caixas (29kg)';
       boxWeightKg = 29;
@@ -381,10 +377,10 @@ class NfeParserService {
       quantity: quantity,
       kg: kg,
       price: unitPrice,
-      pricePerKg: pKg,
-      total: totalVal,
+      pricePerKg: roundMoney(pKg),
+      total: roundMoney(totalVal),
       dailyQuote: 0,
-      valorTotalVP: totalVal
+      valorTotalVP: roundMoney(totalVal)
     };
   }
 
@@ -394,7 +390,7 @@ class NfeParserService {
   static async _parseXml(filePath, originalName, rawXmlContent) {
     let xmlContent = rawXmlContent;
     if (!xmlContent && filePath && fs.existsSync(filePath)) {
-      xmlContent = fs.readFileSync(filePath, 'utf-8');
+      xmlContent = await fs.promises.readFile(filePath, 'utf-8');
     }
     if (!xmlContent) {
       throw new Error('Nenhum conteúdo XML fornecido.');
@@ -435,6 +431,7 @@ class NfeParserService {
 
     const ide = infNFe.ide || {};
     const nNF = ide.nNF || '';
+    const serie = ide.serie || '';
     const dhEmi = ide.dhEmi ? ide.dhEmi.split('T')[0] : (ide.dEmi || new Date().toISOString().split('T')[0]);
 
     const total = infNFe.total?.ICMSTot || {};
@@ -442,9 +439,14 @@ class NfeParserService {
     const vProd = Number(total.vProd) || vNF;
 
     const transp = infNFe.transp || {};
+    const transporta = transp.transporta || {};
+    const carrierName = transporta.xNome || '';
+    const veicTransp = transp.veicTransp || {};
+    const truckPlate = (veicTransp.placa || '').replace('-', '').toUpperCase();
+
     const vol = transp.vol ? (Array.isArray(transp.vol) ? transp.vol[0] : transp.vol) : {};
-    const pesoL = Number(vol.pesoL) || (vNF > 0 ? Math.round(vNF * 0.45) : 0);
-    const qVol = Number(vol.qVol) || Math.round(pesoL / 60) || 1;
+    const pesoL = Number(vol.pesoL) || 0;
+    const qVol = Number(vol.qVol) || 0;
 
     let items = [];
     const detList = infNFe.det ? (Array.isArray(infNFe.det) ? infNFe.det : [infNFe.det]) : [];
@@ -465,17 +467,33 @@ class NfeParserService {
         let itemKg = 0;
         let itemQty = q;
 
+        const isBatata = rawName.toUpperCase().includes('BATATA');
         const isCebola = rawName.toUpperCase().includes('CEBOLA');
         const isCenoura = rawName.toUpperCase().includes('CENOURA');
         const isBeterraba = rawName.toUpperCase().includes('BETERRABA');
         const isGranel = u.includes('KG') || isCebola;
 
-        if (isCebola) {
+        if (isBatata) {
+          if (rawName.toUpperCase().includes('MIUDA') || rawName.toUpperCase().includes('MIÚDA')) {
+            resolvedProduct = 'Batata Miúda Lavada';
+          } else {
+            resolvedProduct = 'Batata Especial';
+          }
+          resolvedUnit = u.includes('CX') ? 'Caixas (25kg)' : 'Sacas (25kg)';
+          boxWeight = 25;
+          if (u.includes('KG')) {
+            itemKg = q;
+            itemQty = Math.round(q / 25);
+          } else {
+            itemQty = q;
+            itemKg = q * 25;
+          }
+        } else if (isCebola) {
           resolvedProduct = 'Cebola';
           resolvedUnit = 'Granel (kg)';
           boxWeight = 1;
           itemKg = q;
-          itemQty = Math.round(q / 29); // caixas equivalentes
+          itemQty = Math.round(q / 20); // caixas/sacos equivalentes
         } else if (isBeterraba) {
           resolvedProduct = 'Beterraba';
           resolvedUnit = 'Caixas (20kg)';
@@ -502,7 +520,7 @@ class NfeParserService {
           resolvedUnit = 'Granel (kg)';
           boxWeight = 1;
           itemKg = q;
-          itemQty = Math.round(q / 29);
+          itemQty = q;
         } else {
           resolvedUnit = 'Caixas (29kg)';
           boxWeight = 29;
@@ -515,38 +533,43 @@ class NfeParserService {
           quantity: itemQty,
           unit: resolvedUnit,
           boxWeightKg: boxWeight,
-          price: vUn,
-          total: vTot,
+          price: roundMoney(vUn),
+          total: roundMoney(vTot),
           kg: itemKg || q,
           dailyQuote: 0,
-          valorTotalVP: 0
+          valorTotalVP: roundMoney(vTot)
         };
       });
     } else {
+      const fallbackQty = qVol || 1;
+      const fallbackKg = pesoL || (fallbackQty * 29);
       items = [{
         product: 'Cenoura',
-        quantity: qVol,
+        quantity: fallbackQty,
         unit: 'Caixas (29kg)',
         boxWeightKg: 29,
-        price: qVol > 0 ? Number((vNF / qVol).toFixed(2)) : vNF,
-        total: vNF,
-        kg: pesoL,
+        price: fallbackQty > 0 ? roundMoney(vNF / fallbackQty) : vNF,
+        total: roundMoney(vNF),
+        kg: fallbackKg,
         dailyQuote: 0,
-        valorTotalVP: 0
+        valorTotalVP: roundMoney(vNF)
       }];
     }
 
-    const previdencia = vNF * TAX_RATES.PREVIDENCIA;
-    const rat = vNF * TAX_RATES.RAT;
-    const senar = vNF * TAX_RATES.SENAR;
-    const funruralTotal = vNF * TAX_RATES.FUNRURAL_TOTAL;
+    const calculatedTotalKg = items.reduce((acc, it) => acc + (Number(it.kg) || 0), 0);
+    const calculatedVolumes = items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0);
+    const finalTotalKg = calculatedTotalKg > 0 ? calculatedTotalKg : (pesoL || (vNF > 0 ? Math.round(vNF * 0.45) : 0));
+    const finalTotalVolumes = calculatedVolumes > 0 ? calculatedVolumes : (qVol || 1);
 
+    const totalOperation = roundMoney(vNF);
+    const fiscal = calculateFiscalDeductions(totalOperation);
     const infCpl = typeof infNFe.infAdic?.infCpl === 'string' ? infNFe.infAdic.infCpl.trim() : '';
 
     return {
       success: true,
       nfeNumber: nNF,
       nfeKey: nfeKey,
+      serie: serie,
       saleDate: dhEmi,
       nfeDate: dhEmi,
       notes: infCpl,
@@ -567,18 +590,25 @@ class NfeParserService {
         uf: destUF,
         address: destAddress
       },
-      totalOperation: vNF,
-      totalVolumes: qVol,
-      totalKg: pesoL,
+      transp: {
+        carrierName: carrierName,
+        truckPlate: truckPlate
+      },
+      truckPlate: truckPlate,
+      carrierName: carrierName,
+      totalOperation: totalOperation,
+      totalVolumes: finalTotalVolumes,
+      totalKg: finalTotalKg,
       items: items,
       funrural: {
-        total: funruralTotal,
-        previdencia: previdencia,
-        rat: rat,
-        senar: senar
+        total: fiscal.funruralTotal,
+        previdencia: fiscal.previdencia,
+        rat: fiscal.rat,
+        senar: fiscal.senar
       }
     };
   }
 }
 
 module.exports = NfeParserService;
+

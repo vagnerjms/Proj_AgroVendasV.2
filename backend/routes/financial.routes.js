@@ -2,16 +2,27 @@ const express = require('express');
 const router = express.Router();
 const { Sale, Purchase } = require('../db');
 const { requireAuth } = require('../middlewares/auth');
-const { roundMoney, calculateFiscalDeductions } = require('../utils/money');
+const { roundMoney, calculateFiscalDeductions, calculateCommission } = require('../utils/money');
 
 // Protect all financial endpoints with JWT authentication
 router.use(requireAuth);
 
-// GET /api/financial
+// GET /api/financial (Com suporte a filtros por período startDate/endDate e consolidação precisa)
 router.get('/', async (req, res) => {
   try {
+    const { startDate, endDate, client, status } = req.query;
+    const query = {};
+
+    if (startDate || endDate) {
+      query.saleDate = {};
+      if (startDate) query.saleDate.$gte = startDate;
+      if (endDate) query.saleDate.$lte = endDate;
+    }
+    if (client) query.client = new RegExp(client, 'i');
+    if (status) query.paymentStatus = status;
+
     const [sales, purchases] = await Promise.all([
-      Sale.find().lean(),
+      Sale.find(query).lean(),
       Purchase.find().lean()
     ]);
 
@@ -30,51 +41,55 @@ router.get('/', async (req, res) => {
 
     for (const s of sales) {
       const valorNF = roundMoney(s.totalOperation);
-      const caixas = Number(s.totalVolumes) || (Number(s.totalKg) > 0 ? (Number(s.totalKg) / 29) : 0);
-      let cotacao = Number(s.dailyQuote) || 0;
-      if (!cotacao && s.notes) {
-        const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
-        if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
+      
+      // Respeita estritamente o VP registrado; se não houver negociação particular, a base comercial é o próprio valor da NF
+      let valorVP = Number(s.valorTotalVP) > 0 ? roundMoney(s.valorTotalVP) : valorNF;
+      if (valorVP <= 0 && Number(s.totalVolumes) > 0 && Number(s.dailyQuote) > 0) {
+        valorVP = roundMoney(Number(s.totalVolumes) * Number(s.dailyQuote));
       }
-      if (!cotacao) cotacao = 45.0;
 
-      const valorVP = Number(s.valorTotalVP) > 0 ? roundMoney(s.valorTotalVP) : roundMoney(caixas * cotacao);
-      const isAReceber = s.paymentStatus === 'A Receber' || !s.paymentStatus;
+      const isRecebido = s.paymentStatus === 'Recebido';
 
-      if (isAReceber) {
+      if (isRecebido) {
+        const recebidoEfetivo = Number(s.paidAmount) > 0 ? Number(s.paidAmount) : valorVP;
+        totalRecebido = roundMoney(totalRecebido + recebidoEfetivo);
+      } else {
         totalAReceberNF = roundMoney(totalAReceberNF + valorNF);
         totalAReceberVP = roundMoney(totalAReceberVP + valorVP);
         
-        // Verifica se está vencido
+        // Verificação de vencimento
         let due = s.dueDate;
         if (!due && s.saleDate) {
           const days = Number(s.paymentTermDays) || 30;
-          const d = new Date(s.saleDate + 'T12:00:00');
-          d.setDate(d.getDate() + days);
-          due = d.toISOString().split('T')[0];
+          const d = new Date(s.saleDate + 'T12:00:00Z');
+          if (!isNaN(d.getTime())) {
+            d.setUTCDate(d.getUTCDate() + days);
+            due = d.toISOString().split('T')[0];
+          }
         }
         if (due && due < todayStr) {
           totalVencido = roundMoney(totalVencido + valorNF);
         }
-      } else if (s.paymentStatus === 'Recebido') {
-        totalRecebido = roundMoney(totalRecebido + valorNF);
       }
 
-      // Impostos e deduções do FUNRURAL
+      // Apuração exata de FUNRURAL
       const fiscal = calculateFiscalDeductions(valorNF);
       totalFunrural = roundMoney(totalFunrural + fiscal.funruralTotal);
       totalPrevidencia = roundMoney(totalPrevidencia + fiscal.previdencia);
       totalRat = roundMoney(totalRat + fiscal.rat);
       totalSenar = roundMoney(totalSenar + fiscal.senar);
 
-      // Comissões
-      const taxa = Number(s.feeValue) || 3.0;
-      const comissao = roundMoney(valorVP * (taxa / 100));
+      // Comissões (prioriza valor persistido ou calcula sobre a base comercial)
+      let comissao = Number(s.totalCommission);
+      if (isNaN(comissao) || comissao <= 0) {
+        const fee = Number(s.feeValue) || 3.0;
+        comissao = calculateCommission(valorVP, fee).comissao;
+      }
       totalComissao = roundMoney(totalComissao + comissao);
       totalLiquidoProdutor = roundMoney(totalLiquidoProdutor + (valorVP - comissao));
     }
 
-    // Contas a pagar (Compras de produtores)
+    // Contas a pagar (Compras de insumos / produtores)
     let totalAPagar = 0;
     for (const p of purchases) {
       if (p.paymentStatus === 'A Pagar' || !p.paymentStatus) {
@@ -85,16 +100,16 @@ router.get('/', async (req, res) => {
     const liquidoNF = roundMoney(totalAReceberNF - totalFunrural);
 
     res.json({
-      totalAReceber: totalAReceberNF, // R$ 1.054.406,28 (Bruto)
+      totalAReceber: totalAReceberNF,
       totalAReceberNF,
       totalFaturadoNF: totalAReceberNF,
-      liquidoNF,                      // R$ 1.037.219,46 (Líquido após FUNRURAL)
-      totalAReceberVP,                // R$ 1.186.046,73 (Base Comercial VP)
+      liquidoNF,
+      totalAReceberVP,
       totalComercialVP: totalAReceberVP,
       totalAPagar,
       totalRecebido,
       vencidos: totalVencido,
-      totalFunrural,                  // R$ 17.186,82
+      totalFunrural,
       totalPrevidencia,
       totalRat,
       totalSenar,
@@ -109,3 +124,4 @@ router.get('/', async (req, res) => {
 });
 
 module.exports = router;
+

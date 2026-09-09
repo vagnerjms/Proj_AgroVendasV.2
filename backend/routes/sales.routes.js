@@ -503,7 +503,7 @@ router.post('/sync-all-webhooks', async (req, res) => {
       sendSaleWebhook('sale.batch_sync', sale);
       count++;
     }
-    res.json({ success: true, count, message: `${count} eventos de vendas foram disparados para o webhook do n8n / Google Calendar!` });
+    res.json({ success: true, count, message: `${count} eventos e anexos de vendas foram disparados para o webhook do n8n (Google Agenda & Google Drive)!` });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao sincronizar todas as vendas via webhook' });
   }

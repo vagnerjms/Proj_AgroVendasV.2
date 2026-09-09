@@ -291,10 +291,10 @@ export default function AgendaAlerts({ setCurrentPage }) {
             onClick={handleSyncAll}
             disabled={syncing}
             className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
-            title="Dispara todos os lançamentos de vendas para o Webhook do n8n / Google Agenda"
+            title="Dispara todos os lançamentos e arquivos de vendas para o Webhook do n8n (Google Agenda & Google Drive)"
           >
             <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-            <span>{syncing ? 'Sincronizando com n8n...' : '⚡ Sincronizar Tudo c/ Google Agenda'}</span>
+            <span>{syncing ? 'Sincronizando com n8n...' : '⚡ Sincronizar Tudo (Agenda & Drive)'}</span>
           </button>
 
           <button

@@ -500,10 +500,12 @@ router.post('/sync-all-webhooks', async (req, res) => {
     const sales = await Sale.find().sort({ saleDate: 1 });
     let count = 0;
     for (const sale of sales) {
-      sendSaleWebhook('sale.batch_sync', sale);
+      await sendSaleWebhook('sale.batch_sync', sale);
+      // Intervalo de 250ms entre envios para evitar saturação no n8n / API do Google Drive
+      await new Promise(resolve => setTimeout(resolve, 250));
       count++;
     }
-    res.json({ success: true, count, message: `${count} eventos e anexos de vendas foram disparados para o webhook do n8n (Google Agenda & Google Drive)!` });
+    res.json({ success: true, count, message: `${count} eventos e anexos de vendas foram sincronizados com sucesso (Google Agenda & Google Drive)!` });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao sincronizar todas as vendas via webhook' });
   }

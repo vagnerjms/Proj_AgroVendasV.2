@@ -51,7 +51,7 @@ async function sendSaleWebhook(event, sale) {
 
     // Leitura assíncrona não-bloqueante de anexos físicos
     const files = [];
-    const targets = [sale.nfFile, sale.evidenceFile].filter(Boolean);
+    const targets = [sale.nfFile, sale.evidenceFile, sale.paymentProofFile].filter(Boolean);
     try {
       if (fs.existsSync(uploadDir)) {
         const diskFiles = await fs.promises.readdir(uploadDir);
@@ -122,24 +122,32 @@ async function sendSaleWebhook(event, sale) {
       }
     };
 
-    // Try sending to n8n webhook with timeout
+    // Try sending to n8n webhook sequentially until one succeeds
     const targetUrls = [
       N8N_WEBHOOK_URL,
       'http://n8n_application:5678/webhook/agrovenda-sale',
       'http://127.0.0.1:5678/webhook/agrovenda-sale'
-    ];
+    ].filter((v, i, a) => a.indexOf(v) === i);
 
+    let sent = false;
     for (const url of targetUrls) {
+      if (sent) break;
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-        fetch(url, {
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
           signal: controller.signal
-        }).catch(() => {}).finally(() => clearTimeout(timeoutId));
-      } catch (e) {}
+        });
+        clearTimeout(timeoutId);
+        if (res.ok) {
+          sent = true;
+        }
+      } catch (e) {
+        // Fallback to next url candidate
+      }
     }
   } catch (err) {
     console.warn('[Webhook] Erro ao disparar webhook para n8n:', err.message);

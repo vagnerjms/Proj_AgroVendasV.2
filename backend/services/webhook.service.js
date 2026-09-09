@@ -2,10 +2,14 @@
 const path = require('path');
 const fs = require('fs');
 const { uploadDir } = require('../middlewares/upload');
+const { roundMoney } = require('../utils/money');
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'http://179.197.231.106:5678/webhook/agrovenda-sale';
 
 function parseDueDate(sale) {
+  if (sale.dueDate) {
+    return sale.dueDate;
+  }
   if (sale.notes) {
     const match = sale.notes.match(/Vencimento:\s*([^\s|]+)/i);
     if (match && match[1]) {
@@ -16,9 +20,12 @@ function parseDueDate(sale) {
     }
   }
   if (sale.saleDate) {
-    const d = new Date(sale.saleDate);
-    d.setDate(d.getDate() + 30);
-    return d.toISOString().split('T')[0];
+    const d = new Date(sale.saleDate + 'T12:00:00Z');
+    if (!isNaN(d.getTime())) {
+      const days = Number(sale.paymentTermDays) || 30;
+      d.setUTCDate(d.getUTCDate() + days);
+      return d.toISOString().split('T')[0];
+    }
   }
   return sale.saleDate || new Date().toISOString().split('T')[0];
 }
@@ -28,62 +35,62 @@ async function sendSaleWebhook(event, sale) {
     const dueDate = parseDueDate(sale);
     const clientName = sale.client || 'Cliente Geral';
 
-    const caixas = sale.totalVolumes || (sale.totalKg > 0 ? (sale.totalKg / 29) : 0);
-    let cotacao = 45.0;
-    if (sale.notes) {
-      const matchCot = sale.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
-      if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
+    // Prioriza o valor real acordado da VP; caso não haja, utiliza o valor total da NF
+    let valorFinal = Number(sale.valorTotalVP) > 0 ? roundMoney(sale.valorTotalVP) : roundMoney(sale.totalOperation);
+    if (valorFinal <= 0 && Number(sale.dailyQuote) > 0 && Number(sale.totalVolumes) > 0) {
+      valorFinal = roundMoney(Number(sale.totalVolumes) * Number(sale.dailyQuote));
     }
-    const valorVP = caixas * cotacao;
-    const valorFinal = valorVP > 0 ? valorVP : (Number(sale.totalOperation) || 0);
-    const volumesInt = Math.round(caixas);
 
-    // Dynamic folder names for Google Drive organization
-    const dateObj = new Date(sale.saleDate || new Date());
+    const volumesInt = Math.round(Number(sale.totalVolumes) || (Number(sale.totalKg) > 0 ? Number(sale.totalKg) / 29 : 0));
+
+    // Formatação de diretórios dinâmicos do Google Drive
+    const dateObj = new Date(sale.saleDate ? `${sale.saleDate}T12:00:00Z` : new Date());
     const year = dateObj.getFullYear();
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const folderMonth = `${year}-${month}`; // ex: "2026-08"
+    const folderMonth = `${year}-${month}`;
 
-    // Search and attach actual files from disk for Google Drive upload
+    // Leitura assíncrona não-bloqueante de anexos físicos
     const files = [];
     const targets = [sale.nfFile, sale.evidenceFile].filter(Boolean);
-    if (fs.existsSync(uploadDir)) {
-      const diskFiles = fs.readdirSync(uploadDir);
-      for (const target of targets) {
-        const diskMatch = diskFiles.find(df => 
-          df === target || 
-          df.endsWith(target) || 
-          (target.includes('.') && df.includes(target))
-        );
-        if (diskMatch) {
-          try {
-            const filePath = path.join(uploadDir, diskMatch);
-            const stat = fs.statSync(filePath);
-            if (stat.isFile() && stat.size > 0 && stat.size <= 25 * 1024 * 1024) {
-              const dataBuffer = fs.readFileSync(filePath);
-              let cleanFileName = diskMatch.replace(/^\d+-\d+-/, '');
-              let driveFileName = cleanFileName;
-              if (!driveFileName.toUpperCase().startsWith(sale.id.toUpperCase())) {
-                driveFileName = `${sale.id} - ${cleanFileName}`;
+    try {
+      if (fs.existsSync(uploadDir)) {
+        const diskFiles = await fs.promises.readdir(uploadDir);
+        for (const target of targets) {
+          const diskMatch = diskFiles.find(df => 
+            df === target || 
+            df.endsWith(target) || 
+            (target.includes('.') && df.includes(target))
+          );
+          if (diskMatch) {
+            try {
+              const filePath = path.join(uploadDir, diskMatch);
+              const stat = await fs.promises.stat(filePath);
+              if (stat.isFile() && stat.size > 0 && stat.size <= 25 * 1024 * 1024) {
+                const dataBuffer = await fs.promises.readFile(filePath);
+                let cleanFileName = diskMatch.replace(/^\d+-\d+-/, '');
+                let driveFileName = cleanFileName;
+                if (!driveFileName.toUpperCase().startsWith(sale.id.toUpperCase())) {
+                  driveFileName = `${sale.id} - ${cleanFileName}`;
+                }
+                const ext = path.extname(cleanFileName).toLowerCase();
+                const mimeType = ext === '.pdf' ? 'application/pdf' :
+                                 (ext === '.xml' ? 'application/xml' :
+                                 (ext === '.png' ? 'image/png' :
+                                 (ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'application/octet-stream')));
+                files.push({
+                  filename: driveFileName,
+                  originalName: cleanFileName,
+                  mimeType,
+                  sizeBytes: stat.size,
+                  contentBase64: dataBuffer.toString('base64'),
+                  downloadUrl: `https://agrovendas.cloud/uploads/${diskMatch}`
+                });
               }
-              const ext = path.extname(cleanFileName).toLowerCase();
-              const mimeType = ext === '.pdf' ? 'application/pdf' :
-                               (ext === '.xml' ? 'application/xml' :
-                               (ext === '.png' ? 'image/png' :
-                               (ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'application/octet-stream')));
-              files.push({
-                filename: driveFileName,
-                originalName: cleanFileName,
-                mimeType,
-                sizeBytes: stat.size,
-                contentBase64: dataBuffer.toString('base64'),
-                downloadUrl: `https://agrovendas.cloud/uploads/${diskMatch}`
-              });
-            }
-          } catch (e) {}
+            } catch (eRead) {}
+          }
         }
       }
-    }
+    } catch (eDir) {}
 
     const payload = {
       event, // 'sale.created', 'sale.updated', 'sale.settled', 'sale.manual_sync', 'sale.batch_sync'
@@ -115,7 +122,7 @@ async function sendSaleWebhook(event, sale) {
       }
     };
 
-    // Try sending to n8n webhook
+    // Try sending to n8n webhook with timeout
     const targetUrls = [
       N8N_WEBHOOK_URL,
       'http://n8n_application:5678/webhook/agrovenda-sale',
@@ -124,11 +131,14 @@ async function sendSaleWebhook(event, sale) {
 
     for (const url of targetUrls) {
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
         fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        }).catch(() => {});
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        }).catch(() => {}).finally(() => clearTimeout(timeoutId));
       } catch (e) {}
     }
   } catch (err) {
@@ -140,3 +150,4 @@ module.exports = {
   sendSaleWebhook,
   parseDueDate
 };
+

@@ -315,9 +315,11 @@ router.post('/trigger-n8n', requireAuth, async (req, res) => {
           pesoNF += peso;
           valorTotalNF = roundMoney(valorTotalNF + valor);
           funrural = roundMoney(funrural + fiscal.funruralTotal);
-          const caixas = Number(s.totalVolumes) || (peso > 0 ? (peso / 29) : 0);
-          let cotacao = Number(s.dailyQuote) || 45.0;
-          const valorVP = Number(s.valorTotalVP) > 0 ? roundMoney(s.valorTotalVP) : roundMoney(caixas * cotacao);
+          
+          let valorVP = Number(s.valorTotalVP) > 0 ? roundMoney(s.valorTotalVP) : valor;
+          if (valorVP <= 0 && Number(s.totalVolumes) > 0 && Number(s.dailyQuote) > 0) {
+            valorVP = roundMoney(Number(s.totalVolumes) * Number(s.dailyQuote));
+          }
           totalVendaAReceber = roundMoney(totalVendaAReceber + valorVP);
         });
         return {
@@ -387,11 +389,20 @@ router.post('/trigger-n8n', requireAuth, async (req, res) => {
     const fetchModule = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
     const fetchFunc = typeof fetch === 'function' ? fetch : fetchModule;
 
-    const response = await fetchFunc(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    let response;
+    try {
+      response = await fetchFunc(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     const resultText = await response.text();
     let resultJson;

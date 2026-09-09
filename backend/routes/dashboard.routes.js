@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
 
     const filteredSales = await Sale.find(query);
     const allSales = await Sale.find().sort({ saleDate: -1 });
-    const { roundMoney, calculateCommission } = require('../utils/money');
+    const { roundMoney, calculateCommission, calculateFiscalDeductions } = require('../utils/money');
 
     const getSaleCommercialValue = (s) => {
       let valorVP = Number(s.valorTotalVP) > 0 ? roundMoney(s.valorTotalVP) : roundMoney(s.totalOperation);
@@ -26,6 +26,13 @@ router.get('/', async (req, res) => {
         valorVP = roundMoney(Number(s.totalVolumes) * Number(s.dailyQuote));
       }
       return valorVP;
+    };
+
+    const getSaleLiquidationValue = (s) => {
+      const valorVP = getSaleCommercialValue(s);
+      const valorNF = roundMoney(s.totalOperation);
+      const fiscal = calculateFiscalDeductions(valorNF > 0 ? valorNF : valorVP);
+      return roundMoney(Math.max(0, valorVP - fiscal.funruralTotal));
     };
 
     const totalSalesCount = filteredSales.length;
@@ -41,9 +48,10 @@ router.get('/', async (req, res) => {
 
     const grossProfit = totalCommission;
 
+    // Total a Receber (Valor a Liquidar = Total Comercial - Funrural s/ NF)
     const totalAReceber = roundMoney(allSales
       .filter(s => s.paymentStatus !== 'Recebido')
-      .reduce((acc, s) => acc + getSaleCommercialValue(s), 0));
+      .reduce((acc, s) => acc + getSaleLiquidationValue(s), 0));
 
     const allPurchases = await Purchase.find();
     const totalAPagar = roundMoney(allPurchases
@@ -68,7 +76,7 @@ router.get('/', async (req, res) => {
           }
         }
         if (due && due < todayStr) {
-          totalVencido = roundMoney(totalVencido + getSaleCommercialValue(s));
+          totalVencido = roundMoney(totalVencido + getSaleLiquidationValue(s));
         }
       }
     }

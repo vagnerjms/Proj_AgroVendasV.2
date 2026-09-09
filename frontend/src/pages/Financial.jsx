@@ -56,28 +56,6 @@ export default function Financial({ view = 'overview' }) {
 
       {/* Financial Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-1">
-          <div className="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
-            <span>Total Faturado (NF)</span>
-            <ArrowUpRight className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="text-2xl font-extrabold text-gray-900">
-            {formatCurrency(financial.totalFaturadoNF || financial.totalAReceberNF)}
-          </div>
-          <span className="text-[11px] text-gray-400 block font-medium">Valor Bruto Faturado</span>
-        </div>
-
-        <div className="bg-white rounded-xl border border-emerald-200 bg-emerald-50/20 p-5 shadow-sm space-y-1">
-          <div className="flex items-center justify-between text-emerald-800 text-xs font-bold uppercase">
-            <span>Líquido da NF</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-700" />
-          </div>
-          <div className="text-2xl font-black text-emerald-950">
-            {formatCurrency(financial.liquidoNF || (financial.totalAReceberNF - financial.totalFunrural))}
-          </div>
-          <span className="text-[11px] text-emerald-700 block font-semibold">Após dedução FUNRURAL</span>
-        </div>
-
         <div className="bg-white rounded-xl border border-blue-200 bg-blue-50/20 p-5 shadow-sm space-y-1">
           <div className="flex items-center justify-between text-blue-800 text-xs font-bold uppercase">
             <span>Total Comercial (VP)</span>
@@ -91,13 +69,35 @@ export default function Financial({ view = 'overview' }) {
 
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-1">
           <div className="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
-            <span>(-) FUNRURAL (1,63%)</span>
+            <span>(-) FUNRURAL (1,63% s/ NF)</span>
             <ShieldCheck className="w-4 h-4 text-red-600" />
           </div>
           <div className="text-2xl font-extrabold text-red-600">
             -{formatCurrency(financial.totalFunrural)}
           </div>
-          <span className="text-[11px] text-gray-400 block font-medium">Dedução tributária</span>
+          <span className="text-[11px] text-gray-400 block font-medium">Dedução apurada s/ Nota</span>
+        </div>
+
+        <div className="bg-white rounded-xl border-2 border-emerald-500 bg-emerald-50/40 p-5 shadow-md space-y-1">
+          <div className="flex items-center justify-between text-emerald-900 text-xs font-black uppercase">
+            <span>(=) Valor a Liquidar</span>
+            <ShieldCheck className="w-4 h-4 text-emerald-700" />
+          </div>
+          <div className="text-2xl font-black text-emerald-950">
+            {formatCurrency(financial.totalALiquidar || financial.totalAReceber || ((financial.totalComercialVP || financial.totalAReceberVP) - financial.totalFunrural))}
+          </div>
+          <span className="text-[11px] text-emerald-800 block font-bold">Total Comercial - FUNRURAL</span>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-1">
+          <div className="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
+            <span>Total Faturado (NF)</span>
+            <ArrowUpRight className="w-4 h-4 text-emerald-600" />
+          </div>
+          <div className="text-2xl font-extrabold text-gray-900">
+            {formatCurrency(financial.totalFaturadoNF || financial.totalAReceberNF)}
+          </div>
+          <span className="text-[11px] text-gray-400 block font-medium">Líquido NF: {formatCurrency(financial.liquidoNF || ((financial.totalFaturadoNF || financial.totalAReceberNF) - financial.totalFunrural))}</span>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-1">
@@ -166,34 +166,44 @@ export default function Financial({ view = 'overview' }) {
               <tr>
                 <th className="py-3 px-4">Operação</th>
                 <th className="py-3 px-4">Cliente</th>
+                <th className="py-3 px-4 text-right">Comercial (VP)</th>
                 <th className="py-3 px-4 text-right">Valor Bruto (NF)</th>
-                <th className="py-3 px-4 text-right">FUNRURAL (1,63%)</th>
+                <th className="py-3 px-4 text-right">FUNRURAL (NF)</th>
+                <th className="py-3 px-4 text-right text-emerald-300">Valor a Liquidar</th>
                 <th className="py-3 px-4 text-right">Comissão (3%)</th>
                 <th className="py-3 px-4 text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {sales.map(s => (
-                <tr key={s.id} className="hover:bg-gray-50/80 transition-colors">
-                  <td className="py-3 px-4 font-bold text-gray-900">
-                    {s.id} 
-                    <span className="block font-normal text-gray-400 text-[11px]">{formatDate(s.saleDate)}</span>
-                  </td>
-                  <td className="py-3 px-4 font-semibold text-gray-800">{s.client}</td>
-                  <td className="py-3 px-4 text-right font-bold text-gray-900">{formatCurrency(s.totalOperation)}</td>
-                  <td className="py-3 px-4 text-right text-red-600 font-medium">-{formatCurrency(s.funruralTotal)}</td>
-                  <td className="py-3 px-4 text-right font-semibold text-blue-900">{formatCurrency(s.totalCommission)}</td>
-                  <td className="py-3 px-4 text-center">
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
-                      s.paymentStatus === 'Recebido' 
-                        ? 'bg-emerald-100 text-emerald-800' 
-                        : 'bg-amber-100 text-amber-900'
-                    }`}>
-                      {s.paymentStatus || 'A Receber'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {sales.map(s => {
+                const vp = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : Number(s.totalOperation);
+                const funrural = Number(s.funruralTotal) || (Number(s.totalOperation) * 0.0163);
+                const aLiquidar = Math.max(0, vp - funrural);
+
+                return (
+                  <tr key={s.id} className="hover:bg-gray-50/80 transition-colors">
+                    <td className="py-3 px-4 font-bold text-gray-900">
+                      {s.id} 
+                      <span className="block font-normal text-gray-400 text-[11px]">{formatDate(s.saleDate)}</span>
+                    </td>
+                    <td className="py-3 px-4 font-semibold text-gray-800">{s.client}</td>
+                    <td className="py-3 px-4 text-right font-bold text-blue-950">{formatCurrency(vp)}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-gray-700">{formatCurrency(s.totalOperation)}</td>
+                    <td className="py-3 px-4 text-right text-red-600 font-medium">-{formatCurrency(funrural)}</td>
+                    <td className="py-3 px-4 text-right font-black text-emerald-950 bg-emerald-50/30">{formatCurrency(aLiquidar)}</td>
+                    <td className="py-3 px-4 text-right font-semibold text-blue-900">{formatCurrency(s.totalCommission)}</td>
+                    <td className="py-3 px-4 text-center">
+                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+                        s.paymentStatus === 'Recebido' 
+                          ? 'bg-emerald-100 text-emerald-800' 
+                          : 'bg-amber-100 text-amber-900'
+                      }`}>
+                        {s.paymentStatus || 'A Receber'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

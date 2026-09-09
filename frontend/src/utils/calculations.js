@@ -1,10 +1,10 @@
-// Funrural breakdown: 1.63% total (Previdência Social 1,30%, RAT 0,10%, SENAR 0,23%)
+// Funrural breakdown: 1.63% total (Previdência Social 1,20%, RAT 0,10%, SENAR 0,33%)
 export function calculateFunrural(totalOperation) {
   const total = Number(totalOperation) || 0;
-  const previdencia = total * 0.0130;
-  const rat = total * 0.0010;
-  const senar = total * 0.0023;
-  const funruralTotal = previdencia + rat + senar;
+  const previdencia = Math.round((total * 0.0120 + Number.EPSILON) * 100) / 100;
+  const rat = Math.round((total * 0.0010 + Number.EPSILON) * 100) / 100;
+  const senar = Math.round((total * 0.0033 + Number.EPSILON) * 100) / 100;
+  const funruralTotal = Math.round((previdencia + rat + senar + Number.EPSILON) * 100) / 100;
 
   return {
     previdencia,
@@ -20,9 +20,9 @@ export function calculateFunrural(totalOperation) {
  * 2. caixas = totalKg / unitKg (ex: 29kg para caixa de cenoura)
  * 3. valorTotalNF = totalKg * precoKg (ou caixas * precoCaixa)
  * 4. funrural = valorTotalNF * 0.0163 (deduzido da NF)
- * 5. liquidoAReceber = valorTotalNF - funrural
- * 6. valorTotalVP = caixas * cotacaoCaixa
- * 7. comissao = valorTotalNF * (feeValue / 100)
+ * 5. valorTotalVP = caixas * cotacaoCaixa (ou kg * cotacao se a granel / cotacao por kg)
+ * 6. liquidoAReceber (Valor a Liquidar) = Total Comercial (VP) - FUNRURAL (calculado sobre a NF)
+ * 7. comissao = valorTotalVP * (feeValue / 100)
  */
 export function calculatePreciseSale({
   totalKg = 0,
@@ -46,20 +46,21 @@ export function calculatePreciseSale({
   // 3. FUNRURAL (1,63% deduzido da NF)
   const funrural = calculateFunrural(valorTotalNF);
 
-  // 4. Líquido a Receber (Valor NF - FUNRURAL)
-  const liquidoAReceber = Math.max(0, valorTotalNF - funrural.funruralTotal);
-
-  // 5. Valor Total da VP (Comercial / Cotação do dia)
+  // 4. Valor Total da VP (Comercial / Cotação do dia)
   // Se a cotação for <= 10.0 (ex: R$ 2,15/kg) ou se unitKg === 1 (Granel), multiplica pelo peso total em kg
   const valorTotalVP = (cot > 0 && cot <= 10.0) || uKg === 1
     ? (kg * cot)
     : (caixas * cot);
 
+  // 5. Valor a Liquidar / Líquido a Receber: Total Comercial (VP) - Funrural (sobre NF)
+  const baseComercial = valorTotalVP > 0 ? valorTotalVP : valorTotalNF;
+  const liquidoAReceber = Math.max(0, baseComercial - funrural.funruralTotal);
+
   // 6. Comissão AgroVenda (Calculada sobre a base comercial / Total VP)
   let totalCommission = 0;
   const val = Number(feeValue) || 0;
   if (feeType === 'Porcentagem (%)') {
-    totalCommission = valorTotalVP * (val / 100);
+    totalCommission = baseComercial * (val / 100);
   } else if (feeType === 'Valor Fixo por Saca/Volume') {
     totalCommission = caixas * val;
   } else if (feeType === 'Valor Fixo Total') {
@@ -78,6 +79,7 @@ export function calculatePreciseSale({
     rat: funrural.rat,
     senar: funrural.senar,
     liquidoAReceber: liquidoAReceber,
+    valorLiquidar: liquidoAReceber,
     valorTotalVP: valorTotalVP,
     totalCommission: totalCommission
   };
@@ -87,6 +89,7 @@ export function calculateSummary({ items = [], feeType = 'Porcentagem (%)', feeV
   let totalVolumes = 0;
   let totalKg = 0;
   let totalOperation = 0;
+  let totalValorVP = 0;
 
   items.forEach(item => {
     const qty = Number(item.quantity) || 0;
@@ -103,13 +106,19 @@ export function calculateSummary({ items = [], feeType = 'Porcentagem (%)', feeV
       totalKg += qty * unitKg;
       totalOperation += qty * price;
     }
+
+    if (item.valorTotalVP) {
+      totalValorVP += Number(item.valorTotalVP);
+    }
   });
+
+  const baseComercial = totalValorVP > 0 ? totalValorVP : totalOperation;
 
   // Calculate commission
   let totalCommission = 0;
   const val = Number(feeValue) || 0;
   if (feeType === 'Porcentagem (%)') {
-    totalCommission = totalOperation * (val / 100);
+    totalCommission = baseComercial * (val / 100);
   } else if (feeType === 'Valor Fixo por Saca/Volume') {
     totalCommission = totalVolumes * val;
   } else if (feeType === 'Valor Fixo Total') {
@@ -117,14 +126,16 @@ export function calculateSummary({ items = [], feeType = 'Porcentagem (%)', feeV
   }
 
   const funrural = calculateFunrural(totalOperation);
-  const liquidoAReceber = Math.max(0, totalOperation - funrural.funruralTotal);
+  const liquidoAReceber = Math.max(0, baseComercial - funrural.funruralTotal);
 
   return {
     totalVolumes,
     totalKg,
     totalOperation,
+    valorTotalVP: totalValorVP,
     totalCommission,
     liquidoAReceber,
+    valorLiquidar: liquidoAReceber,
     ...funrural
   };
 }

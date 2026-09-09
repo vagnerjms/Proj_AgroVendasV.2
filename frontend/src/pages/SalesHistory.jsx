@@ -52,7 +52,7 @@ const COLUMN_DEFINITIONS = [
   { id: 'valorTotalVP', label: 'Valor Total Comercial' },
   { id: 'totalOperation', label: 'Valor Total da NF' },
   { id: 'funrural', label: '(-) FUNRURAL (1,63%)' },
-  { id: 'net', label: '(=) Líquido a Receber' },
+  { id: 'net', label: '(=) Valor a Liquidar' },
   { id: 'feeValue', label: 'Comissão (3%)' },
   { id: 'status', label: 'Status' },
   { id: 'actions', label: 'Ações' }
@@ -371,11 +371,13 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
     return Number(sale.totalOperation) || (caixas * (cotacao || 45.0));
   };
 
-  // Helper calculation for Líquido a Receber (Valor NF - Funrural)
+  // Helper calculation for Valor a Liquidar (Receber) = Total Comercial (VP) - Funrural (calculado sobre a NF)
   const getNetReceivable = (sale) => {
+    const vpTotal = getValorTotalVP(sale);
     const nfTotal = Number(sale.totalOperation) || 0;
+    const baseComercial = vpTotal > 0 ? vpTotal : nfTotal;
     const funrural = Number(sale.funruralTotal) || (nfTotal * 0.0163);
-    return Math.max(0, nfTotal - funrural);
+    return Math.max(0, baseComercial - funrural);
   };
 
   // Sort logic with numerical, string and date support
@@ -1103,35 +1105,40 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
               )}
             </div>
 
-            {/* Breakdown Financeiro: NF vs FUNRURAL vs Líquido vs VP */}
+            {/* Breakdown Financeiro: VP vs NF vs FUNRURAL vs Valor a Liquidar */}
             <div className="bg-emerald-50/50 rounded-xl p-4 border border-emerald-200 space-y-2.5 text-xs">
               <span className="text-xs font-bold text-[#173e27] uppercase tracking-wider block border-b border-emerald-200 pb-1">
                 Demonstrativo Financeiro & Dedução Fiscal:
               </span>
 
-              <div className="flex justify-between text-gray-800 font-semibold">
-                <span>Valor Total da Nota Fiscal (NF):</span>
-                <span className="text-sm font-bold text-gray-900">{formatCurrency(viewSale.totalOperation)}</span>
+              <div className="flex justify-between text-blue-900 font-bold">
+                <span>Total Comercial (VP):</span>
+                <span className="text-sm font-black text-blue-950">{formatCurrency(getValorTotalVP(viewSale))}</span>
+              </div>
+
+              <div className="flex justify-between text-gray-700 font-medium">
+                <span>Valor Faturado na Nota Fiscal (NF):</span>
+                <span className="font-semibold text-gray-900">{formatCurrency(viewSale.totalOperation)}</span>
               </div>
 
               <div className="flex justify-between text-red-600 font-semibold">
-                <span>(-) FUNRURAL Deduzido da Nota (1,63%):</span>
+                <span>(-) FUNRURAL (1,63% apurado s/ NF):</span>
                 <span className="text-sm font-bold">-{formatCurrency(viewSale.funruralTotal)}</span>
               </div>
 
               <div className="pl-4 text-[11px] text-gray-500 space-y-0.5 border-l-2 border-red-200 my-1">
-                <div className="flex justify-between"><span>↳ Previdência Social (1,30%):</span><span>{formatCurrency(viewSale.previdenciaSocial)}</span></div>
+                <div className="flex justify-between"><span>↳ Previdência Social (1,20%):</span><span>{formatCurrency(viewSale.previdenciaSocial)}</span></div>
                 <div className="flex justify-between"><span>↳ RAT (0,10%):</span><span>{formatCurrency(viewSale.rat)}</span></div>
-                <div className="flex justify-between"><span>↳ SENAR (0,23%):</span><span>{formatCurrency(viewSale.senar)}</span></div>
+                <div className="flex justify-between"><span>↳ SENAR (0,33%):</span><span>{formatCurrency(viewSale.senar)}</span></div>
               </div>
 
-              <div className="flex justify-between text-emerald-950 font-extrabold text-sm pt-2 border-t border-emerald-200">
-                <span>(=) Valor Líquido a Receber / Repassar:</span>
+              <div className="flex justify-between text-emerald-950 font-extrabold text-sm pt-2 border-t border-emerald-300 bg-emerald-100/60 p-2 rounded-lg">
+                <span>(=) Valor a Liquidar (Receber):</span>
                 <span className="text-base text-emerald-900">{formatCurrency(getNetReceivable(viewSale))}</span>
               </div>
 
-              <div className="flex justify-between text-[#173e27] font-bold pt-2 border-t border-emerald-100">
-                <span>Comissão AgroVenda (3,0% Corretagem):</span>
+              <div className="flex justify-between text-[#173e27] font-bold pt-1">
+                <span>Comissão AgroVenda (Corretagem):</span>
                 <span>{formatCurrency(viewSale.totalCommission)}</span>
               </div>
             </div>

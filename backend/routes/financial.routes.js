@@ -30,6 +30,7 @@ router.get('/', async (req, res) => {
 
     let totalAReceberNF = 0;
     let totalAReceberVP = 0;
+    let totalALiquidar = 0;
     let totalRecebido = 0;
     let totalVencido = 0;
     let totalFunrural = 0;
@@ -48,16 +49,21 @@ router.get('/', async (req, res) => {
         valorVP = roundMoney(Number(s.totalVolumes) * Number(s.dailyQuote));
       }
 
+      // Apuração exata de FUNRURAL sobre o valor da Nota Fiscal (NF)
+      const fiscal = calculateFiscalDeductions(valorNF > 0 ? valorNF : valorVP);
+      const valorLiquidar = roundMoney(Math.max(0, valorVP - fiscal.funruralTotal));
+
       const isRecebido = s.paymentStatus === 'Recebido';
 
       if (isRecebido) {
-        const recebidoEfetivo = Number(s.paidAmount) > 0 ? Number(s.paidAmount) : valorVP;
+        const recebidoEfetivo = Number(s.paidAmount) > 0 ? Number(s.paidAmount) : valorLiquidar;
         totalRecebido = roundMoney(totalRecebido + recebidoEfetivo);
       } else {
         totalAReceberNF = roundMoney(totalAReceberNF + valorNF);
         totalAReceberVP = roundMoney(totalAReceberVP + valorVP);
+        totalALiquidar = roundMoney(totalALiquidar + valorLiquidar);
         
-        // Verificação de vencimento
+        // Verificação de vencimento baseada no valor a liquidar
         let due = s.dueDate;
         if (!due && s.saleDate) {
           const days = Number(s.paymentTermDays) || 30;
@@ -68,12 +74,10 @@ router.get('/', async (req, res) => {
           }
         }
         if (due && due < todayStr) {
-          totalVencido = roundMoney(totalVencido + valorNF);
+          totalVencido = roundMoney(totalVencido + valorLiquidar);
         }
       }
 
-      // Apuração exata de FUNRURAL
-      const fiscal = calculateFiscalDeductions(valorNF);
       totalFunrural = roundMoney(totalFunrural + fiscal.funruralTotal);
       totalPrevidencia = roundMoney(totalPrevidencia + fiscal.previdencia);
       totalRat = roundMoney(totalRat + fiscal.rat);
@@ -100,12 +104,13 @@ router.get('/', async (req, res) => {
     const liquidoNF = roundMoney(totalAReceberNF - totalFunrural);
 
     res.json({
-      totalAReceber: totalAReceberNF,
+      totalAReceber: totalALiquidar,
+      totalALiquidar,
+      totalAReceberVP,
+      totalComercialVP: totalAReceberVP,
       totalAReceberNF,
       totalFaturadoNF: totalAReceberNF,
       liquidoNF,
-      totalAReceberVP,
-      totalComercialVP: totalAReceberVP,
       totalAPagar,
       totalRecebido,
       vencidos: totalVencido,

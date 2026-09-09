@@ -416,9 +416,10 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   }, 0);
 
   const funrural = calculateFunrural(effectiveTotalNF);
-  const liquidoAReceber = Math.max(0, effectiveTotalNF - funrural.funruralTotal);
+  const baseComercial = valorTotalVP > 0 ? valorTotalVP : effectiveTotalNF;
+  const liquidoAReceber = Math.max(0, baseComercial - funrural.funruralTotal);
   const totalCommission = feeType === 'Porcentagem (%)' 
-    ? (valorTotalVP * (Number(feeValue) / 100))
+    ? (baseComercial * (Number(feeValue) / 100))
     : (feeType === 'Valor Fixo por Saca/Volume' ? totalVolumes * Number(feeValue) : Number(feeValue));
 
   // Dynamic Title
@@ -1372,21 +1373,21 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                 <span className="block text-[10px] font-bold text-emerald-800 uppercase truncate">Total Volumes</span>
                 <span className="text-sm font-black text-gray-900 truncate block" title={`${formatNumber(totalVolumes, 2)} vol`}>{formatNumber(totalVolumes, 2)} vol</span>
               </div>
-              <div className="min-w-0">
-                <span className="block text-[10px] font-bold text-emerald-800 uppercase truncate">Valor Total NF</span>
-                <span className="text-sm font-black text-[#173e27] truncate block" title={formatCurrency(effectiveTotalNF)}>{formatCurrency(effectiveTotalNF)}</span>
+              <div className="bg-blue-50/90 p-2 rounded-lg border border-blue-200 min-w-0">
+                <span className="block text-[10px] font-bold text-blue-900 uppercase truncate">Total Comercial (VP)</span>
+                <span className="text-sm font-black text-blue-950 truncate block" title={formatCurrency(valorTotalVP)}>{formatCurrency(valorTotalVP)}</span>
               </div>
               <div className="min-w-0">
-                <span className="block text-[10px] font-bold text-red-700 uppercase truncate">(-) FUNRURAL (1,63%)</span>
+                <span className="block text-[10px] font-bold text-red-700 uppercase truncate">(-) FUNRURAL (s/ NF)</span>
                 <span className="text-sm font-black text-red-600 truncate block" title={formatCurrency(funrural.funruralTotal)}>-{formatCurrency(funrural.funruralTotal)}</span>
               </div>
-              <div className="min-w-0">
-                <span className="block text-[10px] font-bold text-emerald-800 uppercase truncate">(=) Líquido a Receber</span>
+              <div className="bg-emerald-100/90 p-2 rounded-lg border border-emerald-300 min-w-0">
+                <span className="block text-[10px] font-bold text-emerald-900 uppercase truncate">(=) Valor a Liquidar</span>
                 <span className="text-sm font-black text-emerald-950 truncate block" title={formatCurrency(liquidoAReceber)}>{formatCurrency(liquidoAReceber)}</span>
               </div>
-              <div className="bg-blue-50 p-1.5 rounded-lg border border-blue-200 min-w-0">
-                <span className="block text-[10px] font-bold text-blue-900 uppercase truncate">Total Comercial</span>
-                <span className="text-sm font-black text-blue-950 truncate block" title={formatCurrency(valorTotalVP)}>{formatCurrency(valorTotalVP)}</span>
+              <div className="min-w-0">
+                <span className="block text-[10px] font-bold text-gray-600 uppercase truncate">Valor Total NF</span>
+                <span className="text-sm font-bold text-gray-800 truncate block" title={formatCurrency(effectiveTotalNF)}>{formatCurrency(effectiveTotalNF)}</span>
               </div>
             </div>
           </div>

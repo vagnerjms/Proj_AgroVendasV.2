@@ -63,7 +63,6 @@ function calculateCommission(valorComercialVP, taxaPercentual = 3.0) {
   const taxa = Number(taxaPercentual) || 3.0;
   const comissao = roundMoney(valorVP * (taxa / 100));
   const liquidoProdutor = roundMoney(valorVP - comissao);
-
   return {
     taxaPercentual: taxa,
     comissao,
@@ -71,9 +70,29 @@ function calculateCommission(valorComercialVP, taxaPercentual = 3.0) {
   };
 }
 
+/**
+ * Calcula o Valor a Liquidar (Receber) da operação: Total Comercial (VP) - Funrural (calculado sobre a NF)
+ * @param {number|string} valorComercialVP
+ * @param {number|string} totalOperationNF
+ * @returns {{ valorComercialVP: number, totalOperationNF: number, funruralTotal: number, valorLiquidar: number }}
+ */
+function calculateLiquidationValue(valorComercialVP, totalOperationNF) {
+  const valorVP = roundMoney(valorComercialVP);
+  const valorNF = roundMoney(totalOperationNF);
+  const fiscal = calculateFiscalDeductions(valorNF > 0 ? valorNF : valorVP);
+  const valorLiquidar = roundMoney(Math.max(0, valorVP - fiscal.funruralTotal));
+  return {
+    valorComercialVP: valorVP,
+    totalOperationNF: valorNF,
+    funruralTotal: fiscal.funruralTotal,
+    valorLiquidar
+  };
+}
+
 module.exports = {
   roundMoney,
   TAX_RATES,
   calculateFiscalDeductions,
-  calculateCommission
+  calculateCommission,
+  calculateLiquidationValue
 };

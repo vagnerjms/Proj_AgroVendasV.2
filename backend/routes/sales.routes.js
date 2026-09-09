@@ -34,6 +34,8 @@ router.get('/agenda-events', async (req, res) => {
       if (!dueDate) dueDate = new Date().toISOString().split('T')[0];
 
       const valorFinal = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : (Number(s.totalOperation) || 0);
+      const fiscal = calculateFiscalDeductions(s.totalOperation);
+      const valorLiquidar = roundMoney(Math.max(0, valorFinal - fiscal.funruralTotal));
       const clientShort = s.client ? s.client.split(' ')[0] : 'Cliente';
       const volumesInt = Math.round(Number(s.totalVolumes) || (Number(s.totalKg) > 0 ? Number(s.totalKg) / 29 : 0));
 
@@ -44,12 +46,13 @@ router.get('/agenda-events', async (req, res) => {
         dueDate: dueDate,
         totalOperation: Number(s.totalOperation) || 0,
         valorVP: valorFinal,
+        valorLiquidar: valorLiquidar,
         status: s.status,
         paymentStatus: s.paymentStatus,
-        summary: `💰 ${clientShort} · R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${s.id})`,
+        summary: `💰 ${clientShort} · R$ ${valorLiquidar.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${s.id})`,
         start: `${dueDate}T09:00:00-03:00`,
         end: `${dueDate}T10:00:00-03:00`,
-        description: `🏪 Comprador: ${s.client}\n📅 Vencimento: ${dueDate.split('-').reverse().join('/')}\n💰 Valor a Receber: R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📦 Volumes: ${volumesInt} cx\n📄 Nota Fiscal: ${s.nfFile || 'Pendente'}\n📌 Status: ${s.paymentStatus || 'A Receber'}`
+        description: `🏪 Comprador: ${s.client}\n📅 Vencimento: ${dueDate.split('-').reverse().join('/')}\n💰 Valor a Liquidar (Receber): R$ ${valorLiquidar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📊 Total Comercial (VP): R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📦 Volumes: ${volumesInt} cx\n📄 Nota Fiscal: ${s.nfFile || 'Pendente'}\n📌 Status: ${s.paymentStatus || 'A Receber'}`
       };
     });
 
@@ -224,6 +227,8 @@ router.post('/', async (req, res) => {
       previdenciaSocial: fiscal.previdencia,
       rat: fiscal.rat,
       senar: fiscal.senar,
+      liquidoAReceber: roundMoney(Math.max(0, valorVP - fiscal.funruralTotal)),
+      valorLiquidar: roundMoney(Math.max(0, valorVP - fiscal.funruralTotal)),
       status: body.nfFile ? "Faturado" : "Pendente NF",
       paymentStatus: "A Receber",
       paymentTerms: body.paymentTerms || (body.paymentTermDays !== undefined ? (Number(body.paymentTermDays) === 0 ? 'À Vista' : `${body.paymentTermDays} dias`) : '30 dias'),
@@ -335,6 +340,8 @@ router.put('/:id', async (req, res) => {
     updateFields.rat = fiscal.rat;
     updateFields.senar = fiscal.senar;
     updateFields.funruralTotal = fiscal.funruralTotal;
+    updateFields.liquidoAReceber = roundMoney(Math.max(0, effectiveValorVP - fiscal.funruralTotal));
+    updateFields.valorLiquidar = roundMoney(Math.max(0, effectiveValorVP - fiscal.funruralTotal));
     updateFields.totalCommission = commission.comissao;
 
     const updated = await Sale.findOneAndUpdate(

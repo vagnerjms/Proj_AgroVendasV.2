@@ -75,7 +75,6 @@ router.get('/stores-summary', async (req, res) => {
         const fiscal = calculateFiscalDeductions(itemValorNF);
         let itemFunrural = fiscal.funruralTotal;
         let itemPrecoKg = itemPesoNF > 0 ? roundMoney(itemValorNF / itemPesoNF) : 0;
-        let itemLiquido = fiscal.liquidoNF;
 
         if (isFaturado || s.nfFile) {
           nfs++;
@@ -128,6 +127,9 @@ router.get('/stores-summary', async (req, res) => {
           }
         }
         valorVP = roundMoney(valorVP);
+
+        // Regra de Cálculo: Valor a Liquidar (Receber) = Total Comercial - Funrural (calculado sobre a NF)
+        const itemLiquido = roundMoney(Math.max(0, valorVP - itemFunrural));
 
         totalVendaAReceber = roundMoney(totalVendaAReceber + valorVP);
 
@@ -191,8 +193,8 @@ router.get('/stores-summary', async (req, res) => {
 
       const totalComissaoLoja = roundMoney(itens.reduce((a, b) => a + b.comissao, 0));
       const totalLiquidoProdutorLoja = roundMoney(itens.reduce((a, b) => a + b.liquidoProdutor, 0));
-      const valorLiquidadoLoja = roundMoney(itens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').reduce((a, b) => a + b.valorVP, 0));
-      const valorALiquidarLoja = roundMoney(itens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').reduce((a, b) => a + b.valorVP, 0));
+      const valorLiquidadoLoja = roundMoney(itens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').reduce((a, b) => a + b.liquido, 0));
+      const valorALiquidarLoja = roundMoney(itens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').reduce((a, b) => a + b.liquido, 0));
 
       return {
         loja: clientName,

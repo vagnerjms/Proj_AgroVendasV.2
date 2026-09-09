@@ -1,42 +1,49 @@
 const fs = require('fs');
 const path = require('path');
-const { Sale } = require('../db');
+const { Sale, WeighingSlip } = require('../db');
 const { uploadDir } = require('../middlewares/upload');
 
 /**
- * Remove arquivos órfãos/temporários da pasta uploads que não estejam vinculados
- * a nenhuma venda salva no banco de dados e que tenham mais de 15 minutos de criação.
+ * Remove arquivos temporários órfãos da pasta uploads que não estejam vinculados
+ * a nenhuma venda, comprovante ou romaneio e com mais de 30 minutos de criação.
  */
 async function cleanupOrphanUploads() {
   try {
     if (!fs.existsSync(uploadDir)) return { deletedCount: 0 };
 
-    const sales = await Sale.find({}, { nfFile: 1, evidenceFile: 1 }).lean();
+    const [sales, slips] = await Promise.all([
+      Sale.find({}, { nfFile: 1, evidenceFile: 1, paymentProofFile: 1 }).lean(),
+      WeighingSlip.find({}, { ticketImage: 1, attachment: 1 }).lean()
+    ]);
+
     const activeFiles = new Set();
     sales.forEach(s => {
       if (s.nfFile) activeFiles.add(s.nfFile);
       if (s.evidenceFile) activeFiles.add(s.evidenceFile);
+      if (s.paymentProofFile) activeFiles.add(s.paymentProofFile);
     });
 
-    const diskFiles = fs.readdirSync(uploadDir);
+    slips.forEach(sl => {
+      if (sl.ticketImage) activeFiles.add(sl.ticketImage);
+      if (sl.attachment) activeFiles.add(sl.attachment);
+    });
+
+    const diskFiles = await fs.promises.readdir(uploadDir);
     const now = Date.now();
-    const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+    const THIRTY_MINUTES_MS = 30 * 60 * 1000;
     let deletedCount = 0;
 
     for (const filename of diskFiles) {
       if (!activeFiles.has(filename)) {
         const filePath = path.join(uploadDir, filename);
         try {
-          const stat = fs.statSync(filePath);
-          // Só remove se tiver mais de 15 minutos (para não apagar arquivos de formulários abertos sendo preenchidos)
-          if (now - stat.mtimeMs > FIFTEEN_MINUTES_MS) {
-            fs.unlinkSync(filePath);
+          const stat = await fs.promises.stat(filePath);
+          if (now - stat.mtimeMs > THIRTY_MINUTES_MS) {
+            await fs.promises.unlink(filePath);
             deletedCount++;
-            console.log(`[Cleanup] Arquivo temporário órfão removido: ${filename}`);
+            console.log(`[Cleanup] Arquivo temporário órfão removido com segurança: ${filename}`);
           }
-        } catch (e) {
-          console.warn(`[Cleanup] Não foi possível remover ${filename}:`, e.message);
-        }
+        } catch (e) {}
       }
     }
 
@@ -47,14 +54,11 @@ async function cleanupOrphanUploads() {
   }
 }
 
-// Iniciar agendamento automático a cada 1 hora
 function startCleanupScheduler() {
-  // Executar uma limpeza inicial após 10 segundos de boot
   setTimeout(() => {
     cleanupOrphanUploads();
-  }, 10000);
+  }, 15000);
 
-  // Executar periodicamente a cada 1 hora
   setInterval(() => {
     cleanupOrphanUploads();
   }, 60 * 60 * 1000);
@@ -64,3 +68,4 @@ module.exports = {
   cleanupOrphanUploads,
   startCleanupScheduler
 };
+

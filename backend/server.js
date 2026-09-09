@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const mongoose = require('mongoose');
 const { connectDB } = require('./db');
 const { uploadDir } = require('./middlewares/upload');
 
@@ -10,8 +11,8 @@ const PORT = process.env.PORT || 3001;
 
 // Global Middlewares
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Static Uploads Serving
 app.use('/uploads', express.static(uploadDir));
@@ -32,7 +33,6 @@ app.use('/api/backup', require('./routes/backup.routes'));
 
 // Health Check & Database Status Endpoint
 app.get('/api/health', async (req, res) => {
-  const mongoose = require('mongoose');
   const dbState = mongoose.connection.readyState;
   const states = { 0: 'Desconectado', 1: 'Conectado (Saudável)', 2: 'Conectando', 3: 'Desconectando' };
   
@@ -60,10 +60,34 @@ if (fs.existsSync(frontendDist)) {
 const { startCleanupScheduler } = require('./services/cleanup.service');
 
 // Start Server and MongoDB Connection
-app.listen(PORT, '0.0.0.0', async () => {
+const server = app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🌾 [AgroVenda V2 Backend] Servidor rodando na porta ${PORT}`);
   await connectDB();
   startCleanupScheduler();
 });
 
+// Graceful Shutdown Handlers
+const handleShutdown = async (signal) => {
+  console.log(`\n🛑 [Servidor] Recebido sinal ${signal}. Encerrando conexões com segurança...`);
+  server.close(async () => {
+    console.log('HTTP server encerrado.');
+    try {
+      await mongoose.connection.close(false);
+      console.log('MongoDB desconectado com sucesso.');
+      process.exit(0);
+    } catch (e) {
+      console.error('Erro ao desconectar MongoDB:', e);
+      process.exit(1);
+    }
+  });
+};
+
+process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+process.on('SIGINT', () => handleShutdown('SIGINT'));
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('⚠️ [Unhandled Rejection]:', reason);
+});
+
 module.exports = app;
+

@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { Client, Sale, getNextSequence } = require('../db');
+const { Client, Sale, WeighingSlip, Purchase, getNextSequence } = require('../db');
 const { escapeRegex } = require('../utils/security');
 const { requireAuth } = require('../middlewares/auth');
 
-// Protect all clients endpoints with JWT authentication
 router.use(requireAuth);
 
 // GET /api/clients
@@ -16,7 +15,7 @@ router.get('/', async (req, res) => {
       filter.type = type;
     }
     if (search && search.trim()) {
-      const escaped = escapeRegex(search);
+      const escaped = escapeRegex(search.trim());
       const regex = new RegExp(escaped, 'i');
       filter.$or = [
         { name: regex },
@@ -31,30 +30,43 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/clients
+// POST /api/clients (Com validação e checagem de duplicidade)
 router.post('/', async (req, res) => {
   try {
+    const name = (req.body.name || '').trim();
+    if (!name) {
+      return res.status(400).json({ error: 'Nome do cliente/produtor é obrigatório' });
+    }
+
+    const doc = (req.body.document || '').trim();
+    if (doc) {
+      const existingDoc = await Client.findOne({ document: doc });
+      if (existingDoc) {
+        return res.status(400).json({ error: `Já existe um parceiro cadastrado com este documento (${doc}): ${existingDoc.name}` });
+      }
+    }
+
     const seq = await getNextSequence('client_id', Client, 'CLI-');
     const newClient = new Client({
       id: `CLI-${seq}`,
-      name: req.body.name,
-      document: req.body.document || '',
-      ie: req.body.ie || '',
+      name: name,
+      document: doc,
+      ie: (req.body.ie || '').trim(),
       type: req.body.type || 'Comprador',
-      city: req.body.city || '',
-      uf: req.body.uf || '',
-      address: req.body.address || '',
-      email: req.body.email || '',
-      phone: req.body.phone || '',
-      bankName: req.body.bankName || '',
-      agency: req.body.agency || '',
-      account: req.body.account || '',
-      pixKey: req.body.pixKey || ''
+      city: (req.body.city || '').trim(),
+      uf: (req.body.uf || '').trim().toUpperCase(),
+      address: (req.body.address || '').trim(),
+      email: (req.body.email || '').trim(),
+      phone: (req.body.phone || '').trim(),
+      bankName: (req.body.bankName || '').trim(),
+      agency: (req.body.agency || '').trim(),
+      account: (req.body.account || '').trim(),
+      pixKey: (req.body.pixKey || '').trim()
     });
     await newClient.save();
     res.status(201).json(newClient);
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao cadastrar cliente/produtor' });
+    res.status(500).json({ error: `Erro ao cadastrar cliente/produtor: ${err.message}` });
   }
 });
 
@@ -67,8 +79,11 @@ router.put('/:id', async (req, res) => {
     ];
     const updateData = {};
     for (const key of allowed) {
-      if (req.body[key] !== undefined) updateData[key] = req.body[key];
+      if (req.body[key] !== undefined) {
+        updateData[key] = typeof req.body[key] === 'string' ? req.body[key].trim() : req.body[key];
+      }
     }
+    if (updateData.uf) updateData.uf = updateData.uf.toUpperCase();
 
     const updated = await Client.findOneAndUpdate(
       { id: req.params.id },
@@ -82,17 +97,22 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/clients/:id
+// DELETE /api/clients/:id (Com validação referencial completa em Vendas, Romaneios e Compras)
 router.delete('/:id', async (req, res) => {
   try {
     const client = await Client.findOne({ id: req.params.id });
     if (!client) return res.status(404).json({ error: 'Cliente não encontrado' });
 
-    // Check referential integrity with Sales
-    const salesCount = await Sale.countDocuments({ client: client.name });
-    if (salesCount > 0) {
+    const [salesCount, slipsCount, purchasesCount] = await Promise.all([
+      Sale.countDocuments({ client: client.name }),
+      WeighingSlip.countDocuments({ client: client.name }),
+      Purchase ? Purchase.countDocuments({ producer: client.name }) : 0
+    ]);
+
+    const totalRelations = salesCount + slipsCount + purchasesCount;
+    if (totalRelations > 0) {
       return res.status(400).json({ 
-        error: `Não é possível excluir o parceiro "${client.name}" pois existem ${salesCount} vendas vinculadas a ele.` 
+        error: `Não é possível excluir o parceiro "${client.name}" pois existem registros vinculados (${salesCount} vendas, ${slipsCount} romaneios, ${purchasesCount} compras).` 
       });
     }
 
@@ -104,3 +124,4 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
+

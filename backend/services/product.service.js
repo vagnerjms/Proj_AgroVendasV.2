@@ -1,21 +1,24 @@
 const { Product, Sale, getNextSequence } = require('../db');
+const { escapeRegex } = require('../utils/security');
 
 /**
  * Garante que todos os produtos importados de uma NF-e ou incluídos em uma Venda
- * estejam devidamente cadastrados na coleção Product (Catálogo de Produtos).
+ * estejam devidamente cadastrados na coleção Product (Catálogo de Produtos) sem duplicidades.
  */
 async function ensureProductsRegistered(items) {
   if (!items || !Array.isArray(items) || items.length === 0) return [];
   const registeredOrFound = [];
+  const processedNamesInBatch = new Set();
 
   for (const it of items) {
-    const rawName = (it.product || it.name || '').trim();
-    if (!rawName) continue;
+    const rawName = (it.product || it.name || '').trim().replace(/\s+/g, ' ');
+    if (!rawName || processedNamesInBatch.has(rawName.toLowerCase())) continue;
+    processedNamesInBatch.add(rawName.toLowerCase());
 
     try {
-      // Procura se já existe produto com nome idêntico (case-insensitive)
+      const escaped = escapeRegex(rawName);
       let existing = await Product.findOne({
-        name: { $regex: new RegExp(`^${rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+        name: { $regex: new RegExp(`^${escaped}$`, 'i') }
       });
 
       if (!existing) {
@@ -53,7 +56,7 @@ async function ensureProductsRegistered(items) {
         });
 
         await existing.save();
-        console.log(`🌾 [Catálogo de Produtos] Novo produto importado da NF cadastrado: "${rawName}" (${existing.id})`);
+        console.log(`🌾 [Catálogo de Produtos] Novo produto cadastrado: "${rawName}" (${existing.id})`);
       }
 
       registeredOrFound.push(existing);
@@ -89,3 +92,4 @@ module.exports = {
   ensureProductsRegistered,
   syncAllSalesProducts
 };
+

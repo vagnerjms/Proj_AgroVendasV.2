@@ -499,7 +499,8 @@ export default function Reports({ setCurrentPage }) {
         const valParticular = (Number(item.valorVP) > 0) ? Number(item.valorVP) : (calculatedParticular > 0 ? calculatedParticular : (Number(item.valorNF) || 0));
         const valFunrural = Number(item.funrural) || 0;
         const valNF = Number(item.valorNF) || 0;
-        const valAReceber = valParticular > 0 ? valParticular : (valNF > 0 ? (valNF - valFunrural) : 0);
+        // Regra de Cálculo Oficial: Total a Receber = Total Comercial (Particular) - FUNRURAL (calculado sobre a NF)
+        const valAReceber = Math.max(0, valParticular - valFunrural);
 
         storeValParticular += valParticular;
         storeValAReceber += valAReceber;

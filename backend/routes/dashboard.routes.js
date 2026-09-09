@@ -26,40 +26,37 @@ router.get('/', async (req, res) => {
     const pendingDivergences = await WeighingSlip.countDocuments({ status: 'Divergente' });
     const pendingNfs = allSales.filter(s => s.nfPending || !s.nfFile).length;
 
+    const { roundMoney, calculateCommission } = require('../utils/money');
+
     const getSaleCommercialValue = (s) => {
-      if (Number(s.valorTotalVP) > 0) return Number(s.valorTotalVP);
-      const caixas = s.totalVolumes || (s.totalKg > 0 ? (s.totalKg / 29) : 0);
-      let cotacao = Number(s.dailyQuote) || 0;
-      if (!cotacao && s.notes) {
-        const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
-        if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
+      let valorVP = Number(s.valorTotalVP) > 0 ? roundMoney(s.valorTotalVP) : roundMoney(s.totalOperation);
+      if (valorVP <= 0 && Number(s.totalVolumes) > 0 && Number(s.dailyQuote) > 0) {
+        valorVP = roundMoney(Number(s.totalVolumes) * Number(s.dailyQuote));
       }
-      if (!cotacao) cotacao = 45.0;
-      const valorVP = caixas * cotacao;
-      return valorVP > 0 ? valorVP : (Number(s.totalOperation) || 0);
+      return valorVP;
     };
 
     const totalSalesCount = filteredSales.length;
-    // Total Comercial (Total VP) 100% harmonizado com a rota de Relatórios
-    const totalSold = filteredSales.reduce((acc, s) => acc + getSaleCommercialValue(s), 0);
+    // Total Comercial (Total VP) 100% harmonizado com a rota de Relatórios e Financeiro
+    const totalSold = roundMoney(filteredSales.reduce((acc, s) => acc + getSaleCommercialValue(s), 0));
     
     // Comissão e Lucro sobre a base comercial
-    const totalCommission = filteredSales.reduce((acc, s) => {
+    const totalCommission = roundMoney(filteredSales.reduce((acc, s) => {
       const valorVP = getSaleCommercialValue(s);
       const taxa = Number(s.feeValue) || 3.0;
-      return acc + (valorVP * (taxa / 100));
-    }, 0);
+      return acc + calculateCommission(valorVP, taxa).comissao;
+    }, 0));
 
     const grossProfit = totalCommission;
 
-    const totalAReceber = allSales
+    const totalAReceber = roundMoney(allSales
       .filter(s => s.paymentStatus !== 'Recebido')
-      .reduce((acc, s) => acc + getSaleCommercialValue(s), 0);
+      .reduce((acc, s) => acc + getSaleCommercialValue(s), 0));
 
     const allPurchases = await Purchase.find();
-    const totalAPagar = allPurchases
+    const totalAPagar = roundMoney(allPurchases
       .filter(p => p.paymentStatus !== 'Pago')
-      .reduce((acc, p) => acc + (Number(p.total) || 0), 0);
+      .reduce((acc, p) => acc + (Number(p.total) || 0), 0));
 
     const vencidos = finSummary.vencidos || 0.00;
 

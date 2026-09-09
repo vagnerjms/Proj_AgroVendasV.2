@@ -914,13 +914,28 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
 
                       {visibleColumns.status && (
                         <td className="py-3 px-4 text-center">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            sale.paymentStatus === 'Recebido'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : (sale.status === 'Pendente NF' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800')
-                          }`}>
-                            {sale.paymentStatus === 'Recebido' ? 'Recebido' : (sale.status === 'Pendente NF' ? 'Pendente NF' : 'Em aberto')}
-                          </span>
+                          {(() => {
+                            const hasNf = !!(sale.nfFile && sale.nfFile.trim());
+                            const isReceived = sale.paymentStatus === 'Recebido' || sale.status === 'Concluído';
+                            const isPendingNf = !hasNf;
+
+                            let badgeColor = 'bg-blue-100 text-blue-800';
+                            let label = 'Em aberto';
+
+                            if (isReceived) {
+                              badgeColor = 'bg-emerald-100 text-emerald-800';
+                              label = 'Recebido';
+                            } else if (isPendingNf) {
+                              badgeColor = 'bg-amber-100 text-amber-800';
+                              label = 'Pendente NF';
+                            }
+
+                            return (
+                              <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${badgeColor}`}>
+                                {label}
+                              </span>
+                            );
+                          })()}
                         </td>
                       )}
 

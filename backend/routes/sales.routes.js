@@ -63,7 +63,7 @@ router.get('/agenda-events', async (req, res) => {
 // Protect internal sales endpoints with JWT authentication
 router.use(requireAuth);
 
-// GET /api/sales (Supports optional page/limit pagination with X-Total-Count)
+// GET /api/sales (Supports optional page/limit pagination with X-Total-Count and dynamic status normalization)
 router.get('/', async (req, res) => {
   try {
     const { operationType, status, search, page, limit } = req.query;
@@ -72,7 +72,19 @@ router.get('/', async (req, res) => {
       filter.operationType = operationType;
     }
     if (status && status !== 'all') {
-      filter.status = status;
+      if (status === 'Pendente NF') {
+        filter.$or = [
+          { nfFile: { $in: [null, ''] } },
+          { nfPending: true, nfFile: { $in: [null, ''] } }
+        ];
+      } else if (status === 'Faturado') {
+        filter.$or = [
+          { status: 'Faturado' },
+          { nfFile: { $exists: true, $ne: null, $ne: '' } }
+        ];
+      } else {
+        filter.status = status;
+      }
     }
     if (search && search.trim()) {
       const escaped = escapeRegex(search.trim());
@@ -96,7 +108,24 @@ router.get('/', async (req, res) => {
       query = query.skip((pageNum - 1) * limitNum).limit(limitNum);
     }
     const sales = await query.lean();
-    res.json(sales);
+
+    const normalized = sales.map(s => {
+      const hasNf = !!(s.nfFile && s.nfFile.trim());
+      if (hasNf) {
+        s.nfPending = false;
+        if (s.status === 'Pendente NF') {
+          s.status = s.paymentStatus === 'Recebido' ? 'Concluído' : 'Faturado';
+        }
+      } else {
+        s.nfPending = true;
+        if (!s.status || s.status === 'Faturado') {
+          s.status = 'Pendente NF';
+        }
+      }
+      return s;
+    });
+
+    res.json(normalized);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar vendas' });
   }
@@ -120,8 +149,20 @@ router.get('/check-nfe/:key', async (req, res) => {
 // GET /api/sales/:id
 router.get('/:id', async (req, res) => {
   try {
-    const sale = await Sale.findOne({ id: req.params.id });
+    const sale = await Sale.findOne({ id: req.params.id }).lean();
     if (!sale) return res.status(404).json({ error: 'Venda não encontrada' });
+    const hasNf = !!(sale.nfFile && sale.nfFile.trim());
+    if (hasNf) {
+      sale.nfPending = false;
+      if (sale.status === 'Pendente NF') {
+        sale.status = sale.paymentStatus === 'Recebido' ? 'Concluído' : 'Faturado';
+      }
+    } else {
+      sale.nfPending = true;
+      if (!sale.status || sale.status === 'Faturado') {
+        sale.status = 'Pendente NF';
+      }
+    }
     res.json(sale);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar detalhes da venda' });
@@ -273,6 +314,20 @@ router.put('/:id', async (req, res) => {
 
     const fiscal = calculateFiscalDeductions(effectiveTotalOp);
     const commission = calculateCommission(effectiveValorVP, effectiveFee);
+
+    const effectiveNfFile = body.nfFile !== undefined ? body.nfFile : existing.nfFile;
+    const hasNf = !!(effectiveNfFile && effectiveNfFile.trim());
+    updateFields.nfPending = !hasNf;
+
+    if (hasNf) {
+      if (updateFields.status === 'Pendente NF' || !updateFields.status) {
+        updateFields.status = (updateFields.paymentStatus || existing.paymentStatus) === 'Recebido' ? 'Concluído' : 'Faturado';
+      }
+    } else {
+      if (!updateFields.status || updateFields.status === 'Faturado') {
+        updateFields.status = 'Pendente NF';
+      }
+    }
 
     updateFields.totalOperation = effectiveTotalOp;
     updateFields.valorTotalVP = effectiveValorVP;

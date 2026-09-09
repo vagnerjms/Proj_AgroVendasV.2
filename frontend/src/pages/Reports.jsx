@@ -1218,8 +1218,9 @@ export default function Reports({ setCurrentPage }) {
                       <tbody className="divide-y divide-gray-100">
                         {lojaGroup.itens?.map((it, rIdx) => {
                           const isSettled = it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido';
-                          const itLiquidado = isSettled ? (Number(it.valorVP) || 0) : 0;
-                          const itALiquidar = !isSettled ? (Number(it.valorVP) || 0) : 0;
+                          const itLiquidoValor = Number(it.liquido) > 0 ? Number(it.liquido) : Math.max(0, (Number(it.valorVP) || 0) - (Number(it.funrural) || 0));
+                          const itLiquidado = isSettled ? itLiquidoValor : 0;
+                          const itALiquidar = !isSettled ? itLiquidoValor : 0;
                           return (
                             <tr key={rIdx} className="hover:bg-gray-50/70 transition-colors">
                               <td className="py-2 px-3">
@@ -1252,7 +1253,9 @@ export default function Reports({ setCurrentPage }) {
                               <td className="py-2 px-3 text-right font-black text-amber-900 bg-amber-50/40">
                                 {itALiquidar > 0 ? formatCurrency(itALiquidar) : <span className="text-gray-400 font-normal">-</span>}
                               </td>
-                              <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/30">{formatCurrency(it.liquido)}</td>
+                              <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/30">
+                                {formatCurrency(it.liquidoNF || Math.max(0, (Number(it.valorNF) || 0) - (Number(it.funrural) || 0)))}
+                              </td>
                               <td className="py-2 px-3 text-center text-gray-600">{it.venc}</td>
                               <td className="py-2 px-3 text-center">
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -1515,8 +1518,9 @@ export default function Reports({ setCurrentPage }) {
                       <tbody className="divide-y divide-gray-100">
                         {lojaGroup.itens?.map((it, rIdx) => {
                           const isSettled = it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido';
-                          const itLiquidado = isSettled ? (Number(it.valorVP) || 0) : 0;
-                          const itALiquidar = !isSettled ? (Number(it.valorVP) || 0) : 0;
+                          const itLiquidoValor = Number(it.liquido) > 0 ? Number(it.liquido) : Math.max(0, (Number(it.valorVP) || 0) - (Number(it.funrural) || 0));
+                          const itLiquidado = isSettled ? itLiquidoValor : 0;
+                          const itALiquidar = !isSettled ? itLiquidoValor : 0;
                           return (
                             <tr key={rIdx} className="hover:bg-gray-50/70 transition-colors">
                               <td className="py-2 px-3">

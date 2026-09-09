@@ -178,6 +178,7 @@ router.get('/stores-summary', async (req, res) => {
           cotacao: s.items?.[0]?.dailyQuote ? Number(s.items[0].dailyQuote) : (Number(s.dailyQuote) || 0),
           valorVP: valorVP,
           liquido: itemLiquido,
+          liquidoNF: roundMoney(itemValorNF - itemFunrural),
           taxaComissao: comm.taxaPercentual,
           comissao: comm.comissao,
           liquidoProdutor: comm.liquidoProdutor,

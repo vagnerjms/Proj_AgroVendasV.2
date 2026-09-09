@@ -1,9 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
 const { WeighingSlip, Sale } = require('../db');
 const { escapeRegex } = require('../utils/security');
 const { requireAuth } = require('../middlewares/auth');
 const { roundMoney, calculateFiscalDeductions, calculateCommission } = require('../utils/money');
+const { uploadDir } = require('../middlewares/upload');
 
 // Protect all weighings endpoints with JWT authentication
 router.use(requireAuth);
@@ -44,13 +47,14 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/weighings
+// POST /api/weighings (Com cálculo correto de diffPct e prevenção de ReferenceError)
 router.post('/', async (req, res) => {
   try {
     const body = req.body;
     const origin = Number(body.originWeightKg) || 0;
     const dest = Number(body.destWeightKg) || 0;
     const diff = Math.abs(origin - dest);
+    const diffPct = origin > 0 ? Number(((diff / origin) * 100).toFixed(2)) : 0;
     const tolerance = Math.min(Math.max(Number(body.tolerancePct) || 0.25, 0), 2.0);
     const isDiv = diffPct > tolerance;
 
@@ -59,7 +63,7 @@ router.post('/', async (req, res) => {
     if (saleRef) {
       slipId = saleRef.startsWith('ROM-') ? saleRef : `ROM-${saleRef}`;
     } else {
-      const allSlips = await WeighingSlip.find({}, { id: 1 });
+      const allSlips = await WeighingSlip.find({}, { id: 1 }).lean();
       let maxId = 0;
       for (const s of allSlips) {
         if (s.id) {
@@ -79,7 +83,7 @@ router.post('/', async (req, res) => {
       id: slipId,
       saleId: saleRef,
       client: body.client || 'Cliente Padrão',
-      product: body.product || 'Soja Grão Comercial',
+      product: body.product || 'Cenoura (Caixa 29kg)',
       truckPlate: body.truckPlate || 'ABC-1234',
       driverName: body.driverName || 'Motorista',
       date: body.date || new Date().toISOString().split('T')[0],
@@ -91,7 +95,7 @@ router.post('/', async (req, res) => {
       netWeightKg: dest - (Number(body.discountKg) || 0),
       weightDifferenceKg: diff,
       weightDifferencePct: diffPct,
-      tolerancePct: Number(body.tolerancePct) || 0.25,
+      tolerancePct: tolerance,
       status: isDiv ? 'Divergente' : 'Aprovado',
       resolutionNotes: body.resolutionNotes || '',
       ticketImage: body.ticketImage || body.attachment || '',
@@ -101,7 +105,8 @@ router.post('/', async (req, res) => {
     await newSlip.save();
     res.status(201).json(newSlip);
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao cadastrar romaneio' });
+    console.error('Erro ao cadastrar romaneio:', err);
+    res.status(500).json({ error: `Erro ao cadastrar romaneio: ${err.message}` });
   }
 });
 
@@ -123,13 +128,15 @@ async function syncLinkedSaleWeight(slip, chosenWeightKg, weightChoice) {
   if (!sale) return null;
 
   const newTotalKg = Number(chosenWeightKg);
-  const newVolumes = Math.round(newTotalKg / 29);
+  const isBatata = (sale.items && sale.items.some(it => it.product?.toLowerCase().includes('batata'))) || (sale.notes && sale.notes.toLowerCase().includes('batata'));
+  const boxWeight = Number(sale.items?.[0]?.boxWeightKg) || (isBatata ? 25 : 29);
+  const newVolumes = boxWeight === 1 ? newTotalKg : Number((newTotalKg / boxWeight).toFixed(2));
 
   // Recalcula totais da venda
   if (sale.items && sale.items.length > 0) {
     const unitPriceKg = sale.totalKg > 0 ? (sale.totalOperation / sale.totalKg) : (sale.items[0].price || 2.0);
     sale.items[0].kg = newTotalKg;
-    sale.items[0].quantity = newVolumes;
+    sale.items[0].quantity = Math.round(newVolumes);
     sale.items[0].total = roundMoney(newTotalKg * unitPriceKg);
     sale.totalOperation = sale.items[0].total;
   } else if (sale.totalKg > 0) {
@@ -143,7 +150,7 @@ async function syncLinkedSaleWeight(slip, chosenWeightKg, weightChoice) {
   // Recalcula impostos fiscais (FUNRURAL)
   const fiscal = calculateFiscalDeductions(sale.totalOperation);
   sale.funruralTotal = fiscal.funruralTotal;
-  sale.previdenciaSocial = fiscal.previdenciaSocial;
+  sale.previdenciaSocial = fiscal.previdencia;
   sale.rat = fiscal.rat;
   sale.senar = fiscal.senar;
 
@@ -155,10 +162,10 @@ async function syncLinkedSaleWeight(slip, chosenWeightKg, weightChoice) {
   }
 
   if (cotacao > 0 && cotacao <= 10.0) {
-    // Cotação informada em R$/kg (ex: R$ 2,15/kg para Cebola/Granel): 25.420 kg * R$ 2,15 = R$ 54.653,00
+    // Cotação informada em R$/kg (ex: R$ 2,15/kg para Cebola/Granel)
     sale.valorTotalVP = roundMoney(newTotalKg * cotacao);
   } else if (cotacao > 10.0) {
-    // Cotação informada em R$/caixa (ex: R$ 45,00/cx): 877 cx * R$ 45,00
+    // Cotação informada em R$/caixa
     sale.valorTotalVP = roundMoney(newVolumes * cotacao);
   } else {
     sale.valorTotalVP = roundMoney(sale.totalOperation);
@@ -262,11 +269,23 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/weighings/:id
+// DELETE /api/weighings/:id (Com limpeza assíncrona de ticket anexado)
 router.delete('/:id', async (req, res) => {
   try {
     const deleted = await WeighingSlip.findOneAndDelete({ id: req.params.id });
     if (!deleted) return res.status(404).json({ error: 'Romaneio não encontrado' });
+
+    const ticketFile = deleted.ticketImage || deleted.attachment;
+    if (ticketFile) {
+      const otherUsing = await WeighingSlip.findOne({
+        $or: [{ ticketImage: ticketFile }, { attachment: ticketFile }]
+      });
+      if (!otherUsing) {
+        const filePath = path.join(uploadDir, ticketFile);
+        fs.promises.unlink(filePath).catch(() => {});
+      }
+    }
+
     res.json({ success: true, message: 'Romaneio excluído com sucesso' });
   } catch (err) {
     res.status(500).json({ error: 'Erro ao excluir romaneio' });
@@ -310,3 +329,4 @@ router.put('/:id/resolve', async (req, res) => {
 });
 
 module.exports = router;
+

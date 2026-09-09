@@ -220,9 +220,11 @@ export default function AgendaAlerts({ setCurrentPage }) {
     }
     if (!cotacao) cotacao = 45.0;
 
-    const caixas = s.totalVolumes || (s.totalKg > 0 ? (s.totalKg / 29) : 0);
-    const valorVP = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : (caixas * cotacao);
-    const valorLiquidoNF = Math.max(0, (s.totalOperation || 0) - (s.funruralTotal || 0));
+    const caixas = Number(s.totalVolumes) || (Number(s.totalKg) > 0 ? (Number(s.totalKg) / 29) : 0);
+    const valorVP = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : (Number(s.totalOperation) || (caixas * cotacao));
+    const funrural = Number(s.funruralTotal) || (Number(s.totalOperation) * 0.0163);
+    const valorALiquidar = Math.max(0, valorVP - funrural);
+    const valorLiquidoNF = Math.max(0, (Number(s.totalOperation) || 0) - funrural);
 
     return {
       ...s,
@@ -232,6 +234,8 @@ export default function AgendaAlerts({ setCurrentPage }) {
       cotacao,
       caixas,
       valorVP,
+      funrural,
+      valorALiquidar,
       valorLiquidoNF
     };
   }).sort((a, b) => a.dueDateIso.localeCompare(b.dueDateIso));
@@ -251,14 +255,14 @@ export default function AgendaAlerts({ setCurrentPage }) {
     return matchLoja && matchStatus && matchSearch;
   });
 
-  // KPI Calculations
-  const totalProgramado = scheduleList
+  // KPI Calculations (Harmonizadas com Valor a Liquidar = Total Comercial - Funrural s/ NF)
+  const totalALiquidarProgramado = scheduleList
     .filter(s => s.paymentStatus !== 'Recebido')
-    .reduce((acc, s) => acc + s.valorLiquidoNF, 0);
+    .reduce((acc, s) => acc + s.valorALiquidar, 0);
 
   const totalRecebido = scheduleList
     .filter(s => s.paymentStatus === 'Recebido')
-    .reduce((acc, s) => acc + s.valorLiquidoNF, 0);
+    .reduce((acc, s) => acc + s.valorALiquidar, 0);
 
   const totalVPProgramado = scheduleList
     .filter(s => s.paymentStatus !== 'Recebido')
@@ -316,13 +320,13 @@ export default function AgendaAlerts({ setCurrentPage }) {
         
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
           <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span>Total Líquido a Receber</span>
+            <span>Total a Liquidar (Receber)</span>
             <DollarSign className="w-4 h-4 text-emerald-700" />
           </div>
           <div className="text-2xl font-black text-[#173e27]">
-            {formatCurrency(totalProgramado)}
+            {formatCurrency(totalALiquidarProgramado)}
           </div>
-          <span className="text-[11px] text-gray-400 block">Base em NFs faturadas</span>
+          <span className="text-[11px] text-gray-400 block">Total Comercial - FUNRURAL</span>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
@@ -379,9 +383,9 @@ export default function AgendaAlerts({ setCurrentPage }) {
             onChange={(e) => setSelectedLoja(e.target.value)}
             className="bg-white border border-gray-300 text-xs rounded-lg px-3 py-2 font-semibold text-gray-800 outline-none"
           >
-            <option value="ALL">Todas as Lojas ({uniqueLojas.length})</option>
-            {uniqueLojas.map(l => (
-              <option key={l} value={l}>{l}</option>
+            <option value="ALL">Todas as Lojas / Redes</option>
+            {uniqueLojas.map((loja, idx) => (
+              <option key={idx} value={loja}>{loja}</option>
             ))}
           </select>
 
@@ -391,12 +395,12 @@ export default function AgendaAlerts({ setCurrentPage }) {
             className="bg-white border border-gray-300 text-xs rounded-lg px-3 py-2 font-semibold text-gray-800 outline-none"
           >
             <option value="ALL">Todos os Status</option>
-            <option value="PENDENTE">Em Aberto / A Receber</option>
-            <option value="RECEBIDO">Liquidados / Recebidos</option>
+            <option value="PENDENTE">Pendentes (A Receber)</option>
+            <option value="RECEBIDO">Liquidados (Recebidos)</option>
           </select>
         </div>
 
-        <span className="text-xs text-gray-500 font-semibold">
+        <span className="text-xs font-semibold text-gray-500">
           Exibindo <strong>{filteredSchedule.length}</strong> de {scheduleList.length} recebimentos
         </span>
       </div>
@@ -411,9 +415,10 @@ export default function AgendaAlerts({ setCurrentPage }) {
                 <th className="py-3 px-4">Loja / Comprador</th>
                 <th className="py-3 px-3 text-center">Nº VP</th>
                 <th className="py-3 px-3 text-center">Nº NF</th>
-                <th className="py-3 px-3 text-right">Caixas (29kg)</th>
-                <th className="py-3 px-3 text-right">Líquido NF</th>
+                <th className="py-3 px-3 text-right">Caixas</th>
                 <th className="py-3 px-3 text-right font-black text-blue-900">Total VP (Comercial)</th>
+                <th className="py-3 px-3 text-right text-red-600">(-) FUNRURAL (NF)</th>
+                <th className="py-3 px-3 text-right font-black text-emerald-950 bg-emerald-50/50">Valor a Liquidar</th>
                 <th className="py-3 px-3 text-center">Status Pagamento</th>
                 <th className="py-3 px-4 text-center">Ações</th>
               </tr>
@@ -453,14 +458,19 @@ export default function AgendaAlerts({ setCurrentPage }) {
                       {formatNumber(item.caixas, 2)} cx
                     </td>
 
-                    {/* Líquido NF */}
-                    <td className="py-3 px-3 text-right font-black text-emerald-950">
-                      {formatCurrency(item.valorLiquidoNF)}
-                    </td>
-
                     {/* Total VP */}
                     <td className="py-3 px-3 text-right font-black text-blue-950 bg-blue-50/30">
                       {formatCurrency(item.valorVP)}
+                    </td>
+
+                    {/* FUNRURAL */}
+                    <td className="py-3 px-3 text-right font-medium text-red-600">
+                      -{formatCurrency(item.funrural)}
+                    </td>
+
+                    {/* Valor a Liquidar */}
+                    <td className="py-3 px-3 text-right font-black text-emerald-950 bg-emerald-50/60">
+                      {formatCurrency(item.valorALiquidar)}
                     </td>
 
                     {/* Status */}

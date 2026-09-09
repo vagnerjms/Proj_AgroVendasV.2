@@ -83,8 +83,8 @@ export default function Reports({ setCurrentPage }) {
       const totalVendaAReceber = matchingItens.reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
       const totalComissao = matchingItens.reduce((acc, it) => acc + (Number(it.comissao) || 0), 0);
       const totalLiquidoProdutor = matchingItens.reduce((acc, it) => acc + (Number(it.liquidoProdutor) || 0), 0);
-      const valorLiquidado = matchingItens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
-      const valorALiquidar = matchingItens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
+      const valorLiquidado = matchingItens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').reduce((acc, it) => acc + (Number(it.liquido) || Math.max(0, Number(it.valorVP) - Number(it.funrural))), 0);
+      const valorALiquidar = matchingItens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').reduce((acc, it) => acc + (Number(it.liquido) || Math.max(0, Number(it.valorVP) - Number(it.funrural))), 0);
 
       return {
         ...store,
@@ -112,10 +112,10 @@ export default function Reports({ setCurrentPage }) {
   const valorTotalGeralVP = allFilteredItens.reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0) || rawTotalGeral.totalVendaAReceber;
   const valorTotalLiquidado = allFilteredItens
     .filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido')
-    .reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
+    .reduce((acc, it) => acc + (Number(it.liquido) || Math.max(0, Number(it.valorVP) - Number(it.funrural))), 0);
   const valorTotalALiquidar = allFilteredItens
     .filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido')
-    .reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
+    .reduce((acc, it) => acc + (Number(it.liquido) || Math.max(0, Number(it.valorVP) - Number(it.funrural))), 0);
   const totalVPsLiquidadas = allFilteredItens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').length;
   const totalVPsALiquidar = allFilteredItens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').length;
 

@@ -1,19 +1,19 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs').promises;
 const { Sale, WeighingSlip, getNextSequence } = require('../db');
 const { TAX_RATES, calculateFiscalDeductions, roundMoney, calculateCommission } = require('../utils/money');
 const { uploadDir } = require('../middlewares/upload');
 const { sendSaleWebhook } = require('../services/webhook.service');
 const { escapeRegex } = require('../utils/security');
-const { requireAuth, requirePermission } = require('../middlewares/auth');
+const { requireAuth } = require('../middlewares/auth');
 const { normalizeProducerOrigin } = require('../utils/producer');
 
-// GET /api/sales/agenda-events (Recebíveis formatados por Data de Vencimento para n8n & Google Calendar - Endpoint Público de Feed)
+// GET /api/sales/agenda-events (Recebíveis formatados por Data de Vencimento para n8n & Google Calendar)
 router.get('/agenda-events', async (req, res) => {
   try {
-    const sales = await Sale.find().sort({ saleDate: -1 });
+    const sales = await Sale.find().sort({ saleDate: -1 }).lean();
     const events = sales.map(s => {
       let dueDate = s.dueDate || '';
       if (!dueDate && s.notes) {
@@ -26,24 +26,16 @@ router.get('/agenda-events', async (req, res) => {
         }
       }
       if (!dueDate && s.saleDate) {
-        const days = Number(s.paymentTermDays) !== undefined && !isNaN(Number(s.paymentTermDays)) ? Number(s.paymentTermDays) : 30;
+        const days = Number(s.paymentTermDays) >= 0 ? Number(s.paymentTermDays) : 30;
         const d = new Date(s.saleDate + 'T12:00:00');
         d.setDate(d.getDate() + days);
         dueDate = d.toISOString().split('T')[0];
       }
       if (!dueDate) dueDate = new Date().toISOString().split('T')[0];
 
-      const caixas = s.totalVolumes || (s.totalKg > 0 ? (s.totalKg / 29) : 0);
-      let cotacao = 45.0;
-      if (s.notes) {
-        const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
-        if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
-      }
-      const valorVP = caixas * cotacao;
-      const valorFinal = valorVP > 0 ? valorVP : (Number(s.totalOperation) || 0);
-
+      const valorFinal = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : (Number(s.totalOperation) || 0);
       const clientShort = s.client ? s.client.split(' ')[0] : 'Cliente';
-      const volumesInt = Math.round(caixas);
+      const volumesInt = Math.round(Number(s.totalVolumes) || (Number(s.totalKg) > 0 ? Number(s.totalKg) / 29 : 0));
 
       return {
         id: s.id,
@@ -54,7 +46,7 @@ router.get('/agenda-events', async (req, res) => {
         valorVP: valorFinal,
         status: s.status,
         paymentStatus: s.paymentStatus,
-        summary: `💰 ${clientShort} · R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${s.id})`,
+        summary: `💰 ${clientShort} · R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${s.id})`,
         start: `${dueDate}T09:00:00-03:00`,
         end: `${dueDate}T10:00:00-03:00`,
         description: `🏪 Comprador: ${s.client}\n📅 Vencimento: ${dueDate.split('-').reverse().join('/')}\n💰 Valor a Receber: R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📦 Volumes: ${volumesInt} cx\n📄 Nota Fiscal: ${s.nfFile || 'Pendente'}\n📌 Status: ${s.paymentStatus || 'A Receber'}`
@@ -63,6 +55,7 @@ router.get('/agenda-events', async (req, res) => {
 
     res.json(events);
   } catch (err) {
+    console.error('Erro na agenda de eventos:', err);
     res.status(500).json({ error: 'Erro ao listar agenda de eventos' });
   }
 });
@@ -82,7 +75,7 @@ router.get('/', async (req, res) => {
       filter.status = status;
     }
     if (search && search.trim()) {
-      const escaped = escapeRegex(search);
+      const escaped = escapeRegex(search.trim());
       const regex = new RegExp(escaped, 'i');
       filter.$or = [
         { id: regex },
@@ -103,31 +96,7 @@ router.get('/', async (req, res) => {
       query = query.skip((pageNum - 1) * limitNum).limit(limitNum);
     }
     const sales = await query.lean();
-    const normalized = sales.map(s => {
-      if (s.totalKg > 0 && (!s.totalVolumes || s.totalVolumes === s.totalKg || s.totalVolumes > 2000)) {
-        s.totalVolumes = Number((s.totalKg / 29).toFixed(2));
-      }
-
-      let cotacao = Number(s.dailyQuote) || 0;
-      if (!cotacao && s.notes) {
-        const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
-        if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
-      }
-
-      const kg = Number(s.totalKg) || 0;
-      if (cotacao > 0 && cotacao <= 10.0 && kg > 0) {
-        s.valorTotalVP = roundMoney(kg * cotacao);
-      } else if (cotacao > 10.0) {
-        s.valorTotalVP = roundMoney((s.totalVolumes || (kg / 29)) * cotacao);
-      }
-
-      const feePct = Number(s.feeValue) || 3.0;
-      const baseVP = Number(s.valorTotalVP) || Number(s.totalOperation) || 0;
-      s.totalCommission = roundMoney(baseVP * (feePct / 100));
-
-      return s;
-    });
-    res.json(normalized);
+    res.json(sales);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar vendas' });
   }
@@ -178,8 +147,7 @@ router.post('/', async (req, res) => {
 
     const totalOp = roundMoney(body.totalOperation);
     const fiscal = calculateFiscalDeductions(totalOp);
-
-    const valorVP = roundMoney(body.valorTotalVP);
+    const valorVP = roundMoney(body.valorTotalVP > 0 ? body.valorTotalVP : totalOp);
     const commission = calculateCommission(valorVP, body.feeValue);
     const normalizedOrigin = await normalizeProducerOrigin(body.origin || '', body.notes || '');
 
@@ -235,16 +203,16 @@ router.post('/', async (req, res) => {
     // Auto-create matching Weighing Slip (ROM-VPXXX)
     try {
       const slipId = `ROM-${newSale.id}`;
-      const existingSlip = await WeighingSlip.findOne({ id: slipId });
-      if (!existingSlip) {
-        const originKg = Number(body.totalKg) || 0;
-        const newSlip = new WeighingSlip({
+      const originKg = Number(body.totalKg) || 0;
+      await WeighingSlip.findOneAndUpdate(
+        { id: slipId },
+        {
           id: slipId,
           saleId: newSale.id,
           client: newSale.client,
           product: newSale.items?.[0]?.product || 'Cenoura (Caixa 29kg)',
           truckPlate: newSale.truckPlate || 'ABC-1234',
-          driverName: newSale.driverName || newSale.origin || 'Transportador Bruno Peres Romeiro',
+          driverName: newSale.driverName || newSale.origin || 'Transportador',
           date: newSale.saleDate,
           originWeightKg: originKg,
           destWeightKg: originKg,
@@ -257,9 +225,9 @@ router.post('/', async (req, res) => {
           tolerancePct: 0.25,
           status: 'Aprovado',
           resolutionNotes: `Romaneio gerado automaticamente para a Venda ${newSale.id}`
-        });
-        await newSlip.save();
-      }
+        },
+        { upsert: true, new: true }
+      );
     } catch (e) {
       console.error('Erro ao sincronizar romaneio automático:', e);
     }
@@ -273,38 +241,24 @@ router.post('/', async (req, res) => {
 
     // Rollback orphaned uploaded files if MongoDB insertion fails
     if (body.nfFile) {
-      try { fs.unlinkSync(path.join(uploadDir, body.nfFile)); } catch (e) {}
+      fs.unlink(path.join(uploadDir, body.nfFile)).catch(() => {});
     }
     if (body.evidenceFile) {
-      try { fs.unlinkSync(path.join(uploadDir, body.evidenceFile)); } catch (e) {}
+      fs.unlink(path.join(uploadDir, body.evidenceFile)).catch(() => {});
     }
 
     res.status(500).json({ error: `Erro ao registrar venda: ${err.message}` });
   }
 });
 
-// PUT /api/sales/:id
+// PUT /api/sales/:id (Edição com recálculo consistente de comissões e impostos)
 router.put('/:id', async (req, res) => {
   try {
     const existing = await Sale.findOne({ id: req.params.id });
     if (!existing) return res.status(404).json({ error: 'Venda não encontrada' });
 
     const body = req.body;
-    const allowedFields = [
-      'operationType', 'saleDate', 'client', 'clientDocument', 'origin', 'destCity',
-      'destUF', 'notes', 'nfFile', 'nfeKey', 'evidenceFile', 'paymentProofFile', 'freightType', 'carrierName',
-      'truckPlate', 'driverName', 'driverCPF', 'items', 'feeType', 'feeValue',
-      'dailyQuote', 'valorTotalVP', 'totalVolumes', 'totalKg', 'totalOperation', 
-      'totalCommission', 'status', 'paymentStatus', 'paymentTerms', 'paymentTermDays', 
-      'dueDate', 'paidAmount', 'isDivergent', 'nfPending'
-    ];
-
-    let updateFields = {};
-    for (const key of allowedFields) {
-      if (body[key] !== undefined) {
-        updateFields[key] = body[key];
-      }
-    }
+    let updateFields = { ...body };
 
     if (body.origin !== undefined || body.notes !== undefined) {
       updateFields.origin = await normalizeProducerOrigin(
@@ -313,16 +267,20 @@ router.put('/:id', async (req, res) => {
       );
     }
 
-    // Recalculate FUNRURAL only if totalOperation is explicitly updated
-    if (body.totalOperation !== undefined) {
-      const totalOp = roundMoney(body.totalOperation);
-      const fiscal = calculateFiscalDeductions(totalOp);
-      updateFields.totalOperation = totalOp;
-      updateFields.previdenciaSocial = fiscal.previdencia;
-      updateFields.rat = fiscal.rat;
-      updateFields.senar = fiscal.senar;
-      updateFields.funruralTotal = fiscal.funruralTotal;
-    }
+    const effectiveTotalOp = body.totalOperation !== undefined ? roundMoney(body.totalOperation) : existing.totalOperation;
+    const effectiveValorVP = body.valorTotalVP !== undefined ? roundMoney(body.valorTotalVP) : (existing.valorTotalVP || effectiveTotalOp);
+    const effectiveFee = body.feeValue !== undefined ? Number(body.feeValue) : existing.feeValue;
+
+    const fiscal = calculateFiscalDeductions(effectiveTotalOp);
+    const commission = calculateCommission(effectiveValorVP, effectiveFee);
+
+    updateFields.totalOperation = effectiveTotalOp;
+    updateFields.valorTotalVP = effectiveValorVP;
+    updateFields.previdenciaSocial = fiscal.previdencia;
+    updateFields.rat = fiscal.rat;
+    updateFields.senar = fiscal.senar;
+    updateFields.funruralTotal = fiscal.funruralTotal;
+    updateFields.totalCommission = commission.comissao;
 
     const updated = await Sale.findOneAndUpdate(
       { id: req.params.id },
@@ -388,14 +346,12 @@ router.delete('/:id', async (req, res) => {
       console.warn('Aviso: falha ao remover romaneio vinculado:', slipErr);
     }
 
-    // Clean up physical files on disk if they exist
+    // Clean up physical files on disk if they exist (safe async)
     if (deleted.nfFile) {
       const otherUsingNf = await Sale.findOne({ nfFile: deleted.nfFile });
       if (!otherUsingNf) {
         const nfPath = path.join(uploadDir, deleted.nfFile);
-        if (fs.existsSync(nfPath)) {
-          try { fs.unlinkSync(nfPath); } catch (e) {}
-        }
+        fs.unlink(nfPath).catch(() => {});
       }
     }
 
@@ -403,9 +359,7 @@ router.delete('/:id', async (req, res) => {
       const otherUsingEvidence = await Sale.findOne({ evidenceFile: deleted.evidenceFile });
       if (!otherUsingEvidence) {
         const evPath = path.join(uploadDir, deleted.evidenceFile);
-        if (fs.existsSync(evPath)) {
-          try { fs.unlinkSync(evPath); } catch (e) {}
-        }
+        fs.unlink(evPath).catch(() => {});
       }
     }
 
@@ -415,14 +369,18 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// POST /api/sales/:id/settle
+// POST /api/sales/:id/settle (Liquidação precisa com suporte ao valor real pago/VP)
 router.post('/:id/settle', async (req, res) => {
   try {
     const sale = await Sale.findOne({ id: req.params.id });
     if (!sale) return res.status(404).json({ error: 'Venda não encontrada' });
 
+    const targetAmount = req.body?.paidAmount !== undefined 
+      ? Number(req.body.paidAmount) 
+      : (Number(sale.valorTotalVP) > 0 ? Number(sale.valorTotalVP) : Number(sale.totalOperation));
+
     sale.paymentStatus = 'Recebido';
-    sale.paidAmount = sale.totalOperation;
+    sale.paidAmount = roundMoney(targetAmount);
     sale.status = 'Concluído';
     if (req.body && req.body.paymentProofFile !== undefined) {
       sale.paymentProofFile = req.body.paymentProofFile;

@@ -541,12 +541,15 @@ class NfeParserService {
     const senar = vNF * TAX_RATES.SENAR;
     const funruralTotal = vNF * TAX_RATES.FUNRURAL_TOTAL;
 
+    const infCpl = typeof infNFe.infAdic?.infCpl === 'string' ? infNFe.infAdic.infCpl.trim() : '';
+
     return {
       success: true,
       nfeNumber: nNF,
       nfeKey: nfeKey,
       saleDate: dhEmi,
       nfeDate: dhEmi,
+      notes: infCpl,
       emit: {
         name: emitName,
         document: emitDoc,

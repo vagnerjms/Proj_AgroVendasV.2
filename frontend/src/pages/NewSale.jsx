@@ -466,6 +466,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       setNfeKey(data.nfeKey || '');
       setNfFile(data.filename || file.name);
       if (data.saleDate) setSaleDate(data.saleDate);
+      if (data.notes && !notes) setNotes(data.notes);
 
       // 🏪 VÍNCULO INTELIGENTE DO CLIENTE / COMPRADOR (DESTINATÁRIO DA NOTA FISCAL)
       if (data.dest?.name || data.dest?.document) {
@@ -777,6 +778,8 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       });
 
       const productNamesSummary = saleItems.map(it => it.product).filter(Boolean).join(' + ');
+      const autoSummary = `Venda de ${productNamesSummary || 'Produtos'} | Pesagem: ${totalWeightKg.toLocaleString('pt-BR')} kg (${totalVolumes.toFixed(0)} vol) | NF: R$ ${effectiveTotalNF.toFixed(2)} | Vencimento: ${dueDate ? dueDate.split('-').reverse().join('/') : ''}`;
+      const finalNotes = notes && notes.trim() ? notes.trim() : autoSummary;
 
       const payload = {
         operationType,
@@ -786,7 +789,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         origin: origin || 'Produtor Rural',
         destCity: destCity || 'São Paulo',
         destUF: destUF || 'SP',
-        notes: `Venda de ${productNamesSummary || 'Produtos'} | Pesagem: ${totalWeightKg.toLocaleString('pt-BR')} kg (${totalVolumes.toFixed(0)} vol) | NF: R$ ${effectiveTotalNF.toFixed(2)} | Vencimento: ${dueDate ? dueDate.split('-').reverse().join('/') : ''}`,
+        notes: finalNotes,
         nfFile,
         nfeKey,
         evidenceFile,

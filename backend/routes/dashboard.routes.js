@@ -18,14 +18,6 @@ router.get('/', async (req, res) => {
 
     const filteredSales = await Sale.find(query);
     const allSales = await Sale.find().sort({ saleDate: -1 });
-    let finSummary = await FinancialSummary.findOne();
-    if (!finSummary) {
-      finSummary = { totalAReceber: 0.00, totalAPagar: 0.00, vencidos: 0.00, notasPendentes: 0, divergentes: 0 };
-    }
-
-    const pendingDivergences = await WeighingSlip.countDocuments({ status: 'Divergente' });
-    const pendingNfs = allSales.filter(s => s.nfPending || !s.nfFile).length;
-
     const { roundMoney, calculateCommission } = require('../utils/money');
 
     const getSaleCommercialValue = (s) => {
@@ -40,7 +32,7 @@ router.get('/', async (req, res) => {
     // Total Comercial (Total VP) 100% harmonizado com a rota de Relatórios e Financeiro
     const totalSold = roundMoney(filteredSales.reduce((acc, s) => acc + getSaleCommercialValue(s), 0));
     
-    // Comissão e Lucro sobre a base comercial
+    // Lucratividade Bruta / Comissão sobre a base comercial
     const totalCommission = roundMoney(filteredSales.reduce((acc, s) => {
       const valorVP = getSaleCommercialValue(s);
       const taxa = Number(s.feeValue) || 3.0;
@@ -58,7 +50,29 @@ router.get('/', async (req, res) => {
       .filter(p => p.paymentStatus !== 'Pago')
       .reduce((acc, p) => acc + (Number(p.total) || 0), 0));
 
-    const vencidos = finSummary.vencidos || 0.00;
+    const pendingDivergences = await WeighingSlip.countDocuments({ status: 'Divergente' });
+    const pendingNfs = allSales.filter(s => !s.nfFile || typeof s.nfFile !== 'string' || s.nfFile.trim() === '').length;
+
+    // Cálculo em tempo real dos títulos vencidos (harmonizado com financial.routes.js)
+    const todayStr = new Date().toISOString().split('T')[0];
+    let totalVencido = 0;
+    for (const s of allSales) {
+      if (s.paymentStatus !== 'Recebido') {
+        let due = s.dueDate;
+        if (!due && s.saleDate) {
+          const days = Number(s.paymentTermDays) || 30;
+          const d = new Date(s.saleDate + 'T12:00:00Z');
+          if (!isNaN(d.getTime())) {
+            d.setUTCDate(d.getUTCDate() + days);
+            due = d.toISOString().split('T')[0];
+          }
+        }
+        if (due && due < todayStr) {
+          totalVencido = roundMoney(totalVencido + getSaleCommercialValue(s));
+        }
+      }
+    }
+    const vencidos = totalVencido;
 
     const lastTransactions = allSales.slice(0, 5).map(s => {
       const parts = (s.saleDate || '').split('-');

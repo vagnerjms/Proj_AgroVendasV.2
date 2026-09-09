@@ -3,15 +3,23 @@ const router = express.Router();
 const { User } = require('../db');
 const { generateToken, hashPassword, comparePassword } = require('../middlewares/auth');
 
-// Simple in-memory rate limiting map for login protection
+// Simple in-memory rate limiting map with automatic eviction
 const loginAttempts = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, timestamps] of loginAttempts.entries()) {
+    const valid = timestamps.filter(t => now - t < 60000);
+    if (valid.length === 0) loginAttempts.delete(ip);
+    else loginAttempts.set(ip, valid);
+  }
+}, 5 * 60 * 1000);
 
-// POST /api/auth/login (Robust VPS & Local Login with bcrypt & JWT)
+// POST /api/auth/login (Robust VPS & Local Login with bcrypt async & JWT)
 router.post('/login', async (req, res) => {
   try {
     const rawEmail = (req.body.email || '').trim().toLowerCase();
     const password = (req.body.password || '').trim();
-    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
 
     // Rate limiting: Max 10 attempts per minute per IP
     const now = Date.now();
@@ -29,38 +37,40 @@ router.post('/login', async (req, res) => {
 
     const isAdminAlias = ['admin', 'admin@agrovenda.com.br', 'admin@agrovenda.local'].includes(rawEmail);
 
-    let user = await User.findOne({
-      $or: [
-        { email: rawEmail },
-        ...(isAdminAlias ? [{ email: 'admin@agrovenda.com.br' }, { email: 'admin@agrovenda.local' }, { role: 'Administrador Geral' }] : [])
-      ]
-    });
+    let user = await User.findOne(
+      isAdminAlias 
+        ? { email: { $in: ['admin@agrovenda.com.br', 'admin@agrovenda.local'] } }
+        : { email: rawEmail }
+    );
 
     // Auto-seed or repair Default Admin if missing
     if (!user && isAdminAlias) {
-      user = new User({
-        id: 'USR-001',
-        name: 'Administrador AgroVenda',
-        email: 'admin@agrovenda.com.br',
-        password: hashPassword(password || 'Admin123!'),
-        role: 'Administrador Geral',
-        phone: '(62) 99999-0001',
-        status: 'Ativo',
-        permissions: {
-          dashboard: true,
-          comercial_compras: true,
-          comercial_vendas: true,
-          romaneios_pesagem: true,
-          agenda_alertas: true,
-          relatorios: true,
-          financeiro_fiscal: true,
-          cadastros_clients: true,
-          cadastros_products: true,
-          cadastros_users: true,
-          backup_sistema: true
-        }
-      });
-      await user.save();
+      const adminCount = await User.countDocuments({ role: 'Administrador Geral' });
+      if (adminCount === 0) {
+        user = new User({
+          id: 'USR-001',
+          name: 'Administrador AgroVenda',
+          email: 'admin@agrovenda.com.br',
+          password: await hashPassword(password || 'Admin123!'),
+          role: 'Administrador Geral',
+          phone: '(62) 99999-0001',
+          status: 'Ativo',
+          permissions: {
+            dashboard: true,
+            comercial_compras: true,
+            comercial_vendas: true,
+            romaneios_pesagem: true,
+            agenda_alertas: true,
+            relatorios: true,
+            financeiro_fiscal: true,
+            cadastros_clients: true,
+            cadastros_products: true,
+            cadastros_users: true,
+            backup_sistema: true
+          }
+        });
+        await user.save();
+      }
     }
 
     if (!user) {
@@ -71,13 +81,8 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ error: 'Este usuário está inativo. Contate o administrador.' });
     }
 
-    // Password validation with bcrypt + legacy fallback
-    const defaultFactoryPasswords = ['admin', 'Admin123!', 'admin123', 'Agro@2026', ''];
-    let isValid = comparePassword(password, user.password);
-
-    if (!isValid && defaultFactoryPasswords.includes(user.password)) {
-      isValid = defaultFactoryPasswords.includes(password);
-    }
+    // Password validation with bcrypt async + fallback
+    const isValid = await comparePassword(password, user.password);
 
     if (!isValid) {
       return res.status(401).json({ error: 'Senha incorreta. Verifique e tente novamente.' });
@@ -85,7 +90,7 @@ router.post('/login', async (req, res) => {
 
     // Auto-upgrade plain-text passwords to bcrypt hash upon successful login
     if (user.password && !user.password.startsWith('$2a$') && !user.password.startsWith('$2b$')) {
-      user.password = hashPassword(password);
+      user.password = await hashPassword(password);
       await user.save();
     }
 

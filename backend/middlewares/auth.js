@@ -1,7 +1,11 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'agrovenda_super_secure_jwt_secret_2026_agro_v2';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('FATAL: JWT_SECRET é obrigatório em ambiente de produção.');
+}
+const ACTIVE_SECRET = JWT_SECRET || 'agrovenda_super_secure_jwt_secret_2026_agro_v2';
 
 /**
  * Generates a signed JWT for an authenticated user (valid for 7 days).
@@ -14,29 +18,28 @@ function generateToken(user) {
     role: user.role,
     permissions: user.permissions || {}
   };
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, ACTIVE_SECRET, { expiresIn: '7d' });
 }
 
 /**
- * Hashes a plaintext password using bcrypt (10 rounds).
+ * Hashes a plaintext password using bcrypt async (10 rounds).
  */
-function hashPassword(plainPassword) {
+async function hashPassword(plainPassword) {
   if (!plainPassword) return '';
   if (plainPassword.startsWith('$2a$') || plainPassword.startsWith('$2b$')) {
     return plainPassword; // Already hashed
   }
-  return bcrypt.hashSync(plainPassword, 10);
+  return await bcrypt.hash(plainPassword, 10);
 }
 
 /**
- * Compares plaintext password with stored password (bcrypt or legacy plaintext).
+ * Compares plaintext password with stored password (bcrypt async or fallback).
  */
-function comparePassword(plainPassword, storedPassword) {
+async function comparePassword(plainPassword, storedPassword) {
   if (!plainPassword || !storedPassword) return false;
   if (storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$')) {
-    return bcrypt.compareSync(plainPassword, storedPassword);
+    return await bcrypt.compare(plainPassword, storedPassword);
   }
-  // Fallback for legacy plain text entries during transition
   return plainPassword === storedPassword;
 }
 
@@ -54,7 +57,7 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Acesso não autorizado. Faça login para continuar.' });
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, ACTIVE_SECRET, (err, user) => {
     if (err) {
       return res.status(403).json({ error: 'Sessão expirada ou token inválido. Por favor, faça login novamente.' });
     }
@@ -98,7 +101,7 @@ function requireAdmin(req, res, next) {
 }
 
 module.exports = {
-  JWT_SECRET,
+  JWT_SECRET: ACTIVE_SECRET,
   generateToken,
   hashPassword,
   comparePassword,

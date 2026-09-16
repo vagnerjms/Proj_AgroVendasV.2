@@ -3,21 +3,15 @@ import {
   Users, 
   Boxes, 
   Plus, 
-  Building, 
-  Phone, 
-  Mail, 
-  MapPin, 
-  Edit, 
-  Trash2, 
   Search, 
-  X, 
   CheckCircle2, 
-  AlertTriangle,
-  AlertCircle,
-  Layers,
-  DollarSign
+  AlertCircle
 } from 'lucide-react';
-import { formatCurrency } from '../utils/formatters';
+import { api } from '../services/api';
+import ClientsTab from '../components/cadastros/ClientsTab';
+import ProductsTab from '../components/cadastros/ProductsTab';
+import ClientModal from '../components/cadastros/ClientModal';
+import ProductModal from '../components/cadastros/ProductModal';
 
 export default function Cadastros({ tab = 'clients', setCurrentPage }) {
   const [clients, setClients] = useState([]);
@@ -66,9 +60,8 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
 
   const fetchClients = async () => {
     try {
-      const res = await fetch('/api/clients');
-      if (res.ok) {
-        const data = await res.json();
+      const data = await api.get('/api/clients');
+      if (Array.isArray(data)) {
         setClients(data);
       }
     } catch (err) {
@@ -78,9 +71,8 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch('/api/products');
-      if (res.ok) {
-        const data = await res.json();
+      const data = await api.get('/api/products');
+      if (Array.isArray(data)) {
         setProducts(data);
       }
     } catch (err) {
@@ -142,24 +134,18 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
     if (submittingClient) return;
     setSubmittingClient(true);
     try {
-      const url = editingClient ? `/api/clients/${editingClient.id}` : '/api/clients';
-      const method = editingClient ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(clientForm)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showNotification(editingClient ? `Cadastro de ${clientForm.name} atualizado com sucesso!` : `Novo parceiro ${clientForm.name} cadastrado com sucesso!`);
-        setClientModalOpen(false);
-        fetchClients();
+      if (editingClient) {
+        await api.put(`/api/clients/${editingClient.id}`, clientForm);
+        showNotification(`Cadastro de ${clientForm.name} atualizado com sucesso!`);
       } else {
-        showErrorNotification(data.error || 'Falha ao salvar parceiro comercial.');
+        await api.post('/api/clients', clientForm);
+        showNotification(`Novo parceiro ${clientForm.name} cadastrado com sucesso!`);
       }
+      setClientModalOpen(false);
+      fetchClients();
     } catch (err) {
       console.error(err);
-      showErrorNotification('Erro de conexão ao salvar parceiro.');
+      showErrorNotification(err.message || 'Falha ao salvar parceiro comercial.');
     } finally {
       setSubmittingClient(false);
     }
@@ -168,17 +154,12 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
   const handleDeleteClient = async (client) => {
     if (!window.confirm(`Tem certeza que deseja excluir o cadastro de "${client.name}"?`)) return;
     try {
-      const res = await fetch(`/api/clients/${client.id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (res.ok) {
-        showNotification(`Cadastro de ${client.name} excluído.`);
-        fetchClients();
-      } else {
-        showErrorNotification(data.error || 'Não foi possível excluir o parceiro.');
-      }
+      await api.delete(`/api/clients/${client.id}`);
+      showNotification(`Cadastro de ${client.name} excluído.`);
+      fetchClients();
     } catch (err) {
       console.error(err);
-      showErrorNotification('Erro de rede ao tentar excluir parceiro.');
+      showErrorNotification(err.message || 'Erro de rede ao tentar excluir parceiro.');
     }
   };
 
@@ -213,24 +194,18 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
     if (submittingProduct) return;
     setSubmittingProduct(true);
     try {
-      const url = editingProduct ? `/api/products/${editingProduct.id}` : '/api/products';
-      const method = editingProduct ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(productForm)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showNotification(editingProduct ? `Produto ${productForm.name} atualizado com sucesso!` : `Produto ${productForm.name} cadastrado com sucesso!`);
-        setProductModalOpen(false);
-        fetchProducts();
+      if (editingProduct) {
+        await api.put(`/api/products/${editingProduct.id}`, productForm);
+        showNotification(`Produto ${productForm.name} atualizado com sucesso!`);
       } else {
-        showErrorNotification(data.error || 'Falha ao salvar produto.');
+        await api.post('/api/products', productForm);
+        showNotification(`Produto ${productForm.name} cadastrado com sucesso!`);
       }
+      setProductModalOpen(false);
+      fetchProducts();
     } catch (err) {
       console.error(err);
-      showErrorNotification('Erro de conexão ao salvar produto.');
+      showErrorNotification(err.message || 'Falha ao salvar produto.');
     } finally {
       setSubmittingProduct(false);
     }
@@ -239,17 +214,12 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
   const handleDeleteProduct = async (product) => {
     if (!window.confirm(`Tem certeza que deseja excluir o produto "${product.name}"?`)) return;
     try {
-      const res = await fetch(`/api/products/${product.id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (res.ok) {
-        showNotification(`Produto ${product.name} excluído com sucesso.`);
-        fetchProducts();
-      } else {
-        showErrorNotification(data.error || 'Não foi possível excluir o produto.');
-      }
+      await api.delete(`/api/products/${product.id}`);
+      showNotification(`Produto ${product.name} excluído com sucesso.`);
+      fetchProducts();
     } catch (err) {
       console.error(err);
-      showErrorNotification('Erro de rede ao tentar excluir produto.');
+      showErrorNotification(err.message || 'Erro de rede ao tentar excluir produto.');
     }
   };
 
@@ -366,388 +336,40 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
 
       {/* Content depending on Active Tab */}
       {activeTab === 'clients' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredClients.map(c => (
-            <div key={c.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-3 hover:border-gray-300 transition-all flex flex-col justify-between">
-              <div>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
-                      c.type === 'Produtor' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                    }`}>
-                      {c.type || 'Comprador'}
-                    </span>
-                    <div className="font-bold text-sm text-gray-900 mt-1">{c.name}</div>
-                  </div>
-                  <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">{c.id}</span>
-                </div>
-                
-                <div className="space-y-1.5 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <Building className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                    <span className="font-medium text-gray-700">{c.document || 'Doc não informado'}</span>
-                    {c.ie && (
-                      <span className="text-[11px] text-gray-500">· IE: <strong className="text-gray-800">{c.ie}</strong></span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                    <span>{c.city ? `${c.city} - ${c.uf}` : 'Local não informado'}</span>
-                  </div>
-                  {c.phone && (
-                    <div className="flex items-center gap-2">
-                      <Phone className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                      <span>{c.phone}</span>
-                    </div>
-                  )}
-                  {c.email && (
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                      <span className="truncate">{c.email}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Actions Footer */}
-              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
-                <button
-                  onClick={() => handleOpenClientModal(c)}
-                  className="text-gray-600 hover:text-emerald-700 hover:bg-emerald-50 px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors"
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                  Editar
-                </button>
-                <button
-                  onClick={() => handleDeleteClient(c)}
-                  className="text-gray-400 hover:text-red-600 hover:bg-red-50 px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Excluir
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        <ClientsTab
+          clients={filteredClients}
+          onEditClient={handleOpenClientModal}
+          onDeleteClient={handleDeleteClient}
+        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredProducts.map(p => (
-            <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-3 hover:border-gray-300 transition-all flex flex-col justify-between">
-              <div>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                      {p.category}
-                    </span>
-                    <div className="font-bold text-sm text-gray-900 mt-1">{p.name}</div>
-                  </div>
-                  <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
-                    {p.defaultUnit}
-                  </span>
-                </div>
-
-                <div className="pt-3 border-t border-gray-100 grid grid-cols-2 gap-2 text-xs mt-3">
-                  <div>
-                    <span className="text-gray-400 block text-[10px]">Estoque Silo/Armazém:</span>
-                    <span className="font-bold text-gray-900 text-sm">
-                      {p.currentStock.toLocaleString('pt-BR')} un
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-gray-400 block text-[10px]">Custo Médio:</span>
-                    <span className="font-bold text-[#173e27] text-sm">
-                      {formatCurrency(p.averageCost)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions Footer */}
-              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2">
-                <button
-                  onClick={() => handleOpenProductModal(p)}
-                  className="text-gray-600 hover:text-emerald-700 hover:bg-emerald-50 px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors"
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                  Editar
-                </button>
-                <button
-                  onClick={() => handleDeleteProduct(p)}
-                  className="text-gray-400 hover:text-red-600 hover:bg-red-50 px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Excluir
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        <ProductsTab
+          products={filteredProducts}
+          onEditProduct={handleOpenProductModal}
+          onDeleteProduct={handleDeleteProduct}
+        />
       )}
 
-      {/* MODAL: CRIAR / EDITAR CLIENTE */}
-      {clientModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <form onSubmit={handleSaveClient} className="bg-white rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
-              <h3 className="text-base font-bold text-gray-900">
-                {editingClient ? `Editar Parceiro: ${editingClient.name}` : 'Novo Cadastro de Parceiro'}
-              </h3>
-              <button type="button" onClick={() => setClientModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Razão Social / Nome</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Cooperativa Agrícola Central"
-                  value={clientForm.name}
-                  onChange={e => setClientForm({ ...clientForm, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
-                />
-              </div>
+      {/* Modal: Cliente / Produtor */}
+      <ClientModal
+        isOpen={clientModalOpen}
+        onClose={() => setClientModalOpen(false)}
+        onSubmit={handleSaveClient}
+        editingClient={editingClient}
+        clientForm={clientForm}
+        setClientForm={setClientForm}
+        submitting={submittingClient}
+      />
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Tipo</label>
-                <select
-                  value={clientForm.type}
-                  onChange={e => setClientForm({ ...clientForm, type: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37] font-semibold"
-                >
-                  <option value="Comprador">Comprador</option>
-                  <option value="Produtor">Produtor</option>
-                  <option value="Ambos">Ambos</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">CNPJ / CPF</label>
-                <input
-                  type="text"
-                  placeholder="00.000.000/0000-00"
-                  value={clientForm.document}
-                  onChange={e => setClientForm({ ...clientForm, document: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Inscrição Estadual (IE)</label>
-                <input
-                  type="text"
-                  placeholder="Ex: 000.000.000.000 ou ISENTO"
-                  value={clientForm.ie}
-                  onChange={e => setClientForm({ ...clientForm, ie: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Telefone / WhatsApp</label>
-                <input
-                  type="text"
-                  placeholder="(34) 99876-1122"
-                  value={clientForm.phone}
-                  onChange={e => setClientForm({ ...clientForm, phone: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">E-mail Comercial</label>
-                <input
-                  type="email"
-                  placeholder="contato@empresa.com.br"
-                  value={clientForm.email}
-                  onChange={e => setClientForm({ ...clientForm, email: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Cidade</label>
-                <input
-                  type="text"
-                  placeholder="Ex: São Gotardo"
-                  value={clientForm.city}
-                  onChange={e => setClientForm({ ...clientForm, city: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">UF</label>
-                <input
-                  type="text"
-                  maxLength={2}
-                  placeholder="MG"
-                  value={clientForm.uf}
-                  onChange={e => setClientForm({ ...clientForm, uf: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37] uppercase"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
-              <button
-                type="button"
-                disabled={submittingClient}
-                onClick={() => setClientModalOpen(false)}
-                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={submittingClient}
-                className="bg-[#091b2e] hover:bg-[#132c4a] disabled:opacity-50 text-white text-xs font-bold px-5 py-2 rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
-              >
-                {submittingClient && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                <span>{submittingClient ? 'Gravando...' : (editingClient ? 'Salvar Alterações' : 'Cadastrar Parceiro')}</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* MODAL: CRIAR / EDITAR PRODUTO */}
-      {productModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <form onSubmit={handleSaveProduct} className="bg-white rounded-2xl p-6 max-w-lg w-full space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
-              <h3 className="text-base font-bold text-gray-900">
-                {editingProduct ? `Editar Produto: ${editingProduct.name}` : 'Novo Cadastro de Produto / Grão'}
-              </h3>
-              <button type="button" onClick={() => setProductModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Nome do Produto</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Ex: Soja Grão Comercial Safra 25/26"
-                  value={productForm.name}
-                  onChange={e => setProductForm({ ...productForm, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Categoria</label>
-                <select
-                  value={productForm.category}
-                  onChange={e => setProductForm({ ...productForm, category: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e] font-semibold"
-                >
-                  <option value="Hortifruti">Hortifruti</option>
-                  <option value="Grãos">Grãos</option>
-                  <option value="Legumes & Verduras">Legumes & Verduras</option>
-                  <option value="Frutas">Frutas</option>
-                  <option value="Insumos">Insumos</option>
-                  <option value="Sementes">Sementes</option>
-                  <option value="Café">Café</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Tipo de Embalagem / Unidade</label>
-                <select
-                  value={productForm.defaultUnit}
-                  onChange={e => {
-                    const u = e.target.value;
-                    let kg = productForm.unitKg;
-                    if (u === 'Caixas (cx)') kg = 29;
-                    else if (u === 'Sacas (sc)') kg = 60;
-                    else if (u === 'Granel (kg)') kg = 1;
-                    else if (u === 'Toneladas (ton)') kg = 1000;
-                    else if (u === 'Bins (bin)') kg = 400;
-                    else if (u === 'Fardos / Pacotes (fd)') kg = 10;
-                    else if (u === 'Paletes (pal)') kg = 800;
-                    setProductForm({ ...productForm, defaultUnit: u, unitKg: kg });
-                  }}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e] font-semibold text-gray-800"
-                >
-                  <option value="Caixas (cx)">Caixas (cx)</option>
-                  <option value="Sacas (sc)">Sacas (sc)</option>
-                  <option value="Granel (kg)">Granel (kg)</option>
-                  <option value="Toneladas (ton)">Toneladas (ton)</option>
-                  <option value="Bins (bin)">Bins (bin)</option>
-                  <option value="Fardos / Pacotes (fd)">Fardos / Pacotes (fd)</option>
-                  <option value="Paletes (pal)">Paletes (pal)</option>
-                  <option value="Outro (Personalizado)">Outro (Personalizado)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Peso Unitário (kg) *</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  required
-                  placeholder="Ex: 29, 60, 20..."
-                  value={productForm.unitKg}
-                  onChange={e => setProductForm({ ...productForm, unitKg: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e] font-bold text-gray-900"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Estoque Inicial (unidades)</label>
-                <input
-                  type="number"
-                  value={productForm.currentStock}
-                  onChange={e => setProductForm({ ...productForm, currentStock: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Custo Médio Ponderado (R$)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={productForm.averageCost}
-                  onChange={e => setProductForm({ ...productForm, averageCost: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
-              <button
-                type="button"
-                disabled={submittingProduct}
-                onClick={() => setProductModalOpen(false)}
-                className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={submittingProduct}
-                className="bg-[#091b2e] hover:bg-[#132c4a] disabled:opacity-50 text-white text-xs font-bold px-5 py-2 rounded-lg transition-colors flex items-center gap-2 cursor-pointer"
-              >
-                {submittingProduct && <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                <span>{submittingProduct ? 'Gravando...' : (editingProduct ? 'Salvar Alterações' : 'Cadastrar Produto')}</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
+      {/* Modal: Produto */}
+      <ProductModal
+        isOpen={productModalOpen}
+        onClose={() => setProductModalOpen(false)}
+        onSubmit={handleSaveProduct}
+        editingProduct={editingProduct}
+        productForm={productForm}
+        setProductForm={setProductForm}
+        submitting={submittingProduct}
+      />
     </div>
   );
 }

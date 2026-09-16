@@ -23,24 +23,24 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { formatCurrency, formatNumber, getCleanFileName } from '../utils/formatters';
+import { api } from '../services/api';
 
 export default function AgendaAlerts({ setCurrentPage }) {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [selectedLoja, setSelectedLoja] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL');
-  const [search, setSearch] = useState('');
   const [notification, setNotification] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterPeriod, setFilterPeriod] = useState('ALL'); // 'ALL' | 'OVERDUE' | 'TODAY' | 'NEXT_7_DAYS' | 'THIS_MONTH'
+  const [filterStore, setFilterStore] = useState('ALL');
   const [uploadingSaleId, setUploadingSaleId] = useState(null);
   const [previewEvidence, setPreviewEvidence] = useState(null);
 
   const fetchSales = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/sales');
-      if (res.ok) {
-        const data = await res.json();
+      const data = await api.get('/api/sales');
+      if (Array.isArray(data)) {
         setSales(data);
       }
     } catch (err) {
@@ -62,16 +62,11 @@ export default function AgendaAlerts({ setCurrentPage }) {
   const handleSyncAll = async () => {
     setSyncing(true);
     try {
-      const res = await fetch('/api/sales/sync-all-webhooks', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        showNotification(data.message || 'Todas as vendas foram enviadas para o Webhook do n8n / Google Calendar com sucesso!');
-      } else {
-        alert(data.error || 'Erro ao sincronizar vendas.');
-      }
+      const data = await api.post('/api/sales/sync-all-webhooks');
+      showNotification(data?.message || 'Todas as vendas foram enviadas para o Webhook do n8n / Google Calendar com sucesso!');
     } catch (err) {
       console.error(err);
-      alert('Erro de conexão ao sincronizar com webhook.');
+      alert(err.message || 'Erro ao sincronizar vendas via webhook.');
     } finally {
       setSyncing(false);
     }
@@ -80,30 +75,24 @@ export default function AgendaAlerts({ setCurrentPage }) {
   const handleSettle = async (saleId) => {
     if (!window.confirm(`Deseja confirmar o recebimento integral da venda ${saleId}?`)) return;
     try {
-      const res = await fetch(`/api/sales/${saleId}/settle`, { method: 'POST' });
-      if (res.ok) {
-        showNotification(`Recebimento da venda ${saleId} registrado com sucesso!`);
-        fetchSales();
-      }
+      await api.post(`/api/sales/${saleId}/settle`);
+      showNotification(`Recebimento da venda ${saleId} registrado com sucesso!`);
+      fetchSales();
     } catch (err) {
       console.error(err);
+      alert(err.message || 'Erro ao liquidar venda.');
     }
   };
 
   const handleUnsettle = async (saleId) => {
     if (!window.confirm(`Deseja reverter a liquidação da venda ${saleId} (retornar para status 'A Receber')?`)) return;
     try {
-      const res = await fetch(`/api/sales/${saleId}/unsettle`, { method: 'POST' });
-      if (res.ok) {
-        showNotification(`Liquidação da venda ${saleId} revertida com sucesso! Status alterado para 'A Receber'.`);
-        fetchSales();
-      } else {
-        const data = await res.json();
-        alert(data.error || 'Erro ao reverter liquidação.');
-      }
+      await api.post(`/api/sales/${saleId}/unsettle`);
+      showNotification(`Liquidação da venda ${saleId} revertida com sucesso! Status alterado para 'A Receber'.`);
+      fetchSales();
     } catch (err) {
       console.error(err);
-      alert('Erro de conexão ao reverter liquidação.');
+      alert(err.message || 'Erro ao reverter liquidação.');
     }
   };
 
@@ -114,33 +103,16 @@ export default function AgendaAlerts({ setCurrentPage }) {
 
     setUploadingSaleId(saleId);
     try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const fname = data.filename || file.name;
-        
-        // Atualiza a venda no backend com o arquivo de comprovante de liquidação (sem sobrescrever a imagem da venda)
-        const updateRes = await fetch(`/api/sales/${saleId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paymentProofFile: fname })
-        });
-        
-        if (updateRes.ok) {
-          showNotification(`Comprovante de liquidação anexado à venda ${saleId} com sucesso!`);
-          fetchSales();
-        } else {
-          alert('Erro ao vincular comprovante à venda.');
-        }
-      } else {
-        alert('Falha ao enviar arquivo de comprovante.');
-      }
+      const data = await api.upload('/api/upload', formData);
+      const fname = data?.filename || file.name;
+      
+      // Atualiza a venda no backend com o arquivo de comprovante de liquidação (sem sobrescrever a imagem da venda)
+      await api.put(`/api/sales/${saleId}`, { paymentProofFile: fname });
+      showNotification(`Comprovante de liquidação anexado à venda ${saleId} com sucesso!`);
+      fetchSales();
     } catch (err) {
       console.error(err);
-      alert('Erro de conexão no upload do comprovante.');
+      alert(err.message || 'Erro no upload do comprovante.');
     } finally {
       setUploadingSaleId(null);
     }
@@ -151,20 +123,12 @@ export default function AgendaAlerts({ setCurrentPage }) {
     if (!window.confirm(`Deseja excluir o comprovante de liquidação anexado da venda ${saleId}?`)) return;
 
     try {
-      const res = await fetch(`/api/sales/${saleId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentProofFile: null })
-      });
-      if (res.ok) {
-        showNotification(`Comprovante de liquidação da venda ${saleId} removido com sucesso.`);
-        fetchSales();
-      } else {
-        alert('Erro ao remover comprovante.');
-      }
+      await api.put(`/api/sales/${saleId}`, { paymentProofFile: null });
+      showNotification(`Comprovante de liquidação da venda ${saleId} removido com sucesso.`);
+      fetchSales();
     } catch (err) {
       console.error(err);
-      alert('Erro de conexão ao remover comprovante.');
+      alert(err.message || 'Erro de conexão ao remover comprovante.');
     }
   };
 

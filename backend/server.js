@@ -31,6 +31,10 @@ app.use('/api/reports', require('./routes/reports.routes'));
 app.use('/api/financial', require('./routes/financial.routes'));
 app.use('/api/backup', require('./routes/backup.routes'));
 
+// Global Error Handling Middleware
+const { errorHandler } = require('./middlewares/errorHandler');
+app.use(errorHandler);
+
 // Health Check & Database Status Endpoint
 app.get('/api/health', async (req, res) => {
   const dbState = mongoose.connection.readyState;

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatKg, formatNumber, getCleanFileName } from '../utils/formatters';
 import ContractModal from '../components/ContractModal';
+import { api } from '../services/api';
 
 const DEFAULT_COLUMNS = {
   id: true,
@@ -188,22 +189,17 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
   const fetchSales = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (selectedOperation !== 'all') params.append('operationType', selectedOperation);
-      if (selectedStatus !== 'all') params.append('status', selectedStatus);
-      if (search) params.append('search', search);
-
-      const res = await fetch(`/api/sales?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
+      const data = await api.get('/api/sales', {
+        operationType: selectedOperation,
+        status: selectedStatus,
+        search: search || undefined
+      });
+      if (Array.isArray(data)) {
         setSales(data);
-      } else {
-        const data = await res.json();
-        showErrorNotification(data.error || 'Erro ao carregar lista de vendas.');
       }
     } catch (err) {
       console.error('Erro ao carregar vendas:', err);
-      showErrorNotification('Falha de conexão ao carregar vendas.');
+      showErrorNotification(err.message || 'Falha de conexão ao carregar vendas.');
     } finally {
       setLoading(false);
     }
@@ -251,22 +247,13 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
     if (!editingSale || submittingEdit) return;
     setSubmittingEdit(true);
     try {
-      const res = await fetch(`/api/sales/${editingSale.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editForm)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showNotification(`Venda ${editingSale.id} atualizada com sucesso!`);
-        setEditingSale(null);
-        fetchSales();
-      } else {
-        showErrorNotification(data.error || 'Erro ao atualizar dados da operação.');
-      }
+      await api.put(`/api/sales/${editingSale.id}`, editForm);
+      showNotification(`Venda ${editingSale.id} atualizada com sucesso!`);
+      setEditingSale(null);
+      fetchSales();
     } catch (err) {
       console.error(err);
-      showErrorNotification('Erro de conexão ao salvar alterações da venda.');
+      showErrorNotification(err.message || 'Erro de conexão ao salvar alterações da venda.');
     } finally {
       setSubmittingEdit(false);
     }
@@ -275,51 +262,36 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
   const handleDeleteSale = async (sale) => {
     if (!window.confirm(`Tem certeza que deseja cancelar e excluir a venda ${sale.id} de ${sale.client}?`)) return;
     try {
-      const res = await fetch(`/api/sales/${sale.id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (res.ok) {
-        showNotification(`Venda ${sale.id} excluída com sucesso.`);
-        fetchSales();
-      } else {
-        showErrorNotification(data.error || 'Erro ao excluir operação de venda.');
-      }
+      await api.delete(`/api/sales/${sale.id}`);
+      showNotification(`Venda ${sale.id} excluída com sucesso.`);
+      fetchSales();
     } catch (err) {
       console.error(err);
-      showErrorNotification('Erro de rede ao tentar excluir venda.');
+      showErrorNotification(err.message || 'Erro de rede ao tentar excluir venda.');
     }
   };
 
   const handleSettle = async (saleId) => {
     if (!window.confirm(`Deseja registrar o recebimento e liquidação integral da venda ${saleId}?`)) return;
     try {
-      const res = await fetch(`/api/sales/${saleId}/settle`, { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        showNotification(`Venda ${saleId} liquidada com sucesso!`);
-        fetchSales();
-      } else {
-        showErrorNotification(data.error || 'Não foi possível liquidar a venda.');
-      }
+      await api.post(`/api/sales/${saleId}/settle`);
+      showNotification(`Venda ${saleId} liquidada com sucesso!`);
+      fetchSales();
     } catch (err) {
       console.error(err);
-      showErrorNotification('Erro de rede ao registrar liquidação.');
+      showErrorNotification(err.message || 'Erro de rede ao registrar liquidação.');
     }
   };
 
   const handleUnsettle = async (saleId) => {
     if (!window.confirm(`Deseja reverter a liquidação da venda ${saleId} (retornar para status 'A Receber')?`)) return;
     try {
-      const res = await fetch(`/api/sales/${saleId}/unsettle`, { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        showNotification(`Liquidação da venda ${saleId} revertida com sucesso!`);
-        fetchSales();
-      } else {
-        showErrorNotification(data.error || 'Não foi possível reverter a liquidação.');
-      }
+      await api.post(`/api/sales/${saleId}/unsettle`);
+      showNotification(`Liquidação da venda ${saleId} revertida com sucesso!`);
+      fetchSales();
     } catch (err) {
       console.error(err);
-      showErrorNotification('Erro de rede ao reverter liquidação.');
+      showErrorNotification(err.message || 'Erro de rede ao reverter liquidação.');
     }
   };
 

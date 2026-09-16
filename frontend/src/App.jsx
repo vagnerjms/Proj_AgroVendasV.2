@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 import Dashboard from './pages/Dashboard';
@@ -14,123 +15,16 @@ import BackupRestore from './pages/BackupRestore';
 import UserManagement from './pages/UserManagement';
 import Login from './pages/Login';
 
-// Session Storage Helpers (Multi-storage resilient)
-const SESSION_KEY = 'agrovenda_user_v2';
-const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
-
-function getCookie(name) {
-  try {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift());
-  } catch (e) {}
-  return null;
-}
-
-function setCookie(name, value, days) {
-  try {
-    const expires = days ? `; max-age=${days * 24 * 60 * 60}` : '';
-    document.cookie = `${name}=${encodeURIComponent(value || '')}${expires}; path=/; SameSite=Lax`;
-  } catch (e) {}
-}
-
-function eraseCookie(name) {
-  try {
-    document.cookie = `${name}=; max-age=0; path=/; SameSite=Lax`;
-  } catch (e) {}
-}
-
-function getStoredUser() {
-  try {
-    // 1. Try LocalStorage (Permanent / 1-year)
-    const localRaw = localStorage.getItem(SESSION_KEY) || localStorage.getItem('agrovenda_user');
-    if (localRaw) {
-      const parsed = JSON.parse(localRaw);
-      if (parsed) {
-        if (parsed.expiresAt && Date.now() > parsed.expiresAt) {
-          localStorage.removeItem(SESSION_KEY);
-          localStorage.removeItem('agrovenda_user');
-        } else {
-          return parsed.user || (parsed.id ? parsed : null);
-        }
-      }
-    }
-
-    // 2. Try SessionStorage (Transient browser session)
-    const sessionRaw = sessionStorage.getItem(SESSION_KEY) || sessionStorage.getItem('agrovenda_user');
-    if (sessionRaw) {
-      const parsed = JSON.parse(sessionRaw);
-      if (parsed) return parsed.user || (parsed.id ? parsed : null);
-    }
-
-    // 3. Try Cookie Fallback
-    const cookieRaw = getCookie('agrovenda_session');
-    if (cookieRaw) {
-      const parsed = JSON.parse(cookieRaw);
-      if (parsed) return parsed.user || (parsed.id ? parsed : null);
-    }
-  } catch (err) {
-    console.warn('Erro ao recuperar sessão:', err);
-  }
-  return null;
-}
-
-export default function App() {
-  const [currentUser, setCurrentUser] = useState(() => getStoredUser());
+function MainApp() {
+  const { currentUser, login, logout } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [editingSale, setEditingSale] = useState(null);
-
-  const handleLogin = (user, rememberMe = true) => {
-    setCurrentUser(user);
-    try {
-      const sessionPayload = {
-        user,
-        rememberMe,
-        savedAt: Date.now(),
-        expiresAt: rememberMe ? (Date.now() + ONE_YEAR_MS) : null
-      };
-      const serialized = JSON.stringify(sessionPayload);
-
-      if (rememberMe) {
-        localStorage.setItem(SESSION_KEY, serialized);
-        localStorage.setItem('agrovenda_user', JSON.stringify(user));
-        sessionStorage.removeItem(SESSION_KEY);
-        sessionStorage.removeItem('agrovenda_user');
-        setCookie('agrovenda_session', serialized, 365);
-      } else {
-        sessionStorage.setItem(SESSION_KEY, serialized);
-        sessionStorage.setItem('agrovenda_user', JSON.stringify(user));
-        localStorage.removeItem(SESSION_KEY);
-        localStorage.removeItem('agrovenda_user');
-        eraseCookie('agrovenda_session');
-      }
-    } catch (e) {
-      console.error('Erro ao salvar sessão:', e);
-    }
-    setCurrentPage('dashboard');
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    try {
-      localStorage.removeItem(SESSION_KEY);
-      localStorage.removeItem('agrovenda_user');
-      localStorage.removeItem('agrovenda_token');
-      sessionStorage.removeItem(SESSION_KEY);
-      sessionStorage.removeItem('agrovenda_user');
-      eraseCookie('agrovenda_session');
-    } catch (e) {
-      console.error('Erro ao encerrar sessão:', e);
-    }
-    setCurrentPage('dashboard');
-  };
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleEditSale = (sale) => {
     setEditingSale(sale);
     setCurrentPage('new-sale');
   };
-
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleNavigate = (page) => {
     if (page === 'new-sale' && editingSale) {
@@ -142,7 +36,7 @@ export default function App() {
 
   // If user is not authenticated, render Login Screen
   if (!currentUser) {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={(user, rememberMe) => { login(user, rememberMe); setCurrentPage('dashboard'); }} />;
   }
 
   const renderContent = () => {
@@ -194,7 +88,7 @@ export default function App() {
         currentPage={currentPage} 
         setCurrentPage={handleNavigate} 
         currentUser={currentUser}
-        onLogout={handleLogout}
+        onLogout={logout}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
       />
@@ -203,7 +97,7 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0 w-full overflow-x-hidden">
         <Navbar 
           currentUser={currentUser} 
-          onLogout={handleLogout}
+          onLogout={logout}
           mobileOpen={mobileMenuOpen}
           onToggleMobileMenu={() => setMobileMenuOpen(prev => !prev)}
         />
@@ -212,5 +106,13 @@ export default function App() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
   );
 }

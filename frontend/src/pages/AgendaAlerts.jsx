@@ -29,10 +29,10 @@ export default function AgendaAlerts({ setCurrentPage }) {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [selectedLoja, setSelectedLoja] = useState('ALL');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [search, setSearch] = useState('');
   const [notification, setNotification] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterPeriod, setFilterPeriod] = useState('ALL'); // 'ALL' | 'OVERDUE' | 'TODAY' | 'NEXT_7_DAYS' | 'THIS_MONTH'
-  const [filterStore, setFilterStore] = useState('ALL');
   const [uploadingSaleId, setUploadingSaleId] = useState(null);
   const [previewEvidence, setPreviewEvidence] = useState(null);
 

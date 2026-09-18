@@ -232,7 +232,7 @@ export function buildExcelReportHtml(stores = []) {
     }
 
     const numCols = cols.length;
-    const totalTableCols = 5 + numCols + numCols + 4;
+    const totalTableCols = 5 + numCols + numCols + 3;
 
     const storeColQtd = {};
     cols.forEach(c => { storeColQtd[c.key] = 0; });
@@ -260,7 +260,7 @@ export function buildExcelReportHtml(stores = []) {
             <th colspan="5" style="border: 1px solid #000000; background-color: #ffffff;"></th>
             <th colspan="${numCols}" class="hdr-grp-qtd">QUANTIDADE</th>
             <th colspan="${numCols}" class="hdr-grp-val">VALOR</th>
-            <th colspan="4" class="hdr-grp-fin">FINANCEIRO</th>
+            <th colspan="3" class="hdr-grp-fin">FINANCEIRO</th>
           </tr>
           <!-- Linha de Colunas -->
           <tr style="height: 22px;">
@@ -271,7 +271,6 @@ export function buildExcelReportHtml(stores = []) {
             <th class="hdr-col" style="width: 35px;">UF</th>
             ${cols.map(c => `<th class="hdr-col" style="min-width: 65px;">${c.labelQtd}</th>`).join('')}
             ${cols.map(c => `<th class="hdr-col" style="min-width: 65px;">${c.labelVal}</th>`).join('')}
-            <th class="hdr-col" style="width: 105px;">Total Particular</th>
             <th class="hdr-col" style="width: 105px;">Total a Receber</th>
             <th class="hdr-col" style="width: 85px;">FUNRURAL</th>
             <th class="hdr-col" style="width: 105px;">Valor Nfe's</th>
@@ -320,7 +319,6 @@ export function buildExcelReportHtml(stores = []) {
           <!-- Preços Unitários -->
           ${cols.map(col => `<td class="cell-price">${formatMoeda(c.val[col.key])}</td>`).join('')}
           <!-- Financeiro -->
-          <td class="cell-money">${formatMoedaTotal(valParticular)}</td>
           <td class="cell-money">${formatMoedaTotal(valAReceber)}</td>
           <td class="cell-price">${formatMoedaTotal(valFunrural)}</td>
           <td class="cell-price">${formatMoedaTotal(valNF)}</td>
@@ -341,7 +339,6 @@ export function buildExcelReportHtml(stores = []) {
             return `<td class="${isInt ? 'cell-qty-int' : 'cell-qty'}" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatQty(qVal)}</td>`;
           }).join('')}
           <td colspan="${numCols}" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;"></td>
-          <td class="cell-money" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${formatMoedaTotal(storeValParticular)}</td>
           <td class="cell-money" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${formatMoedaTotal(storeValAReceber)}</td>
           <td class="cell-price" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatMoedaTotal(storeValFunrural)}</td>
           <td class="cell-price" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatMoedaTotal(storeValNF)}</td>

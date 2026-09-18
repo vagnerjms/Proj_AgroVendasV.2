@@ -1,363 +1,303 @@
 /**
  * Utilitário de Geração de Planilhas HTML/Excel Corporativas para Relatórios AgroVenda V2
- * Suporta modelos multi-loja, batatas com 5 classificações ou hortifrúti genérico com colunas dinâmicas.
+ * Espelha fielmente o layout em PDF/Tela do Relatório Geral:
+ * 1. ResumoLojas (NFs e VPs por Loja)
+ * 2. Detalhamento Individual das Vendas por Loja (VPs)
+ * Exclui expressamente as colunas "Total Comercial" e "Valor Total VP".
  */
 
-export function buildExcelReportHtml(stores = []) {
+export function buildExcelReportHtml(stores = [], customTotal = null, filters = {}) {
   const hojeFormatado = new Date().toLocaleDateString('pt-BR');
-  
+  const periodoStr = (filters.startDate || filters.endDate) 
+    ? `${filters.startDate ? filters.startDate.split('-').reverse().join('/') : 'Início'} até ${filters.endDate ? filters.endDate.split('-').reverse().join('/') : 'Atual'}`
+    : 'Todo o Histórico';
+
   const formatMoeda = (v) => {
     const num = Number(v) || 0;
-    return num > 0 ? 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+    return 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
-  
-  const formatMoedaTotal = (v) => 'R$ ' + (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  
-  const formatQty = (v) => {
+
+  const formatNumero = (v, decimals = 2) => {
     const num = Number(v) || 0;
-    if (num <= 0) return '';
-    return num % 1 === 0 
-      ? String(num) 
-      : num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return num.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   };
 
-  const cleanProdName = (name) => {
-    if (!name) return 'Produto';
-    let n = name.trim();
-    n = n.replace(/\s*\(Caixa\s*\d*kg\)/i, '')
-         .replace(/\s*\(Sacas?\s*\d*kg\)/i, '')
-         .replace(/\s*\(\d+\s*kg\)/i, '')
-         .replace(/\s*\(Caixa\)/i, '')
-         .replace(/\s*\(Saca\)/i, '')
-         .trim();
-    return n || name.trim();
-  };
+  // Calcular totais gerais consolidados caso não venham prontos
+  const totalGeral = customTotal || stores.reduce((acc, row) => ({
+    nfs: acc.nfs + (Number(row.nfs) || 0),
+    pedidosVenda: acc.pedidosVenda + (Number(row.pedidosVenda) || 0),
+    pedidosSemNF: acc.pedidosSemNF + (Number(row.pedidosSemNF) || 0),
+    pesoNF: acc.pesoNF + (Number(row.pesoNF) || 0),
+    pesoColheita: acc.pesoColheita + (Number(row.pesoColheita) || 0),
+    cxsVendidas: acc.cxsVendidas + (Number(row.cxsVendidas) || 0),
+    valorTotalNF: acc.valorTotalNF + (Number(row.valorTotalNF) || 0),
+    funrural: acc.funrural + (Number(row.funrural) || 0),
+    valorTotalLiquidado: acc.valorTotalLiquidado + (Number(row.valorLiquidado) || 0),
+    valorTotalALiquidar: acc.valorTotalALiquidar + (Number(row.valorALiquidar) || 0),
+    liquidoNF: acc.liquidoNF + (Number(row.liquidoNF) || 0)
+  }), {
+    nfs: 0,
+    pedidosVenda: 0,
+    pedidosSemNF: 0,
+    pesoNF: 0,
+    pesoColheita: 0,
+    cxsVendidas: 0,
+    valorTotalNF: 0,
+    funrural: 0,
+    valorTotalLiquidado: 0,
+    valorTotalALiquidar: 0,
+    liquidoNF: 0
+  });
 
-  // Classificação clássica de Batata (Especial, 1X, Diversa, Bolinha / Miúda, Florão)
-  const extractBatataClassifications = (it) => {
-    const res = {
-      qtd: { esp: 0, prim: 0, div: 0, bol: 0, flo: 0 },
-      val: { esp: 0, prim: 0, div: 0, bol: 0, flo: 0 }
-    };
-
-    const classifyName = (name) => {
-      const p = (name || '').toLowerCase();
-      if (p.includes('bolinha') || p.includes('bol') || p.includes('baby') || p.includes('miuda') || p.includes('miúda') || p.includes('pequena') || p.includes('tipo 4') || p.includes('tipo4')) {
-        return 'bol';
-      }
-      if (p.includes('primeira') || p.includes('1x') || p.includes('prim') || p.includes('tipo 2') || p.includes('tipo2')) {
-        return 'prim';
-      }
-      if (p.includes('diversa') || p.includes('div') || p.includes('media') || p.includes('média') || p.includes('tipo 3') || p.includes('tipo3') || p.includes('caixa 3') || p.includes('cx3')) {
-        return 'div';
-      }
-      if (p.includes('florao') || p.includes('florão') || p.includes('flo') || p.includes('descarte') || p.includes('refugo') || p.includes('g2') || p.includes('tipo 5') || p.includes('tipo5')) {
-        return 'flo';
-      }
-      return 'esp';
-    };
-
-    const rawItems = it.items && Array.isArray(it.items) && it.items.length > 0 ? it.items : null;
-
-    if (rawItems && rawItems.length > 1) {
-      rawItems.forEach(item => {
-        const slot = classifyName(item.product);
-        const p = (item.product || '').toLowerCase();
-        const bw = Number(item.boxWeightKg) || (p.includes('batata') ? 25 : (p.includes('granel') ? 1 : 29));
-        const q = Number(item.quantity) || (Number(item.kg) > 0 && bw > 0 ? Number((Number(item.kg) / bw).toFixed(2)) : 0);
-        const quote = Number(item.dailyQuote) || Number(item.price) || (q > 0 && Number(item.valorTotalVP) > 0 ? Number(item.valorTotalVP) / q : (q > 0 && Number(item.total) > 0 ? Number(item.total) / q : Number(it.cotacao) || 0));
-
-        res.qtd[slot] += q;
-        if (quote > 0) res.val[slot] = quote;
-      });
-    } else if (rawItems && rawItems.length === 1) {
-      const item = rawItems[0];
-      const slot = classifyName(item.product);
-      const p = (item.product || '').toLowerCase();
-      const bw = Number(item.boxWeightKg) || (p.includes('batata') ? 25 : (p.includes('granel') ? 1 : 29));
-      const q = Number(item.quantity) || (Number(item.kg) > 0 && bw > 0 ? Number((Number(item.kg) / bw).toFixed(2)) : (Number(it.cxs) || (Number(it.pesoNF) > 0 ? Number((Number(it.pesoNF) / bw).toFixed(2)) : 0)));
-      const quote = Number(item.dailyQuote) || Number(item.price) || (q > 0 && Number(item.valorTotalVP) > 0 ? Number(item.valorTotalVP) / q : (q > 0 && Number(item.total) > 0 ? Number(item.total) / q : Number(it.cotacao) || 0));
-
-      res.qtd[slot] += q;
-      if (quote > 0) res.val[slot] = quote;
-    } else if (it.product && it.product.includes('+')) {
-      const segments = it.product.split('+');
-      segments.forEach(seg => {
-        const slot = classifyName(seg);
-        const qMatch = seg.match(/(\d+[\d.,]*)\s*(sc|cx|kg|saca|caixa)/i) || seg.match(/\((\d+[\d.,]*)/);
-        const q = qMatch ? parseFloat(qMatch[1].replace(/\./g, '').replace(',', '.')) : 0;
-        const quote = Number(it.cotacao) || 0;
-
-        res.qtd[slot] += q;
-        if (quote > 0 && !res.val[slot]) res.val[slot] = quote;
-      });
-    } else {
-      const slot = classifyName(it.product);
-      const q = Number(it.cxs) || (Number(it.pesoNF) > 0 ? Number((Number(it.pesoNF) / 29).toFixed(2)) : 0);
-      const quote = Number(it.cotacao) || 0;
-      res.qtd[slot] = q;
-      res.val[slot] = quote;
-    }
-
-    return res;
-  };
-
-  // Extração para produtos genéricos (Cenoura, Cebola, Beterraba, etc.)
-  const extractGenericClassifications = (it, cols) => {
-    const res = { qtd: {}, val: {} };
-    cols.forEach(c => {
-      res.qtd[c.key] = 0;
-      res.val[c.key] = 0;
-    });
-
-    const rawItems = it.items && Array.isArray(it.items) && it.items.length > 0 ? it.items : null;
-
-    if (rawItems && rawItems.length > 0) {
-      rawItems.forEach(sub => {
-        const subName = cleanProdName(sub.product || it.product || 'Produto');
-        const matchedCol = cols.find(c => c.prodName.toLowerCase() === subName.toLowerCase()) || cols[0];
-        const p = (sub.product || '').toLowerCase();
-        const bw = Number(sub.boxWeightKg) || (p.includes('granel') ? 1 : 29);
-        const q = Number(sub.quantity) || (Number(sub.kg) > 0 && bw > 0 ? Number((Number(sub.kg) / bw).toFixed(2)) : 0);
-        const quote = Number(sub.dailyQuote) || Number(sub.price) || (q > 0 && Number(sub.valorTotalVP) > 0 ? Number(sub.valorTotalVP) / q : (q > 0 && Number(sub.total) > 0 ? Number(sub.total) / q : Number(it.cotacao) || 0));
-
-        if (matchedCol) {
-          res.qtd[matchedCol.key] += q;
-          if (quote > 0) res.val[matchedCol.key] = quote;
-        }
-      });
-    } else if (it.product && it.product.includes('+')) {
-      const segments = it.product.split('+');
-      segments.forEach(seg => {
-        const segName = cleanProdName(seg.replace(/\s*\([^)]*\)/g, ''));
-        const matchedCol = cols.find(c => c.prodName.toLowerCase() === segName.toLowerCase()) || cols[0];
-        const qMatch = seg.match(/(\d+[\d.,]*)\s*(sc|cx|kg|saca|caixa)/i) || seg.match(/\((\d+[\d.,]*)/);
-        const q = qMatch ? parseFloat(qMatch[1].replace(/\./g, '').replace(',', '.')) : 0;
-        const quote = Number(it.cotacao) || 0;
-
-        if (matchedCol) {
-          res.qtd[matchedCol.key] += q;
-          if (quote > 0 && !res.val[matchedCol.key]) res.val[matchedCol.key] = quote;
-        }
-      });
-    } else {
-      const pName = cleanProdName(it.product || 'Produto');
-      const matchedCol = cols.find(c => c.prodName.toLowerCase() === pName.toLowerCase()) || cols[0];
-      const bw = (it.unit && it.unit.includes('25')) ? 25 : 29;
-      const q = Number(it.cxs) || (Number(it.pesoNF) > 0 ? Number((Number(it.pesoNF) / bw).toFixed(2)) : 0);
-      const quote = Number(it.cotacao) || (q > 0 && Number(it.valorVP) > 0 ? Number(it.valorVP) / q : 0);
-
-      if (matchedCol) {
-        res.qtd[matchedCol.key] += q;
-        res.val[matchedCol.key] = quote;
-      }
-    }
-
-    return res;
-  };
-
-  let excelContent = `
+  return `
     <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
     <head>
       <meta charset="utf-8">
       <style>
-        body { font-family: Arial, Calibri, sans-serif; font-size: 9pt; color: #000000; margin: 20px; }
-        table { border-collapse: collapse; margin-bottom: 5px; font-family: Arial, Calibri, sans-serif; }
-        th, td { border: 1px solid #000000; padding: 4px 6px; font-size: 8.5pt; }
-        .hdr-grp-qtd { background-color: #70ad47; color: #000000; font-weight: bold; font-size: 13pt; text-align: center; letter-spacing: 1px; border: 1px solid #000000; }
-        .hdr-grp-val { background-color: #ffc000; color: #000000; font-weight: bold; font-size: 13pt; text-align: center; letter-spacing: 1px; border: 1px solid #000000; }
-        .hdr-grp-fin { background-color: #d9d9d9; color: #000000; font-weight: bold; font-size: 13pt; text-align: center; letter-spacing: 1px; border: 1px solid #000000; }
-        .hdr-col { background-color: #ffffff; color: #000000; font-weight: bold; font-size: 8pt; text-align: center; border: 1px solid #000000; }
-        .cell-center { text-align: center; mso-number-format: "\\@"; }
+        body { font-family: Arial, Calibri, sans-serif; font-size: 9pt; color: #1e293b; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 25px; font-family: Arial, Calibri, sans-serif; }
+        th, td { border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 8.5pt; }
+        
+        .hdr-main { background-color: #1b4363; color: #ffffff; font-weight: bold; font-size: 11pt; padding: 8px 12px; text-align: left; }
+        .hdr-sub { background-color: #245b85; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: center; }
+        .hdr-loja { background-color: #f1f5f9; color: #0f172a; font-weight: bold; font-size: 9.5pt; padding: 6px 10px; border-bottom: 2px solid #94a3b8; }
+        
         .cell-left { text-align: left; mso-number-format: "\\@"; }
+        .cell-center { text-align: center; mso-number-format: "\\@"; }
         .cell-right { text-align: right; }
-        .cell-qty { mso-number-format: "\\#\\,\\#\\#0\\.00"; text-align: right; }
-        .cell-qty-int { mso-number-format: "\\#\\,\\#\\#0"; text-align: right; }
-        .cell-price { mso-number-format: "\\0022R\\$\\0022\\\\ \\#\\,\\#\\#0\\.00"; text-align: right; }
-        .cell-money { mso-number-format: "\\0022R\\$\\0022\\\\ \\#\\,\\#\\#0\\.00"; text-align: right; font-weight: bold; }
-        .row-subtotal { background-color: #ffffff; font-weight: bold; border-top: 2px solid #000000; border-bottom: 2px solid #000000; }
-        .grand-volume { text-align: center; font-size: 18pt; font-weight: bold; color: #000000; margin-top: 10px; margin-bottom: 35px; mso-number-format: "\\#\\,\\#\\#0\\.00"; }
+        .cell-num { text-align: right; mso-number-format: "\\#\\,\\#\\#0\\.00"; }
+        .cell-num-int { text-align: center; mso-number-format: "\\#\\,\\#\\#0"; }
+        .cell-money { text-align: right; mso-number-format: "\\0022R\\$\\0022\\\\ \\#\\,\\#\\#0\\.00"; font-weight: bold; }
+        .cell-money-normal { text-align: right; mso-number-format: "\\0022R\\$\\0022\\\\ \\#\\,\\#\\#0\\.00"; }
+        .cell-funrural { text-align: right; mso-number-format: "\\-\\0022R\\$\\0022\\\\ \\#\\,\\#\\#0\\.00"; color: #b91c1c; }
+        
+        .badge-kpi { border: 1px solid #cbd5e1; background-color: #f8fafc; padding: 8px; font-weight: bold; }
+        .row-total-geral { background-color: #bfe2a5; font-weight: bold; font-size: 9pt; border-top: 2px solid #166534; border-bottom: 2px solid #166534; }
+        .row-subtotal-loja { background-color: #f1f5f9; font-weight: bold; border-top: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1; }
+        
+        .bg-liquidado { background-color: #ecfdf5; color: #065f46; font-weight: bold; }
+        .bg-aliquidar { background-color: #fffbeb; color: #92400e; font-weight: bold; }
+        .bg-liquido-nf { background-color: #f0fdf4; color: #14532d; font-weight: bold; }
       </style>
     </head>
     <body>
-  `;
 
-  for (const s of stores) {
-    const items = s.itens || [];
-
-    // Detecta se a loja possui Batata com as 5 classificações clássicas
-    const isBatata = items.some(it => {
-      const p = (it.product || '').toLowerCase();
-      const hasBatataWord = p.includes('batata');
-      const hasMultiBatataItems = it.items && it.items.some(sub => (sub.product || '').toLowerCase().includes('batata'));
-      const hasBatataClassification = p.includes('bolinha') || p.includes('primeira') || p.includes('diversa') || p.includes('florão') || p.includes('florao');
-      return hasBatataWord || hasMultiBatataItems || hasBatataClassification;
-    });
-
-    let cols = [];
-    if (isBatata) {
-      cols = [
-        { key: 'esp', labelQtd: 'Especial', labelVal: 'Esp.' },
-        { key: 'prim', labelQtd: 'Primeira X', labelVal: 'Prim. X' },
-        { key: 'div', labelQtd: 'Diversa', labelVal: 'Div.' },
-        { key: 'bol', labelQtd: 'Bolinha / Miúda', labelVal: 'Bol. / Miúda' },
-        { key: 'flo', labelQtd: 'Florao', labelVal: 'Flo.' }
-      ];
-    } else {
-      const distinctProds = [];
-      for (const it of items) {
-        if (it.items && Array.isArray(it.items) && it.items.length > 0) {
-          it.items.forEach(sub => {
-            const cName = cleanProdName(sub.product || it.product || 'Produto');
-            if (cName && !distinctProds.includes(cName)) distinctProds.push(cName);
-          });
-        } else if (it.product && it.product.includes('+')) {
-          it.product.split('+').forEach(seg => {
-            const cName = cleanProdName(seg.replace(/\s*\([^)]*\)/g, ''));
-            if (cName && !distinctProds.includes(cName)) distinctProds.push(cName);
-          });
-        } else {
-          const cName = cleanProdName(it.product || 'Produto');
-          if (cName && !distinctProds.includes(cName)) distinctProds.push(cName);
-        }
-      }
-      if (distinctProds.length === 0) distinctProds.push('Produto');
-
-      cols = distinctProds.map((pName, idx) => ({
-        key: `prod_${idx}`,
-        prodName: pName,
-        labelQtd: pName,
-        labelVal: pName
-      }));
-    }
-
-    const numCols = cols.length;
-    const totalTableCols = 5 + numCols + numCols + 3;
-
-    const storeColQtd = {};
-    cols.forEach(c => { storeColQtd[c.key] = 0; });
-    let storeValParticular = 0;
-    let storeValAReceber = 0;
-    let storeValFunrural = 0;
-    let storeValNF = 0;
-
-    excelContent += `
-      <!-- Badge Data Superior Esquerdo -->
-      <table style="border: none; margin-bottom: 10px;">
+      <!-- CABEÇALHO DO RELATÓRIO -->
+      <table style="border: none; margin-bottom: 15px;">
         <tr>
-          <td colspan="3" style="background-color: #001f3f; color: #ffffff; font-weight: bold; font-size: 13pt; text-align: center; padding: 6px 16px; border: 1px solid #001f3f; font-style: italic; mso-number-format: '\\@';">
-            ${hojeFormatado}
+          <td colspan="12" style="border: none; padding: 0;">
+            <div style="font-size: 14pt; font-weight: bold; color: #091b2e;">AGROVENDA — RELATÓRIO GERAL (NFS E VPS POR LOJA)</div>
+            <div style="font-size: 9pt; color: #64748b; margin-top: 3px;">
+              Data de Emissão: <b>${hojeFormatado}</b> | Período: <b>${periodoStr}</b> | Total de Lojas: <b>${stores.length}</b> | Total de Vendas: <b>${totalGeral.pedidosVenda || 0}</b>
+            </div>
           </td>
-          <td colspan="${totalTableCols - 3}" style="border: none;"></td>
         </tr>
       </table>
 
-      <!-- Tabela Principal da Loja -->
-      <table>
+      <!-- CARDS DE RESUMO FINANCEIRO -->
+      <table style="margin-bottom: 20px; border: 1px solid #cbd5e1;">
+        <tr style="height: 28px;">
+          <td colspan="3" class="badge-kpi" style="border-right: 1px solid #cbd5e1;">
+            <div style="font-size: 8pt; color: #64748b; text-transform: uppercase;">Total Faturado NF</div>
+            <div style="font-size: 12pt; color: #0f172a; font-weight: bold;">${formatMoeda(totalGeral.valorTotalNF)}</div>
+          </td>
+          <td colspan="3" class="badge-kpi" style="border-right: 1px solid #cbd5e1;">
+            <div style="font-size: 8pt; color: #b91c1c; text-transform: uppercase;">(-) FUNRURAL (1,63%)</div>
+            <div style="font-size: 12pt; color: #b91c1c; font-weight: bold;">-${formatMoeda(totalGeral.funrural)}</div>
+          </td>
+          <td colspan="3" class="badge-kpi" style="border-right: 1px solid #cbd5e1; background-color: #ecfdf5;">
+            <div style="font-size: 8pt; color: #065f46; text-transform: uppercase;">Valor Total Liquidado</div>
+            <div style="font-size: 12pt; color: #065f46; font-weight: bold;">${formatMoeda(totalGeral.valorTotalLiquidado)}</div>
+          </td>
+          <td colspan="3" class="badge-kpi" style="background-color: #fffbeb;">
+            <div style="font-size: 8pt; color: #92400e; text-transform: uppercase;">Valor a Liquidar (Em Aberto)</div>
+            <div style="font-size: 12pt; color: #92400e; font-weight: bold;">${formatMoeda(totalGeral.valorTotalALiquidar)}</div>
+          </td>
+        </tr>
+      </table>
+
+      <!-- ========================================================================= -->
+      <!-- TABELA 1: RESUMOLOJAS — RELATÓRIO GERAL - NFS E VPS POR LOJA             -->
+      <!-- ========================================================================= -->
+      <table style="margin-bottom: 30px;">
         <thead>
-          <!-- Linha de Super-Grupos (QUANTIDADE | VALOR | FINANCEIRO) -->
-          <tr style="height: 28px;">
-            <th colspan="5" style="border: 1px solid #000000; background-color: #ffffff;"></th>
-            <th colspan="${numCols}" class="hdr-grp-qtd">QUANTIDADE</th>
-            <th colspan="${numCols}" class="hdr-grp-val">VALOR</th>
-            <th colspan="3" class="hdr-grp-fin">FINANCEIRO</th>
+          <tr>
+            <th colspan="12" class="hdr-main">
+              RESUMOLOJAS — RELATÓRIO GERAL - NFS E VPS POR LOJA
+            </th>
           </tr>
-          <!-- Linha de Colunas -->
-          <tr style="height: 22px;">
-            <th class="hdr-col" style="width: 55px;">Part.</th>
-            <th class="hdr-col" style="width: 80px;">DATA</th>
-            <th class="hdr-col" style="width: 110px;">PRODUTOR</th>
-            <th class="hdr-col" style="width: 120px;">DESTINATARIO</th>
-            <th class="hdr-col" style="width: 35px;">UF</th>
-            ${cols.map(c => `<th class="hdr-col" style="min-width: 65px;">${c.labelQtd}</th>`).join('')}
-            ${cols.map(c => `<th class="hdr-col" style="min-width: 65px;">${c.labelVal}</th>`).join('')}
-            <th class="hdr-col" style="width: 105px;">Total a Receber</th>
-            <th class="hdr-col" style="width: 85px;">FUNRURAL</th>
-            <th class="hdr-col" style="width: 105px;">Valor Nfe's</th>
+          <tr style="height: 25px;">
+            <th class="hdr-sub" style="text-align: left; width: 230px;">LOJA</th>
+            <th class="hdr-sub" style="width: 45px;">NFS</th>
+            <th class="hdr-sub" style="width: 65px;">PEDIDOS VENDA</th>
+            <th class="hdr-sub" style="width: 65px;">PEDIDOS SEM NF</th>
+            <th class="hdr-sub" style="width: 95px;">PESO NF (KG)</th>
+            <th class="hdr-sub" style="width: 110px;">PESO BASEADO NA COLHEITA (KG)</th>
+            <th class="hdr-sub" style="width: 90px;">CXS VENDIDAS</th>
+            <th class="hdr-sub" style="width: 115px;">VALOR TOTAL NF (R$)</th>
+            <th class="hdr-sub" style="width: 95px;">FUNRURAL (R$)</th>
+            <th class="hdr-sub" style="width: 115px; background-color: #166534;">VALOR LIQUIDADO (R$)</th>
+            <th class="hdr-sub" style="width: 115px; background-color: #b45309;">VALOR A LIQUIDAR (R$)</th>
+            <th class="hdr-sub" style="width: 115px; background-color: #143753;">LÍQUIDO NF (R$)</th>
           </tr>
         </thead>
         <tbody>
-    `;
-
-    for (const item of items) {
-      const c = isBatata ? extractBatataClassifications(item) : extractGenericClassifications(item, cols);
-      const partNumber = item.vp ? item.vp.replace(/^VP-?/i, '') : '-';
-      const cleanProducer = (item.producer || item.origin || 'PRODUTOR').replace(/\s*\(.*\)/, '').trim().toUpperCase();
-      const cleanDest = (s.loja || item.client || 'DESTINATARIO').toUpperCase();
-      const uf = item.uf || (s.loja?.includes('RJ') ? 'RJ' : (s.loja?.includes('SP') ? 'SP' : 'MG'));
-
-      let calculatedParticular = 0;
-      cols.forEach(col => {
-        calculatedParticular += (c.qtd[col.key] || 0) * (c.val[col.key] || 0);
-        storeColQtd[col.key] += (c.qtd[col.key] || 0);
-      });
-
-      const valParticular = (Number(item.valorVP) > 0) ? Number(item.valorVP) : (calculatedParticular > 0 ? calculatedParticular : (Number(item.valorNF) || 0));
-      const valFunrural = Number(item.funrural) || 0;
-      const valNF = Number(item.valorNF) || 0;
-      // Regra de Cálculo Oficial: Total a Receber = Total Comercial (Particular) - FUNRURAL (calculado sobre a NF)
-      const valAReceber = Math.max(0, valParticular - valFunrural);
-
-      storeValParticular += valParticular;
-      storeValAReceber += valAReceber;
-      storeValFunrural += valFunrural;
-      storeValNF += valNF;
-
-      excelContent += `
-        <tr style="height: 20px;">
-          <td class="cell-center"><b>${partNumber}</b></td>
-          <td class="cell-center">${item.dataVP || item.dataNF || '-'}</td>
-          <td class="cell-left">${cleanProducer}</td>
-          <td class="cell-left">${cleanDest}</td>
-          <td class="cell-center">${uf}</td>
-          <!-- Quantidades -->
-          ${cols.map(col => {
-            const qVal = c.qtd[col.key] || 0;
-            const isInt = qVal % 1 === 0;
-            return `<td class="${isInt ? 'cell-qty-int' : 'cell-qty'}">${formatQty(qVal)}</td>`;
-          }).join('')}
-          <!-- Preços Unitários -->
-          ${cols.map(col => `<td class="cell-price">${formatMoeda(c.val[col.key])}</td>`).join('')}
-          <!-- Financeiro -->
-          <td class="cell-money">${formatMoedaTotal(valAReceber)}</td>
-          <td class="cell-price">${formatMoedaTotal(valFunrural)}</td>
-          <td class="cell-price">${formatMoedaTotal(valNF)}</td>
-        </tr>
-      `;
-    }
-
-    const storeTotalVolumes = Object.values(storeColQtd).reduce((a, b) => a + b, 0);
-    const isTotalInt = (storeTotalVolumes % 1 === 0);
-
-    // Linha de Subtotal da Loja
-    excelContent += `
-        <tr class="row-subtotal" style="height: 22px;">
-          <td colspan="5" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;"></td>
-          ${cols.map(col => {
-            const qVal = storeColQtd[col.key] || 0;
-            const isInt = qVal % 1 === 0;
-            return `<td class="${isInt ? 'cell-qty-int' : 'cell-qty'}" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatQty(qVal)}</td>`;
-          }).join('')}
-          <td colspan="${numCols}" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;"></td>
-          <td class="cell-money" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">${formatMoedaTotal(storeValAReceber)}</td>
-          <td class="cell-price" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatMoedaTotal(storeValFunrural)}</td>
-          <td class="cell-price" style="border-top: 2px solid #000000; border-bottom: 2px solid #000000; font-weight: bold;">${formatMoedaTotal(storeValNF)}</td>
-        </tr>
-      </tbody>
+          ${stores.map(row => `
+            <tr style="height: 22px;">
+              <td class="cell-left" style="font-weight: bold; color: #0f172a;">${row.loja}</td>
+              <td class="cell-num-int">${row.nfs || 0}</td>
+              <td class="cell-num-int" style="font-weight: bold;">${row.pedidosVenda || 0}</td>
+              <td class="cell-num-int" style="color: ${row.pedidosSemNF > 0 ? '#b45309' : '#64748b'}; font-weight: ${row.pedidosSemNF > 0 ? 'bold' : 'normal'};">
+                ${row.pedidosSemNF || 0}
+              </td>
+              <td class="cell-num">${formatNumero(row.pesoNF, 2)}</td>
+              <td class="cell-num" style="font-weight: bold;">${formatNumero(row.pesoColheita, 2)}</td>
+              <td class="cell-num" style="font-weight: bold;">${formatNumero(row.cxsVendidas, 2)}</td>
+              <td class="cell-money-normal">${formatMoeda(row.valorTotalNF)}</td>
+              <td class="cell-funrural">-${formatMoeda(row.funrural)}</td>
+              <td class="cell-money bg-liquidado">${formatMoeda(row.valorLiquidado)}</td>
+              <td class="cell-money bg-aliquidar">${formatMoeda(row.valorALiquidar)}</td>
+              <td class="cell-money bg-liquido-nf">${formatMoeda(row.liquidoNF)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+        <tfoot>
+          <tr class="row-total-geral" style="height: 26px;">
+            <td class="cell-left" style="font-weight: bold;">TOTAL GERAL</td>
+            <td class="cell-num-int" style="font-weight: bold;">${totalGeral.nfs}</td>
+            <td class="cell-num-int" style="font-weight: bold;">${totalGeral.pedidosVenda}</td>
+            <td class="cell-num-int" style="font-weight: bold;">${totalGeral.pedidosSemNF}</td>
+            <td class="cell-num" style="font-weight: bold;">${formatNumero(totalGeral.pesoNF, 2)}</td>
+            <td class="cell-num" style="font-weight: bold;">${formatNumero(totalGeral.pesoColheita, 2)}</td>
+            <td class="cell-num" style="font-weight: bold;">${formatNumero(totalGeral.cxsVendidas, 2)}</td>
+            <td class="cell-money" style="font-weight: bold;">${formatMoeda(totalGeral.valorTotalNF)}</td>
+            <td class="cell-funrural" style="font-weight: bold; color: #7f1d1d;">-${formatMoeda(totalGeral.funrural)}</td>
+            <td class="cell-money" style="font-weight: bold; background-color: #a7f3d0; color: #064e3b;">${formatMoeda(totalGeral.valorTotalLiquidado)}</td>
+            <td class="cell-money" style="font-weight: bold; background-color: #fde68a; color: #78350f;">${formatMoeda(totalGeral.valorTotalALiquidar)}</td>
+            <td class="cell-money" style="font-weight: bold; background-color: #aedb8e; color: #064e3b;">${formatMoeda(totalGeral.liquidoNF)}</td>
+          </tr>
+        </tfoot>
       </table>
 
-      <!-- Totalizador Geral de Caixas Destacado no Rodapé -->
-      <table style="border: none; width: 100%; margin-top: 10px; margin-bottom: 30px;">
+      <!-- ========================================================================= -->
+      <!-- TABELA 2: DETALHAMENTO INDIVIDUAL DAS VENDAS POR LOJA (VPS)              -->
+      <!-- ========================================================================= -->
+      <table style="margin-bottom: 10px;">
         <tr>
-          <td colspan="${totalTableCols}" class="${isTotalInt ? 'cell-qty-int' : 'cell-qty'}" style="border: none; text-align: center; font-size: 18pt; font-weight: bold; color: #000000;">
-            ${formatQty(storeTotalVolumes || Number(s.cxsVendidas) || 0)}
+          <td colspan="15" style="border: none; padding: 8px 0;">
+            <div style="font-size: 12pt; font-weight: bold; color: #0f172a; text-transform: uppercase;">
+              Detalhamento Individual das Vendas por Loja (VPs)
+            </div>
           </td>
         </tr>
       </table>
-      <br/>
-    `;
-  }
 
-  excelContent += `</body></html>`;
-  return excelContent;
+      ${stores.map(lojaGroup => {
+        const items = lojaGroup.itens || [];
+        return `
+          <table style="margin-bottom: 25px;">
+            <thead>
+              <!-- Barra de Cabeçalho da Loja -->
+              <tr>
+                <th colspan="15" class="hdr-loja">
+                  <span style="font-size: 10pt; text-transform: uppercase;">${lojaGroup.loja}</span>
+                  <span style="font-size: 8.5pt; font-weight: normal; color: #475569; margin-left: 10px;">(${items.length} VPs)</span>
+                  <span style="float: right; font-size: 8.5pt; font-weight: normal; color: #334155;">
+                    NF: <b>${formatMoeda(lojaGroup.valorTotalNF)}</b> | 
+                    Liquidado: <b style="color: #065f46;">${formatMoeda(lojaGroup.valorLiquidado)}</b> | 
+                    A Liquidar: <b style="color: #92400e;">${formatMoeda(lojaGroup.valorALiquidar)}</b>
+                  </span>
+                </th>
+              </tr>
+              <!-- Colunas de Detalhamento -->
+              <tr style="height: 22px;">
+                <th class="hdr-sub" style="width: 60px;">Nº VP</th>
+                <th class="hdr-sub" style="width: 140px; text-align: left;">PRODUTO / PRODUTOR</th>
+                <th class="hdr-sub" style="width: 75px;">DATA VP</th>
+                <th class="hdr-sub" style="width: 110px;">Nº NF</th>
+                <th class="hdr-sub" style="width: 75px;">DATA NF</th>
+                <th class="hdr-sub" style="width: 80px;">PESO NF (KG)</th>
+                <th class="hdr-sub" style="width: 85px;">PESO COLHEITA</th>
+                <th class="hdr-sub" style="width: 85px;">VOLUMES</th>
+                <th class="hdr-sub" style="width: 75px;">PREÇO/KG</th>
+                <th class="hdr-sub" style="width: 105px;">VALOR TOTAL NF</th>
+                <th class="hdr-sub" style="width: 90px;">FUNRURAL (1,63%)</th>
+                <th class="hdr-sub" style="width: 85px;">COTAÇÃO DIA</th>
+                <th class="hdr-sub" style="width: 105px; background-color: #166534;">VALOR LIQUIDADO</th>
+                <th class="hdr-sub" style="width: 105px; background-color: #b45309;">VALOR A LIQUIDAR</th>
+                <th class="hdr-sub" style="width: 105px; background-color: #143753;">LÍQUIDO DA NF</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map(it => {
+                const isSettled = it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido';
+                const itLiquidoValor = Number(it.liquido) > 0 ? Number(it.liquido) : Math.max(0, (Number(it.valorVP) || 0) - (Number(it.funrural) || 0));
+                const itLiquidado = isSettled ? itLiquidoValor : 0;
+                const itALiquidar = !isSettled ? itLiquidoValor : 0;
+                const itLiquidoNF = Number(it.liquidoNF) > 0 ? Number(it.liquidoNF) : Math.max(0, (Number(it.valorNF) || 0) - (Number(it.funrural) || 0));
+                const unitAbbr = it.unit?.toLowerCase().includes('saca') || it.product?.toLowerCase().includes('batata') ? 'sc' : 'cx';
+                const cotacaoUnit = it.cotacao <= 10.0 ? 'kg' : unitAbbr;
+
+                return `
+                  <tr style="height: 20px;">
+                    <td class="cell-center" style="font-weight: bold; color: #173e27;">${it.vp || '-'}</td>
+                    <td class="cell-left">
+                      <div style="font-weight: bold; color: #0f172a;">${it.product || 'Produto'}</div>
+                      <div style="font-size: 7.5pt; color: #2563eb;">${it.producer || it.origin || 'Produtor Rural'}</div>
+                    </td>
+                    <td class="cell-center">${it.dataVP || '-'}</td>
+                    <td class="cell-left" style="font-weight: bold;">${it.nf || '-'}</td>
+                    <td class="cell-center">${it.dataNF || '-'}</td>
+                    <td class="cell-num">${formatNumero(it.pesoNF, 0)} kg</td>
+                    <td class="cell-num" style="font-weight: bold;">${formatNumero(it.pesoColheita, 0)} kg</td>
+                    <td class="cell-num" style="font-weight: bold;">${formatNumero(it.cxs, 2)} ${unitAbbr}</td>
+                    <td class="cell-right">${it.precoKg > 0 ? 'R$ ' + formatNumero(it.precoKg, 2) : '-'}</td>
+                    <td class="cell-money-normal">${formatMoeda(it.valorNF)}</td>
+                    <td class="cell-funrural">-${formatMoeda(it.funrural)}</td>
+                    <td class="cell-right" style="color: #1e40af; font-weight: bold;">
+                      ${it.cotacao > 0 ? 'R$ ' + formatNumero(it.cotacao, 2) + '/' + cotacaoUnit : '-'}
+                    </td>
+                    <td class="cell-money bg-liquidado">
+                      ${itLiquidado > 0 ? formatMoeda(itLiquidado) : '-'}
+                    </td>
+                    <td class="cell-money bg-aliquidar">
+                      ${itALiquidar > 0 ? formatMoeda(itALiquidar) : '-'}
+                    </td>
+                    <td class="cell-money bg-liquido-nf">${formatMoeda(itLiquidoNF)}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+            <tfoot>
+              <!-- Subtotal da Loja -->
+              <tr class="row-subtotal-loja" style="height: 24px;">
+                <td colspan="5" class="cell-left" style="font-weight: bold; text-transform: uppercase;">
+                  TOTAL ${lojaGroup.loja.split(' ')[0]}
+                </td>
+                <td class="cell-num" style="font-weight: bold;">${formatNumero(lojaGroup.pesoNF, 2)} kg</td>
+                <td class="cell-num" style="font-weight: bold;">${formatNumero(lojaGroup.pesoColheita, 2)} kg</td>
+                <td class="cell-num" style="font-weight: bold;">${formatNumero(lojaGroup.cxsVendidas, 2)}</td>
+                <td class="cell-center">-</td>
+                <td class="cell-money" style="font-weight: bold;">${formatMoeda(lojaGroup.valorTotalNF)}</td>
+                <td class="cell-funrural" style="font-weight: bold;">-${formatMoeda(lojaGroup.funrural)}</td>
+                <td class="cell-center">-</td>
+                <td class="cell-money" style="font-weight: bold; background-color: #d1fae5; color: #064e3b;">
+                  ${formatMoeda(lojaGroup.valorLiquidado)}
+                </td>
+                <td class="cell-money" style="font-weight: bold; background-color: #fef3c7; color: #78350f;">
+                  ${formatMoeda(lojaGroup.valorALiquidar)}
+                </td>
+                <td class="cell-money" style="font-weight: bold; background-color: #dcfce7; color: #064e3b;">
+                  ${formatMoeda(lojaGroup.liquidoNF)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        `;
+      }).join('')}
+
+    </body>
+    </html>
+  `;
 }
+

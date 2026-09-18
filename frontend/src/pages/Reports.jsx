@@ -209,7 +209,7 @@ export default function Reports({ setCurrentPage }) {
   };
 
   // Gerador do HTML/Excel via utilitário modular reportExcelBuilder
-  const buildExcelContent = () => buildExcelReportHtml(filteredLojas);
+  const buildExcelContent = () => buildExcelReportHtml(filteredLojas, currentTotal, { startDate, endDate, selectedLoja, selectedProducer });
 
   // Download direto do Excel no navegador
   const handleDownloadExcelDirect = () => {

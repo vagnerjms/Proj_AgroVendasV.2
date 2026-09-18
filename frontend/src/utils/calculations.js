@@ -5,6 +5,23 @@
  */
 
 /**
+ * Calcula a decomposição do FUNRURAL (1,63% = Previdência 1,20% + RAT 0,10% + SENAR 0,33%)
+ */
+export function calculateFunrural(totalNF = 0) {
+  const base = Number(totalNF) || 0;
+  const previdenciaSocial = base * 0.012;
+  const rat = base * 0.001;
+  const senar = base * 0.0033;
+  const funruralTotal = previdenciaSocial + rat + senar; // 1.63%
+  return {
+    previdenciaSocial,
+    rat,
+    senar,
+    funruralTotal
+  };
+}
+
+/**
  * Calcula a conciliação completa de uma venda com suporte a liquidação parcial
  */
 export function calculateLiquidation(sale = {}) {
@@ -56,6 +73,8 @@ export function calculateLiquidation(sale = {}) {
   if (isSettled) statusLabel = 'Recebido';
   else if (isPartial) statusLabel = 'Parcial';
 
+  const percentPaid = totalLiquido > 0 ? Math.min(100, (valorLiquidado / totalLiquido) * 100) : (isSettled ? 100 : 0);
+
   return {
     valorVP,
     valorTotalNF: itemValorNF,
@@ -66,9 +85,19 @@ export function calculateLiquidation(sale = {}) {
     valorALiquidar,
     liquidoNF,
     isSettled,
+    isFullySettled: isSettled,
     isPartial,
-    statusLabel
+    statusLabel,
+    paymentStatus: statusLabel,
+    percentPaid
   };
+}
+
+/**
+ * Alias para resumo financeiro
+ */
+export function calculateSummary(params = {}) {
+  return calculateLiquidation(params);
 }
 
 /**
@@ -85,3 +114,4 @@ export function cleanProductName(name) {
        .trim();
   return n || name.trim();
 }
+

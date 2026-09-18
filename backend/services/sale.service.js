@@ -1,8 +1,7 @@
 const path = require('path');
 const fs = require('fs').promises;
-const { Sale, WeighingSlip } = require('../db');
+const { Sale, WeighingSlip, getNextSequence } = require('../db');
 const { uploadDir } = require('../middlewares/upload');
-const { getNextSequence } = require('../utils/sequence');
 const { roundMoney, calculateFiscalDeductions, calculateCommission } = require('../utils/money');
 const { normalizeProducerOrigin } = require('../utils/producer');
 const { sendSaleWebhook } = require('./webhook.service');

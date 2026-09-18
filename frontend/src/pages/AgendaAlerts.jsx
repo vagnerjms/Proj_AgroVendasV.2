@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatNumber, getCleanFileName } from '../utils/formatters';
 import { api } from '../services/api';
+import { calculateLiquidation } from '../utils/calculations';
+import SettleModal from '../components/sales/SettleModal';
 
 export default function AgendaAlerts({ setCurrentPage }) {
   const [sales, setSales] = useState([]);
@@ -35,6 +37,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
   const [notification, setNotification] = useState('');
   const [uploadingSaleId, setUploadingSaleId] = useState(null);
   const [previewEvidence, setPreviewEvidence] = useState(null);
+  const [settleSaleModal, setSettleSaleModal] = useState(null);
 
   const fetchSales = async () => {
     setLoading(true);
@@ -69,18 +72,6 @@ export default function AgendaAlerts({ setCurrentPage }) {
       alert(err.message || 'Erro ao sincronizar vendas via webhook.');
     } finally {
       setSyncing(false);
-    }
-  };
-
-  const handleSettle = async (saleId) => {
-    if (!window.confirm(`Deseja confirmar o recebimento integral da venda ${saleId}?`)) return;
-    try {
-      await api.post(`/api/sales/${saleId}/settle`);
-      showNotification(`Recebimento da venda ${saleId} registrado com sucesso!`);
-      fetchSales();
-    } catch (err) {
-      console.error(err);
-      alert(err.message || 'Erro ao liquidar venda.');
     }
   };
 
@@ -171,7 +162,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
     return { formatted: 'A Definir', isoDate: '9999-12-31' };
   };
 
-  // Process schedule list
+  // Process schedule list with dynamic calculation
   const scheduleList = sales.map(s => {
     const dueDateObj = parseDueDate(s);
     const nfNumber = s.nfFile ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '').replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
@@ -187,8 +178,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
     const caixas = Number(s.totalVolumes) || (Number(s.totalKg) > 0 ? (Number(s.totalKg) / 29) : 0);
     const valorVP = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : (Number(s.totalOperation) || (caixas * cotacao));
     const funrural = Number(s.funruralTotal) || (Number(s.totalOperation) * 0.0163);
-    const valorALiquidar = Math.max(0, valorVP - funrural);
-    const valorLiquidoNF = Math.max(0, (Number(s.totalOperation) || 0) - funrural);
+    const liq = calculateLiquidation(s);
 
     return {
       ...s,
@@ -199,8 +189,14 @@ export default function AgendaAlerts({ setCurrentPage }) {
       caixas,
       valorVP,
       funrural,
-      valorALiquidar,
-      valorLiquidoNF
+      valorLiquidado: liq.valorLiquidado,
+      valorALiquidar: liq.valorALiquidar,
+      totalLiquido: liq.totalLiquido,
+      paymentStatus: liq.paymentStatus,
+      isFullySettled: liq.isFullySettled,
+      isPartial: liq.isPartial,
+      percentPaid: liq.percentPaid,
+      valorLiquidoNF: Math.max(0, (Number(s.totalOperation) || 0) - funrural)
     };
   }).sort((a, b) => a.dueDateIso.localeCompare(b.dueDateIso));
 
@@ -211,26 +207,20 @@ export default function AgendaAlerts({ setCurrentPage }) {
   const filteredSchedule = scheduleList.filter(item => {
     const matchLoja = selectedLoja === 'ALL' || item.client === selectedLoja;
     const matchStatus = statusFilter === 'ALL' || 
-      (statusFilter === 'RECEBIDO' && item.paymentStatus === 'Recebido') ||
-      (statusFilter === 'PENDENTE' && item.paymentStatus !== 'Recebido');
-    const matchSearch = item.client.toLowerCase().includes(search.toLowerCase()) ||
-      item.id.toLowerCase().includes(search.toLowerCase()) ||
-      item.nfNumber.toLowerCase().includes(search.toLowerCase());
+      (statusFilter === 'RECEBIDO' && item.isFullySettled) ||
+      (statusFilter === 'PARCIAL' && item.isPartial) ||
+      (statusFilter === 'PENDENTE' && !item.isFullySettled);
+    const matchSearch = (item.client || '').toLowerCase().includes(search.toLowerCase()) ||
+      (item.id || '').toLowerCase().includes(search.toLowerCase()) ||
+      (item.nfNumber || '').toLowerCase().includes(search.toLowerCase());
     return matchLoja && matchStatus && matchSearch;
   });
 
-  // KPI Calculations (Harmonizadas com Valor a Liquidar = Total Comercial - Funrural s/ NF)
-  const totalALiquidarProgramado = scheduleList
-    .filter(s => s.paymentStatus !== 'Recebido')
-    .reduce((acc, s) => acc + s.valorALiquidar, 0);
-
-  const totalRecebido = scheduleList
-    .filter(s => s.paymentStatus === 'Recebido')
-    .reduce((acc, s) => acc + s.valorALiquidar, 0);
-
-  const totalVPProgramado = scheduleList
-    .filter(s => s.paymentStatus !== 'Recebido')
-    .reduce((acc, s) => acc + s.valorVP, 0);
+  // KPI Calculations (Harmonizadas com Valor a Liquidar e Parciais)
+  const totalALiquidarProgramado = scheduleList.reduce((acc, s) => acc + s.valorALiquidar, 0);
+  const totalRecebido = scheduleList.reduce((acc, s) => acc + s.valorLiquidado, 0);
+  const totalVPProgramado = scheduleList.reduce((acc, s) => acc + s.valorVP, 0);
+  const totalPedidosAbertos = scheduleList.filter(s => !s.isFullySettled).length;
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto space-y-6">
@@ -284,13 +274,13 @@ export default function AgendaAlerts({ setCurrentPage }) {
         
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
           <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span>Total a Liquidar (Receber)</span>
-            <DollarSign className="w-4 h-4 text-emerald-700" />
+            <span>Total a Liquidar (Em Aberto)</span>
+            <DollarSign className="w-4 h-4 text-amber-700" />
           </div>
-          <div className="text-2xl font-black text-[#173e27]">
+          <div className="text-2xl font-black text-amber-900">
             {formatCurrency(totalALiquidarProgramado)}
           </div>
-          <span className="text-[11px] text-gray-400 block">Total Comercial - FUNRURAL</span>
+          <span className="text-[11px] text-gray-400 block">Saldo pendente a receber</span>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
@@ -301,7 +291,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
           <div className="text-2xl font-black text-blue-950">
             {formatCurrency(totalVPProgramado)}
           </div>
-          <span className="text-[11px] text-gray-400 block">Cotação comercial das 34 VPs</span>
+          <span className="text-[11px] text-gray-400 block">Cotação comercial das {scheduleList.length} VPs</span>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
@@ -310,20 +300,20 @@ export default function AgendaAlerts({ setCurrentPage }) {
             <Clock className="w-4 h-4 text-amber-600" />
           </div>
           <div className="text-2xl font-black text-amber-900">
-            {scheduleList.filter(s => s.paymentStatus !== 'Recebido').length} entregas
+            {totalPedidosAbertos} entregas
           </div>
-          <span className="text-[11px] text-gray-400 block">Aguardando data de vencimento</span>
+          <span className="text-[11px] text-gray-400 block">Pendentes ou liquidação parcial</span>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
           <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span>Total Liquidado</span>
+            <span>Total Liquidado (Recebido)</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-2xl font-black text-emerald-700">
             {formatCurrency(totalRecebido)}
           </div>
-          <span className="text-[11px] text-gray-400 block">Vendas já recebidas</span>
+          <span className="text-[11px] text-gray-400 block">Valores já quitados / recebidos</span>
         </div>
       </div>
 
@@ -359,7 +349,8 @@ export default function AgendaAlerts({ setCurrentPage }) {
             className="bg-white border border-gray-300 text-xs rounded-lg px-3 py-2 font-semibold text-gray-800 outline-none"
           >
             <option value="ALL">Todos os Status</option>
-            <option value="PENDENTE">Pendentes (A Receber)</option>
+            <option value="PENDENTE">Pendentes (A Receber / Parcial)</option>
+            <option value="PARCIAL">Parcialmente Pagos</option>
             <option value="RECEBIDO">Liquidados (Recebidos)</option>
           </select>
         </div>
@@ -382,14 +373,16 @@ export default function AgendaAlerts({ setCurrentPage }) {
                 <th className="py-3 px-3 text-right">Caixas</th>
                 <th className="py-3 px-3 text-right font-black text-blue-900">Total VP (Comercial)</th>
                 <th className="py-3 px-3 text-right text-red-600">(-) FUNRURAL (NF)</th>
-                <th className="py-3 px-3 text-right font-black text-emerald-950 bg-emerald-50/50">Valor a Liquidar</th>
+                <th className="py-3 px-3 text-right font-black text-emerald-800 bg-emerald-50/40">Valor Liquidado</th>
+                <th className="py-3 px-3 text-right font-black text-amber-900 bg-amber-50/40">Valor a Liquidar</th>
                 <th className="py-3 px-3 text-center">Status Pagamento</th>
                 <th className="py-3 px-4 text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredSchedule.map((item, idx) => {
-                const isPaid = item.paymentStatus === 'Recebido';
+                const isPaid = item.isFullySettled;
+                const isPartial = item.isPartial;
                 return (
                   <tr key={idx} className={`hover:bg-gray-50/80 transition-colors ${isPaid ? 'bg-gray-50/40 opacity-75' : ''}`}>
                     
@@ -432,17 +425,26 @@ export default function AgendaAlerts({ setCurrentPage }) {
                       -{formatCurrency(item.funrural)}
                     </td>
 
+                    {/* Valor Liquidado */}
+                    <td className="py-3 px-3 text-right font-black text-emerald-800 bg-emerald-50/40">
+                      {item.valorLiquidado > 0 ? formatCurrency(item.valorLiquidado) : <span className="text-gray-400 font-normal">-</span>}
+                    </td>
+
                     {/* Valor a Liquidar */}
-                    <td className="py-3 px-3 text-right font-black text-emerald-950 bg-emerald-50/60">
-                      {formatCurrency(item.valorALiquidar)}
+                    <td className="py-3 px-3 text-right font-black text-amber-900 bg-amber-50/40">
+                      {item.valorALiquidar > 0 ? formatCurrency(item.valorALiquidar) : <span className="text-gray-400 font-normal">-</span>}
                     </td>
 
                     {/* Status */}
                     <td className="py-3 px-3 text-center">
                       <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
-                        isPaid ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900 border border-amber-200'
+                        isPaid 
+                          ? 'bg-emerald-100 text-emerald-800' 
+                          : (isPartial 
+                              ? 'bg-blue-100 text-blue-900 border border-blue-200' 
+                              : 'bg-amber-100 text-amber-900 border border-amber-200')
                       }`}>
-                        {isPaid ? 'Recebido' : 'A Receber'}
+                        {isPaid ? 'Recebido' : (isPartial ? `Parcial (${item.percentPaid?.toFixed(0)}%)` : 'A Receber')}
                       </span>
                     </td>
 
@@ -450,15 +452,15 @@ export default function AgendaAlerts({ setCurrentPage }) {
                     <td className="py-3 px-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         
-                        {/* Botão Liquidar */}
+                        {/* Botão Liquidar / Quitar / Parcial */}
                         {!isPaid ? (
                           <button
                             type="button"
-                            onClick={() => handleSettle(item.id)}
-                            className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer shadow-xs"
-                            title="Confirmar recebimento do valor"
+                            onClick={() => setSettleSaleModal(item)}
+                            className={`${isPartial ? 'bg-blue-700 hover:bg-blue-800' : 'bg-emerald-700 hover:bg-emerald-800'} text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer shadow-xs`}
+                            title={isPartial ? 'Adicionar novo pagamento ou quitar saldo' : 'Registrar quitação total ou liquidação parcial'}
                           >
-                            Liquidar
+                            {isPartial ? 'Liquidar (+)' : 'Liquidar'}
                           </button>
                         ) : (
                           <button
@@ -528,6 +530,17 @@ export default function AgendaAlerts({ setCurrentPage }) {
           </table>
         </div>
       </div>
+
+      {/* SettleModal para quitação total e parcial */}
+      <SettleModal
+        isOpen={!!settleSaleModal}
+        sale={settleSaleModal}
+        onClose={() => setSettleSaleModal(null)}
+        onSettled={() => {
+          fetchSales();
+          showNotification('Recebimento / liquidação registrado com sucesso!');
+        }}
+      />
 
       {/* Modal Lightbox: Visualizar Comprovante em Alta Resolução */}
       {previewEvidence && (

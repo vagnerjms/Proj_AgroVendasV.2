@@ -28,6 +28,8 @@ import {
 import { formatCurrency, formatDate, formatKg, formatNumber, getCleanFileName } from '../utils/formatters';
 import ContractModal from '../components/ContractModal';
 import { api } from '../services/api';
+import { calculateLiquidation } from '../utils/calculations';
+import SettleModal from '../components/sales/SettleModal';
 
 const DEFAULT_COLUMNS = {
   id: true,
@@ -67,6 +69,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
   const [search, setSearch] = useState('');
   const [viewSale, setViewSale] = useState(null);
   const [contractSale, setContractSale] = useState(null);
+  const [settleSaleModal, setSettleSaleModal] = useState(null);
 
   // Persistent Sorting State
   const [sortField, setSortField] = useState(() => {
@@ -863,12 +866,20 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                         </td>
                       )}
 
-                      {/* LÍQUIDO A RECEBER (VALOR NF - FUNRURAL) */}
-                      {visibleColumns.net && (
-                        <td className="py-3 px-4 text-right font-extrabold text-emerald-950 bg-emerald-50/30">
-                          {formatCurrency(net)}
-                        </td>
-                      )}
+                      {/* LÍQUIDO A RECEBER / VALOR A LIQUIDAR */}
+                      {visibleColumns.net && (() => {
+                        const liq = calculateLiquidation(sale);
+                        return (
+                          <td className="py-3 px-4 text-right font-extrabold text-emerald-950 bg-emerald-50/30">
+                            {formatCurrency(liq.valorALiquidar)}
+                            {liq.valorLiquidado > 0 && (
+                              <span className="block text-[10px] text-emerald-700 font-normal">
+                                Pago: {formatCurrency(liq.valorLiquidado)}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })()}
 
                       {/* Comissão 3% */}
                       {visibleColumns.feeValue && (() => {
@@ -890,16 +901,18 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                         <td className="py-3 px-4 text-center">
                           {(() => {
                             const hasNf = !!(sale.nfFile && sale.nfFile.trim());
-                            const isReceived = sale.paymentStatus === 'Recebido' || sale.status === 'Concluído';
-                            const isPendingNf = !hasNf;
+                            const liq = calculateLiquidation(sale);
 
-                            let badgeColor = 'bg-blue-100 text-blue-800';
-                            let label = 'Em aberto';
+                            let badgeColor = 'bg-amber-100 text-amber-900 border border-amber-200';
+                            let label = 'A Receber';
 
-                            if (isReceived) {
+                            if (liq.isFullySettled) {
                               badgeColor = 'bg-emerald-100 text-emerald-800';
                               label = 'Recebido';
-                            } else if (isPendingNf) {
+                            } else if (liq.isPartial) {
+                              badgeColor = 'bg-blue-100 text-blue-900 border border-blue-200';
+                              label = `Parcial (${liq.percentPaid.toFixed(0)}%)`;
+                            } else if (!hasNf) {
                               badgeColor = 'bg-amber-100 text-amber-800';
                               label = 'Pendente NF';
                             }
@@ -919,7 +932,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                             {/* Ver detalhes */}
                             <button
                               onClick={() => setViewSale(sale)}
-                              className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 p-1.5 rounded transition-colors"
+                              className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 p-1.5 rounded transition-colors cursor-pointer"
                               title="Ver detalhes da negociação / Rastreio VP"
                             >
                               <Eye className="w-3.5 h-3.5" />
@@ -928,7 +941,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                             {/* Imprimir Contrato Agrícola */}
                             <button
                               onClick={() => setContractSale(sale)}
-                              className="text-blue-700 hover:bg-blue-50 p-1.5 rounded transition-colors"
+                              className="text-blue-700 hover:bg-blue-50 p-1.5 rounded transition-colors cursor-pointer"
                               title="Imprimir Contrato Agrícola / Confirmação de Negócio"
                             >
                               <Printer className="w-3.5 h-3.5" />
@@ -937,25 +950,25 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                             {/* Editar - Abre o Formulário Completo */}
                             <button
                               onClick={() => onEditSale ? onEditSale(sale) : handleOpenEdit(sale)}
-                              className="text-emerald-700 hover:bg-emerald-50 p-1.5 rounded transition-colors"
+                              className="text-emerald-700 hover:bg-emerald-50 p-1.5 rounded transition-colors cursor-pointer"
                               title="Editar todos os dados da venda no formulário completo"
                             >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
 
                             {/* Liquidar ou Reverter */}
-                            {sale.paymentStatus !== 'Recebido' ? (
+                            {!calculateLiquidation(sale).isFullySettled ? (
                               <button
-                                onClick={() => handleSettle(sale.id)}
-                                className="text-amber-700 hover:bg-amber-50 p-1.5 rounded transition-colors"
-                                title="Dar baixa / Registrar recebimento"
+                                onClick={() => setSettleSaleModal(sale)}
+                                className={`${calculateLiquidation(sale).isPartial ? 'text-blue-700 hover:bg-blue-50' : 'text-amber-700 hover:bg-amber-50'} p-1.5 rounded transition-colors cursor-pointer`}
+                                title="Dar baixa / Registrar recebimento (Total ou Parcial)"
                               >
                                 <DollarSign className="w-3.5 h-3.5" />
                               </button>
                             ) : (
                               <button
                                 onClick={() => handleUnsettle(sale.id)}
-                                className="text-emerald-700 hover:text-amber-700 hover:bg-amber-50 p-1.5 rounded transition-colors"
+                                className="text-emerald-700 hover:text-amber-700 hover:bg-amber-50 p-1.5 rounded transition-colors cursor-pointer"
                                 title="Reverter liquidação / Voltar para 'A Receber'"
                               >
                                 <RotateCcw className="w-3.5 h-3.5" />
@@ -965,8 +978,8 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                             {/* Excluir */}
                             <button
                               onClick={() => handleDeleteSale(sale)}
-                              className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1.5 rounded transition-colors"
-                              title="Excluir negociação"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition-colors cursor-pointer"
+                              title="Cancelar e excluir venda"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -983,160 +996,204 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
       </div>
 
       {/* Modal: Detalhes da Venda e Rastreio */}
-      {viewSale && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div>
-                <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
-                  {viewSale.operationType}
-                </span>
-                <h3 className="text-lg font-bold text-gray-900">Rastreio & Detalhes da Venda {viewSale.id}</h3>
+      {viewSale && (() => {
+        const liq = calculateLiquidation(viewSale);
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <div>
+                  <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                    {viewSale.operationType}
+                  </span>
+                  <h3 className="text-lg font-bold text-gray-900">Rastreio & Detalhes da Venda {viewSale.id}</h3>
+                </div>
+                <button 
+                  onClick={() => setViewSale(null)}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-lg cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button 
-                onClick={() => setViewSale(null)}
-                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <div className="grid grid-cols-2 gap-4 text-xs bg-gray-50 p-4 rounded-xl border border-gray-200">
-              <div>
-                <span className="text-gray-500 block">Destinatário (Comprador):</span>
-                <span className="font-bold text-gray-900 text-sm">{viewSale.client}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Remetente (Produtor):</span>
-                <span className="font-semibold text-gray-900">{viewSale.origin || 'BRUNO PERES ROMEIRO'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Data da Operação (VP):</span>
-                <span className="font-semibold text-gray-900">{formatDate(viewSale.saleDate)}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Documento Fiscal:</span>
-                {viewSale.nfFile ? (
-                  <a href={`/uploads/${viewSale.nfFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:underline font-mono flex items-center gap-1" title={getCleanFileName(viewSale.nfFile)}>
-                    <FileText className="w-3 h-3" />
-                    <span className="truncate max-w-[260px]">{getCleanFileName(viewSale.nfFile)}</span>
-                  </a>
-                ) : (
-                  <span className="font-semibold text-gray-400">Pendente de emissão</span>
+              <div className="grid grid-cols-2 gap-4 text-xs bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <div>
+                  <span className="text-gray-500 block">Destinatário (Comprador):</span>
+                  <span className="font-bold text-gray-900 text-sm">{viewSale.client}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500 block">Remetente (Produtor):</span>
+                  <span className="font-semibold text-gray-900">{viewSale.origin || 'BRUNO PERES ROMEIRO'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500 block">Data da Operação (VP):</span>
+                  <span className="font-semibold text-gray-900">{formatDate(viewSale.saleDate)}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500 block">Documento Fiscal:</span>
+                  {viewSale.nfFile ? (
+                    <a href={`/uploads/${viewSale.nfFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:underline font-mono flex items-center gap-1" title={getCleanFileName(viewSale.nfFile)}>
+                      <FileText className="w-3 h-3" />
+                      <span className="truncate max-w-[260px]">{getCleanFileName(viewSale.nfFile)}</span>
+                    </a>
+                  ) : (
+                    <span className="font-semibold text-gray-400">Pendente de emissão</span>
+                  )}
+                </div>
+                {viewSale.evidenceFile && (
+                  <div>
+                    <span className="text-gray-500 block">Anexo da Venda (Imagem / Carga):</span>
+                    <a href={`/uploads/${viewSale.evidenceFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 hover:underline font-mono flex items-center gap-1" title={getCleanFileName(viewSale.evidenceFile)}>
+                      <Paperclip className="w-3 h-3" />
+                      <span className="truncate max-w-[260px]">{getCleanFileName(viewSale.evidenceFile)}</span>
+                    </a>
+                  </div>
+                )}
+                {viewSale.paymentProofFile && (
+                  <div>
+                    <span className="text-gray-500 block">Comprovante de Liquidação:</span>
+                    <a href={`/uploads/${viewSale.paymentProofFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:underline font-mono flex items-center gap-1" title={getCleanFileName(viewSale.paymentProofFile)}>
+                      <Paperclip className="w-3 h-3" />
+                      <span className="truncate max-w-[260px]">{getCleanFileName(viewSale.paymentProofFile)}</span>
+                    </a>
+                  </div>
                 )}
               </div>
-              {viewSale.evidenceFile && (
-                <div>
-                  <span className="text-gray-500 block">Anexo da Venda (Imagem / Carga):</span>
-                  <a href={`/uploads/${viewSale.evidenceFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 hover:underline font-mono flex items-center gap-1" title={getCleanFileName(viewSale.evidenceFile)}>
-                    <Paperclip className="w-3 h-3" />
-                    <span className="truncate max-w-[260px]">{getCleanFileName(viewSale.evidenceFile)}</span>
-                  </a>
-                </div>
-              )}
-              {viewSale.paymentProofFile && (
-                <div>
-                  <span className="text-gray-500 block">Comprovante de Liquidação (Pagamento):</span>
-                  <a href={`/uploads/${viewSale.paymentProofFile}`} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 hover:underline font-mono flex items-center gap-1" title={getCleanFileName(viewSale.paymentProofFile)}>
-                    <Paperclip className="w-3 h-3" />
-                    <span className="truncate max-w-[260px]">{getCleanFileName(viewSale.paymentProofFile)}</span>
-                  </a>
-                </div>
-              )}
-            </div>
 
-            {/* Itens e Pesos */}
-            <div className="bg-white rounded-xl p-3.5 border border-gray-200 text-xs space-y-2.5">
-              <div className="font-bold text-gray-800 flex items-center justify-between border-b border-gray-100 pb-2">
-                <span>Itens da Operação ({viewSale.items?.length || 1})</span>
-                <span className="font-black text-gray-900">{formatNumber(viewSale.totalKg, 0)} kg ({formatNumber(viewSale.totalVolumes || (viewSale.totalKg / 29), 2)} caixas eq.)</span>
+              {/* Itens e Pesos */}
+              <div className="bg-white rounded-xl p-3.5 border border-gray-200 text-xs space-y-2.5">
+                <div className="font-bold text-gray-800 flex items-center justify-between border-b border-gray-100 pb-2">
+                  <span>Itens da Operação ({viewSale.items?.length || 1})</span>
+                  <span className="font-black text-gray-900">{formatNumber(viewSale.totalKg, 0)} kg ({formatNumber(viewSale.totalVolumes || (viewSale.totalKg / 29), 2)} caixas eq.)</span>
+                </div>
+                
+                {viewSale.items && viewSale.items.length > 0 ? (
+                  <div className="divide-y divide-gray-100">
+                    {viewSale.items.map((it, i) => (
+                      <div key={i} className="py-1.5 flex items-center justify-between text-xs">
+                        <div>
+                          <span className="font-bold text-gray-900">{it.product || 'Produto'}</span>
+                          <span className="text-gray-400 text-[11px] ml-2">({it.unit || 'Caixas 29kg'})</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-extrabold text-gray-900">{formatNumber(it.kg, 0)} kg</span>
+                          <span className="text-gray-500 text-[11px] ml-2">({formatNumber(it.quantity, 0)} vol)</span>
+                          {it.total ? <span className="font-bold text-emerald-800 ml-2">· {formatCurrency(it.total)}</span> : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {viewSale.notes && (
+                  <div className="text-gray-600 text-[11px] bg-gray-50 p-2 rounded-lg border border-gray-100">
+                    {viewSale.notes}
+                  </div>
+                )}
               </div>
-              
-              {viewSale.items && viewSale.items.length > 0 ? (
-                <div className="divide-y divide-gray-100">
-                  {viewSale.items.map((it, i) => (
-                    <div key={i} className="py-1.5 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-bold text-gray-900">{it.product || 'Produto'}</span>
-                        <span className="text-gray-400 text-[11px] ml-2">({it.unit || 'Caixas 29kg'})</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-extrabold text-gray-900">{formatNumber(it.kg, 0)} kg</span>
-                        <span className="text-gray-500 text-[11px] ml-2">({formatNumber(it.quantity, 0)} vol)</span>
-                        {it.total ? <span className="font-bold text-emerald-800 ml-2">· {formatCurrency(it.total)}</span> : null}
-                      </div>
+
+              {/* Breakdown Financeiro: VP vs NF vs FUNRURAL vs Valor Liquidado / A Liquidar */}
+              <div className="bg-emerald-50/50 rounded-xl p-4 border border-emerald-200 space-y-2.5 text-xs">
+                <span className="text-xs font-bold text-[#173e27] uppercase tracking-wider block border-b border-emerald-200 pb-1">
+                  Demonstrativo Financeiro & Liquidação:
+                </span>
+
+                <div className="flex justify-between text-blue-900 font-bold">
+                  <span>Total Comercial (VP):</span>
+                  <span className="text-sm font-black text-blue-950">{formatCurrency(getValorTotalVP(viewSale))}</span>
+                </div>
+
+                <div className="flex justify-between text-gray-700 font-medium">
+                  <span>Valor Faturado na Nota Fiscal (NF):</span>
+                  <span className="font-semibold text-gray-900">{formatCurrency(viewSale.totalOperation)}</span>
+                </div>
+
+                <div className="flex justify-between text-red-600 font-semibold">
+                  <span>(-) FUNRURAL (1,63% apurado s/ NF):</span>
+                  <span className="text-sm font-bold">-{formatCurrency(viewSale.funruralTotal)}</span>
+                </div>
+
+                <div className="flex justify-between text-gray-800 font-bold pt-2 border-t border-emerald-200">
+                  <span>Total Líquido da Venda:</span>
+                  <span>{formatCurrency(liq.totalLiquido)}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="bg-emerald-100/70 p-2.5 rounded-lg border border-emerald-300">
+                    <span className="text-[10px] uppercase font-bold text-emerald-800 block">Total Liquidado (Pago)</span>
+                    <span className="text-sm font-black text-emerald-950">{formatCurrency(liq.valorLiquidado)}</span>
+                  </div>
+                  <div className="bg-amber-100/70 p-2.5 rounded-lg border border-amber-300">
+                    <span className="text-[10px] uppercase font-bold text-amber-800 block">Saldo a Liquidar</span>
+                    <span className="text-sm font-black text-amber-950">{formatCurrency(liq.valorALiquidar)}</span>
+                  </div>
+                </div>
+
+                {viewSale.paymentHistory && viewSale.paymentHistory.length > 0 && (
+                  <div className="pt-2 border-t border-emerald-200">
+                    <span className="font-bold text-gray-700 block mb-1">Histórico de Pagamentos Recebidos:</span>
+                    <div className="space-y-1">
+                      {viewSale.paymentHistory.map((ph, idx) => (
+                        <div key={idx} className="flex justify-between text-[11px] bg-white p-1.5 rounded border border-gray-200">
+                          <span>📅 {ph.date || formatDate(ph.createdAt)}: {ph.notes || 'Recebimento'}</span>
+                          <span className="font-bold text-emerald-800">{formatCurrency(ph.amount)}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-2 flex flex-wrap justify-between items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setContractSale(viewSale);
+                      setViewSale(null);
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Imprimir Contrato
+                  </button>
+
+                  {!liq.isFullySettled && (
+                    <button
+                      onClick={() => {
+                        const s = viewSale;
+                        setViewSale(null);
+                        setSettleSaleModal(s);
+                      }}
+                      className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <DollarSign className="w-3.5 h-3.5" />
+                      Registrar Pagamento
+                    </button>
+                  )}
                 </div>
-              ) : null}
 
-              {viewSale.notes && (
-                <div className="text-gray-600 text-[11px] bg-gray-50 p-2 rounded-lg border border-gray-100">
-                  {viewSale.notes}
-                </div>
-              )}
-            </div>
-
-            {/* Breakdown Financeiro: VP vs NF vs FUNRURAL vs Valor a Liquidar */}
-            <div className="bg-emerald-50/50 rounded-xl p-4 border border-emerald-200 space-y-2.5 text-xs">
-              <span className="text-xs font-bold text-[#173e27] uppercase tracking-wider block border-b border-emerald-200 pb-1">
-                Demonstrativo Financeiro & Dedução Fiscal:
-              </span>
-
-              <div className="flex justify-between text-blue-900 font-bold">
-                <span>Total Comercial (VP):</span>
-                <span className="text-sm font-black text-blue-950">{formatCurrency(getValorTotalVP(viewSale))}</span>
+                <button
+                  onClick={() => setViewSale(null)}
+                  className="bg-[#173e27] hover:bg-[#1f5033] text-white text-xs font-semibold px-5 py-2 rounded-lg cursor-pointer"
+                >
+                  Fechar
+                </button>
               </div>
-
-              <div className="flex justify-between text-gray-700 font-medium">
-                <span>Valor Faturado na Nota Fiscal (NF):</span>
-                <span className="font-semibold text-gray-900">{formatCurrency(viewSale.totalOperation)}</span>
-              </div>
-
-              <div className="flex justify-between text-red-600 font-semibold">
-                <span>(-) FUNRURAL (1,63% apurado s/ NF):</span>
-                <span className="text-sm font-bold">-{formatCurrency(viewSale.funruralTotal)}</span>
-              </div>
-
-              <div className="pl-4 text-[11px] text-gray-500 space-y-0.5 border-l-2 border-red-200 my-1">
-                <div className="flex justify-between"><span>↳ Previdência Social (1,20%):</span><span>{formatCurrency(viewSale.previdenciaSocial)}</span></div>
-                <div className="flex justify-between"><span>↳ RAT (0,10%):</span><span>{formatCurrency(viewSale.rat)}</span></div>
-                <div className="flex justify-between"><span>↳ SENAR (0,33%):</span><span>{formatCurrency(viewSale.senar)}</span></div>
-              </div>
-
-              <div className="flex justify-between text-emerald-950 font-extrabold text-sm pt-2 border-t border-emerald-300 bg-emerald-100/60 p-2 rounded-lg">
-                <span>(=) Valor a Liquidar (Receber):</span>
-                <span className="text-base text-emerald-900">{formatCurrency(getNetReceivable(viewSale))}</span>
-              </div>
-
-              <div className="flex justify-between text-[#173e27] font-bold pt-1">
-                <span>Comissão AgroVenda (Corretagem):</span>
-                <span>{formatCurrency(viewSale.totalCommission)}</span>
-              </div>
-            </div>
-
-            <div className="pt-2 flex justify-between items-center">
-              <button
-                onClick={() => {
-                  setContractSale(viewSale);
-                  setViewSale(null);
-                }}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg flex items-center gap-1.5"
-              >
-                <Printer className="w-3.5 h-3.5" />
-                Imprimir Contrato
-              </button>
-
-              <button
-                onClick={() => setViewSale(null)}
-                className="bg-[#173e27] text-white text-xs font-semibold px-5 py-2 rounded-lg"
-              >
-                Fechar
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
+      {/* SettleModal para quitação total e liquidação parcial */}
+      <SettleModal
+        isOpen={!!settleSaleModal}
+        sale={settleSaleModal}
+        onClose={() => setSettleSaleModal(null)}
+        onSettled={() => {
+          fetchSales();
+          showNotification('Pagamento / liquidação registrado com sucesso!');
+        }}
+      />
 
       {/* Modal: Editar Venda */}
       {editingSale && (
@@ -1185,6 +1242,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                   className="w-full border border-gray-300 rounded-lg p-2 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
                 >
                   <option value="A Receber">A Receber</option>
+                  <option value="Parcial">Parcial</option>
                   <option value="Recebido">Recebido (Liquidado)</option>
                 </select>
               </div>

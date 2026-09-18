@@ -57,6 +57,15 @@ const SaleSchema = new mongoose.Schema({
   paymentTermDays: { type: Number, default: 30 },
   dueDate: { type: String, default: '' },
   paidAmount: { type: Number, default: 0 },
+  paymentHistory: [
+    {
+      amount: { type: Number, default: 0 },
+      date: { type: String, default: '' },
+      paymentProofFile: { type: String, default: null },
+      notes: { type: String, default: '' },
+      createdAt: { type: Date, default: Date.now }
+    }
+  ],
   isDivergent: { type: Boolean, default: false },
   nfPending: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }

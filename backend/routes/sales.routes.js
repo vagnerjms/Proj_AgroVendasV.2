@@ -1,17 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const path = require('path');
-const fs = require('fs').promises;
-const { Sale, WeighingSlip, getNextSequence } = require('../db');
-const { TAX_RATES, calculateFiscalDeductions, roundMoney, calculateCommission } = require('../utils/money');
-const { uploadDir } = require('../middlewares/upload');
+const { Sale } = require('../db');
+const { calculateFiscalDeductions, roundMoney } = require('../utils/money');
 const { sendSaleWebhook } = require('../services/webhook.service');
 const { escapeRegex } = require('../utils/security');
 const { requireAuth } = require('../middlewares/auth');
-const { normalizeProducerOrigin } = require('../utils/producer');
+const saleService = require('../services/sale.service');
 
 // GET /api/sales/agenda-events (Recebíveis formatados por Data de Vencimento para n8n & Google Calendar)
-router.get('/agenda-events', async (req, res) => {
+router.get('/agenda-events', async (req, res, next) => {
   try {
     const sales = await Sale.find().sort({ saleDate: -1 }).lean();
     const events = sales.map(s => {
@@ -47,27 +44,27 @@ router.get('/agenda-events', async (req, res) => {
         totalOperation: Number(s.totalOperation) || 0,
         valorVP: valorFinal,
         valorLiquidar: valorLiquidar,
+        paidAmount: Number(s.paidAmount) || 0,
         status: s.status,
-        paymentStatus: s.paymentStatus,
+        paymentStatus: s.paymentStatus || 'A Receber',
         summary: `💰 ${clientShort} · R$ ${valorLiquidar.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${s.id})`,
         start: `${dueDate}T09:00:00-03:00`,
         end: `${dueDate}T10:00:00-03:00`,
-        description: `🏪 Comprador: ${s.client}\n📅 Vencimento: ${dueDate.split('-').reverse().join('/')}\n💰 Valor a Liquidar (Receber): R$ ${valorLiquidar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📊 Total Comercial (VP): R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📦 Volumes: ${volumesInt} cx\n📄 Nota Fiscal: ${s.nfFile || 'Pendente'}\n📌 Status: ${s.paymentStatus || 'A Receber'}`
+        description: `🏪 Comprador: ${s.client}\n📅 Vencimento: ${dueDate.split('-').reverse().join('/')}\n💰 Valor a Liquidar: R$ ${valorLiquidar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📊 Total Comercial (VP): R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📦 Volumes: ${volumesInt} cx\n📄 Nota Fiscal: ${s.nfFile || 'Pendente'}\n📌 Status: ${s.paymentStatus || 'A Receber'}`
       };
     });
 
     res.json(events);
   } catch (err) {
-    console.error('Erro na agenda de eventos:', err);
-    res.status(500).json({ error: 'Erro ao listar agenda de eventos' });
+    next(err);
   }
 });
 
 // Protect internal sales endpoints with JWT authentication
 router.use(requireAuth);
 
-// GET /api/sales (Supports optional page/limit pagination with X-Total-Count and dynamic status normalization)
-router.get('/', async (req, res) => {
+// GET /api/sales (Lista de vendas com paginação, filtros e busca)
+router.get('/', async (req, res, next) => {
   try {
     const { operationType, status, search, page, limit } = req.query;
     let filter = {};
@@ -130,12 +127,12 @@ router.get('/', async (req, res) => {
 
     res.json(normalized);
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao buscar vendas' });
+    next(err);
   }
 });
 
 // GET /api/sales/check-nfe/:key
-router.get('/check-nfe/:key', async (req, res) => {
+router.get('/check-nfe/:key', async (req, res, next) => {
   try {
     const { key } = req.params;
     if (!key || key.length < 10) return res.json({ exists: false });
@@ -145,12 +142,12 @@ router.get('/check-nfe/:key', async (req, res) => {
     }
     res.json({ exists: false });
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao verificar NF-e' });
+    next(err);
   }
 });
 
 // GET /api/sales/:id
-router.get('/:id', async (req, res) => {
+router.get('/:id', async (req, res, next) => {
   try {
     const sale = await Sale.findOne({ id: req.params.id }).lean();
     if (!sale) return res.status(404).json({ error: 'Venda não encontrada' });
@@ -168,451 +165,85 @@ router.get('/:id', async (req, res) => {
     }
     res.json(sale);
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao buscar detalhes da venda' });
+    next(err);
   }
 });
 
-// POST /api/sales (Atomic sequence & Romaneio sync)
-router.post('/', async (req, res) => {
-  const body = req.body;
+// POST /api/sales (Criação via sale.service.js)
+router.post('/', async (req, res, next) => {
   try {
-    // 1. Prevent duplicate XML/SEFAZ import by 44-digit nfeKey
-    if (body.nfeKey && body.nfeKey.trim().length >= 10) {
-      const existingKey = await Sale.findOne({ nfeKey: body.nfeKey.trim() }).lean();
-      if (existingKey) {
-        return res.status(409).json({ 
-          error: `Esta NF-e (Chave SEFAZ: ${body.nfeKey}) já foi importada e está vinculada à Venda ${existingKey.id} (${existingKey.client}).` 
-        });
-      }
-    }
-
-    const seq = await getNextSequence('sale_vp_id', Sale, 'VP');
-    const newId = `VP${String(seq).padStart(3, '0')}`;
-
-    const totalOp = roundMoney(body.totalOperation);
-    const fiscal = calculateFiscalDeductions(totalOp);
-    const valorVP = roundMoney(body.valorTotalVP > 0 ? body.valorTotalVP : totalOp);
-    const commission = calculateCommission(valorVP, body.feeValue);
-    const normalizedOrigin = await normalizeProducerOrigin(body.origin || '', body.notes || '');
-
-    const newSale = new Sale({
-      id: newId,
-      operationType: body.operationType || "Intermediação (Corretagem / Comissão)",
-      saleDate: body.saleDate || new Date().toISOString().split('T')[0],
-      client: body.client || "Cliente Geral",
-      clientDocument: body.clientDocument || "",
-      origin: normalizedOrigin,
-      destCity: body.destCity || "",
-      destUF: body.destUF || "",
-      notes: body.notes || "",
-      nfFile: body.nfFile || null,
-      nfeKey: body.nfeKey || "",
-      nfeDate: body.nfeDate || (body.nfFile ? body.saleDate : ""),
-      evidenceFile: body.evidenceFile || null,
-      freightType: body.freightType || 'FOB (Retira na Origem)',
-      carrierName: body.carrierName || '',
-      truckPlate: body.truckPlate || '',
-      driverName: body.driverName || '',
-      driverCPF: body.driverCPF || '',
-      items: body.items || [],
-      feeType: body.feeType || "Porcentagem (%)",
-      feeValue: Number(body.feeValue) || 3.0,
-      dailyQuote: roundMoney(body.dailyQuote),
-      valorTotalVP: valorVP,
-      totalVolumes: Number(body.totalVolumes) || 0,
-      totalKg: Number(body.totalKg) || 0,
-      totalOperation: totalOp,
-      totalCommission: commission.comissao,
-      funruralTotal: fiscal.funruralTotal,
-      previdenciaSocial: fiscal.previdencia,
-      rat: fiscal.rat,
-      senar: fiscal.senar,
-      liquidoAReceber: roundMoney(Math.max(0, valorVP - fiscal.funruralTotal)),
-      valorLiquidar: roundMoney(Math.max(0, valorVP - fiscal.funruralTotal)),
-      status: body.nfFile ? "Faturado" : "Pendente NF",
-      paymentStatus: "A Receber",
-      paymentTerms: body.paymentTerms || (body.paymentTermDays !== undefined ? (Number(body.paymentTermDays) === 0 ? 'À Vista' : `${body.paymentTermDays} dias`) : '30 dias'),
-      paymentTermDays: body.paymentTermDays !== undefined ? Number(body.paymentTermDays) : 30,
-      dueDate: body.dueDate || '',
-      isDivergent: false,
-      nfPending: !body.nfFile
-    });
-
-    await newSale.save();
-
-    // Auto-cadastra os produtos da venda no catálogo se ainda não existirem
-    if (newSale.items && Array.isArray(newSale.items) && newSale.items.length > 0) {
-      const { ensureProductsRegistered } = require('../services/product.service');
-      ensureProductsRegistered(newSale.items).catch(e => console.warn('Aviso ao auto-cadastrar produtos:', e.message));
-    }
-
-    // Auto-create matching Weighing Slip (ROM-VPXXX)
-    try {
-      const slipId = `ROM-${newSale.id}`;
-      const originKg = Number(body.totalKg) || 0;
-      await WeighingSlip.findOneAndUpdate(
-        { id: slipId },
-        {
-          id: slipId,
-          saleId: newSale.id,
-          client: newSale.client,
-          product: newSale.items?.[0]?.product || 'Cenoura (Caixa 29kg)',
-          truckPlate: newSale.truckPlate || 'ABC-1234',
-          driverName: newSale.driverName || newSale.origin || 'Transportador',
-          date: newSale.saleDate,
-          originWeightKg: originKg,
-          destWeightKg: originKg,
-          humidityPct: 14.0,
-          impurityPct: 1.0,
-          discountKg: 0,
-          netWeightKg: originKg,
-          weightDifferenceKg: 0,
-          weightDifferencePct: 0,
-          tolerancePct: 0.25,
-          status: 'Aprovado',
-          resolutionNotes: `Romaneio gerado automaticamente para a Venda ${newSale.id}`
-        },
-        { upsert: true, new: true }
-      );
-    } catch (e) {
-      console.error('Erro ao sincronizar romaneio automático:', e);
-    }
-
-    // Disparar Webhook para o n8n em tempo real (não bloqueante)
-    sendSaleWebhook('sale.created', newSale);
-
+    const newSale = await saleService.createSale(req.body);
     res.status(201).json(newSale);
   } catch (err) {
-    console.error('Erro ao salvar venda:', err);
-
-    // Rollback orphaned uploaded files if MongoDB insertion fails
-    if (body.nfFile) {
-      fs.unlink(path.join(uploadDir, body.nfFile)).catch(() => {});
-    }
-    if (body.evidenceFile) {
-      fs.unlink(path.join(uploadDir, body.evidenceFile)).catch(() => {});
-    }
-
-    res.status(500).json({ error: `Erro ao registrar venda: ${err.message}` });
+    next(err);
   }
 });
 
-// PUT /api/sales/:id (Edição com recálculo consistente de comissões e impostos)
-router.put('/:id', async (req, res) => {
+// PUT /api/sales/:id (Atualização via sale.service.js)
+router.put('/:id', async (req, res, next) => {
   try {
-    const existing = await Sale.findOne({ id: req.params.id });
-    if (!existing) return res.status(404).json({ error: 'Venda não encontrada' });
-
-    const body = req.body;
-    let updateFields = { ...body };
-
-    if (body.origin !== undefined || body.notes !== undefined) {
-      updateFields.origin = await normalizeProducerOrigin(
-        body.origin !== undefined ? body.origin : existing.origin,
-        body.notes !== undefined ? body.notes : existing.notes
-      );
-    }
-
-    const effectiveTotalOp = body.totalOperation !== undefined ? roundMoney(body.totalOperation) : existing.totalOperation;
-    const effectiveValorVP = body.valorTotalVP !== undefined ? roundMoney(body.valorTotalVP) : (existing.valorTotalVP || effectiveTotalOp);
-    const effectiveFee = body.feeValue !== undefined ? Number(body.feeValue) : existing.feeValue;
-
-    const fiscal = calculateFiscalDeductions(effectiveTotalOp);
-    const commission = calculateCommission(effectiveValorVP, effectiveFee);
-
-    const effectiveNfFile = body.nfFile !== undefined ? body.nfFile : existing.nfFile;
-    const hasNf = !!(effectiveNfFile && effectiveNfFile.trim());
-    updateFields.nfPending = !hasNf;
-
-    if (hasNf) {
-      if (updateFields.status === 'Pendente NF' || !updateFields.status) {
-        updateFields.status = (updateFields.paymentStatus || existing.paymentStatus) === 'Recebido' ? 'Concluído' : 'Faturado';
-      }
-    } else {
-      if (!updateFields.status || updateFields.status === 'Faturado') {
-        updateFields.status = 'Pendente NF';
-      }
-    }
-
-    updateFields.totalOperation = effectiveTotalOp;
-    updateFields.valorTotalVP = effectiveValorVP;
-    updateFields.previdenciaSocial = fiscal.previdencia;
-    updateFields.rat = fiscal.rat;
-    updateFields.senar = fiscal.senar;
-    updateFields.funruralTotal = fiscal.funruralTotal;
-    updateFields.liquidoAReceber = roundMoney(Math.max(0, effectiveValorVP - fiscal.funruralTotal));
-    updateFields.valorLiquidar = roundMoney(Math.max(0, effectiveValorVP - fiscal.funruralTotal));
-    updateFields.totalCommission = commission.comissao;
-
-    const updated = await Sale.findOneAndUpdate(
-      { id: req.params.id },
-      updateFields,
-      { new: true }
-    );
-
-    if (updated && updated.items && Array.isArray(updated.items) && updated.items.length > 0) {
-      const { ensureProductsRegistered } = require('../services/product.service');
-      ensureProductsRegistered(updated.items).catch(e => console.warn('Aviso ao auto-cadastrar produtos:', e.message));
-    }
-
-    // Cascade update to matching Weighing Slip (ROM-VPXXX)
-    if (updated) {
-      try {
-        const slipUpdate = {};
-        if (body.client) slipUpdate.client = body.client;
-        if (body.truckPlate) slipUpdate.truckPlate = body.truckPlate;
-        if (body.driverName || body.origin) slipUpdate.driverName = body.driverName || body.origin;
-        if (body.saleDate) slipUpdate.date = body.saleDate;
-        if (body.items?.[0]?.product) slipUpdate.product = body.items[0].product;
-        if (body.totalKg !== undefined) {
-          const kg = Number(body.totalKg) || 0;
-          slipUpdate.originWeightKg = kg;
-          slipUpdate.destWeightKg = kg;
-          slipUpdate.netWeightKg = kg;
-        }
-        if (Object.keys(slipUpdate).length > 0) {
-          await WeighingSlip.findOneAndUpdate(
-            { $or: [{ saleId: updated.id }, { id: `ROM-${updated.id}` }] },
-            slipUpdate
-          );
-        }
-      } catch (slipSyncErr) {
-        console.warn('Aviso: erro ao sincronizar edição no romaneio vinculado:', slipSyncErr.message);
-      }
-
-      // Disparar Webhook para o n8n
-      sendSaleWebhook('sale.updated', updated);
-    }
-
+    const updated = await saleService.updateSale(req.params.id, req.body);
     res.json(updated);
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao atualizar venda' });
+    next(err);
   }
 });
 
-// DELETE /api/sales/:id (Cascade delete on linked romaneios and physical files)
-router.delete('/:id', async (req, res) => {
+// DELETE /api/sales/:id (Exclusão via sale.service.js)
+router.delete('/:id', async (req, res, next) => {
   try {
-    const deleted = await Sale.findOneAndDelete({ id: req.params.id });
-    if (!deleted) return res.status(404).json({ error: 'Venda não encontrada' });
-
-    // Cascade delete of matching weighing slips
-    try {
-      await WeighingSlip.deleteMany({
-        $or: [
-          { saleId: deleted.id },
-          { id: `ROM-${deleted.id}` }
-        ]
-      });
-    } catch (slipErr) {
-      console.warn('Aviso: falha ao remover romaneio vinculado:', slipErr);
-    }
-
-    // Clean up physical files on disk if they exist (safe async)
-    if (deleted.nfFile) {
-      const otherUsingNf = await Sale.findOne({ nfFile: deleted.nfFile });
-      if (!otherUsingNf) {
-        const nfPath = path.join(uploadDir, deleted.nfFile);
-        fs.unlink(nfPath).catch(() => {});
-      }
-    }
-
-    if (deleted.evidenceFile) {
-      const otherUsingEvidence = await Sale.findOne({ evidenceFile: deleted.evidenceFile });
-      if (!otherUsingEvidence) {
-        const evPath = path.join(uploadDir, deleted.evidenceFile);
-        fs.unlink(evPath).catch(() => {});
-      }
-    }
-
+    const deleted = await saleService.deleteSale(req.params.id);
     res.json({ success: true, message: `Venda ${deleted.id} e romaneio vinculado excluídos com sucesso.` });
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao excluir venda' });
+    next(err);
   }
 });
 
-// POST /api/sales/:id/settle (Liquidação precisa com suporte ao valor real pago/VP)
-router.post('/:id/settle', async (req, res) => {
+// POST /api/sales/:id/settle (Liquidação Total ou Parcial via sale.service.js)
+router.post('/:id/settle', async (req, res, next) => {
   try {
-    const sale = await Sale.findOne({ id: req.params.id });
-    if (!sale) return res.status(404).json({ error: 'Venda não encontrada' });
-
-    const targetAmount = req.body?.paidAmount !== undefined 
-      ? Number(req.body.paidAmount) 
-      : (Number(sale.valorTotalVP) > 0 ? Number(sale.valorTotalVP) : Number(sale.totalOperation));
-
-    sale.paymentStatus = 'Recebido';
-    sale.paidAmount = roundMoney(targetAmount);
-    sale.status = 'Concluído';
-    if (req.body && req.body.paymentProofFile !== undefined) {
-      sale.paymentProofFile = req.body.paymentProofFile;
-    }
-    if (req.body && req.body.evidenceFile !== undefined) {
-      sale.evidenceFile = req.body.evidenceFile;
-    }
-    await sale.save();
-
-    // Disparar Webhook para atualizar status no n8n / Calendar
-    sendSaleWebhook('sale.settled', sale);
-
+    const sale = await saleService.settleSale(req.params.id, req.body);
     res.json({ success: true, sale });
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao liquidar venda' });
+    next(err);
   }
 });
 
-// POST /api/sales/:id/unsettle (Reverter liquidação para 'A Receber')
-router.post('/:id/unsettle', async (req, res) => {
+// POST /api/sales/:id/unsettle (Reverter liquidação via sale.service.js)
+router.post('/:id/unsettle', async (req, res, next) => {
   try {
-    const sale = await Sale.findOne({ id: req.params.id });
-    if (!sale) return res.status(404).json({ error: 'Venda não encontrada' });
-
-    sale.paymentStatus = 'A Receber';
-    sale.paidAmount = 0;
-    sale.status = sale.nfFile ? 'Faturado' : 'Pendente NF';
-    await sale.save();
-
-    // Disparar Webhook para atualizar status no n8n / Calendar
-    sendSaleWebhook('sale.updated', sale);
-
+    const sale = await saleService.unsettleSale(req.params.id);
     res.json({ success: true, sale });
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao reverter liquidação da venda' });
+    next(err);
   }
 });
 
-// POST /api/sales/:id/sync-calendar (Manual sync trigger for a specific sale)
-router.post('/:id/sync-calendar', async (req, res) => {
+// POST /api/sales/:id/sync-calendar (Sincronização manual)
+router.post('/:id/sync-calendar', async (req, res, next) => {
   try {
     const sale = await Sale.findOne({ id: req.params.id });
     if (!sale) return res.status(404).json({ error: 'Venda não encontrada' });
-
     sendSaleWebhook('sale.manual_sync', sale);
     res.json({ success: true, message: `Webhook disparado para a venda ${sale.id}` });
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao sincronizar venda com o calendário' });
+    next(err);
   }
 });
 
-// POST /api/sales/sync-all-webhooks (Dispara webhook para todas as vendas no banco de dados)
-router.post('/sync-all-webhooks', async (req, res) => {
+// POST /api/sales/sync-all-webhooks (Sincronização de lote)
+router.post('/sync-all-webhooks', async (req, res, next) => {
   try {
     const sales = await Sale.find().sort({ saleDate: 1 });
     let count = 0;
     for (const sale of sales) {
       await sendSaleWebhook('sale.batch_sync', sale);
-      // Intervalo de 250ms entre envios para evitar saturação no n8n / API do Google Drive
       await new Promise(resolve => setTimeout(resolve, 250));
       count++;
     }
-    res.json({ success: true, count, message: `${count} eventos e anexos de vendas foram sincronizados com sucesso (Google Agenda & Google Drive)!` });
+    res.json({ success: true, count, message: `${count} eventos e anexos de vendas foram sincronizados com sucesso!` });
   } catch (err) {
-    res.status(500).json({ error: 'Erro ao sincronizar todas as vendas via webhook' });
-  }
-});
-
-// POST /api/sales/repair-database (Repara vendas corrompidas por distorção de casas decimais)
-router.post('/repair-database', async (req, res) => {
-  try {
-    const { repairCorruptedSales } = require('../scripts/repair_corrupted_sales');
-    const sales = await Sale.find({});
-    let fixedCount = 0;
-
-    for (const sale of sales) {
-      let needsUpdate = false;
-      let newItems = [];
-      let calculatedTotalNF = 0;
-      let calculatedTotalVP = 0;
-
-      if (sale.items && sale.items.length > 0) {
-        newItems = sale.items.map(it => {
-          let kg = Number(it.kg) || 0;
-          let pKg = Number(it.pricePerKg) || 0;
-          let total = Number(it.total) || 0;
-          let bw = Number(it.boxWeightKg) || 29;
-          let q = Number(it.dailyQuote) || 0;
-          let vp = Number(it.valorTotalVP) || 0;
-
-          const expectedTotal = kg * pKg;
-          if (expectedTotal > 0 && total > 500000 && (total / expectedTotal >= 90)) {
-            total = expectedTotal;
-            needsUpdate = true;
-          } else if (expectedTotal > 0 && total === 0) {
-            total = expectedTotal;
-          }
-
-          const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
-          const vol = isGr ? kg : (bw > 0 ? (kg / bw) : 0);
-          const isQKg = (q > 0 && q <= 10.0) || isGr;
-          const expectedVP = q > 0 ? (isQKg ? (kg * q) : (vol * q)) : total;
-
-          if (vp > 500000 && expectedVP > 0 && (vp / expectedVP >= 90)) {
-            vp = expectedVP;
-            needsUpdate = true;
-          } else if (expectedVP > 0 && (!vp || vp === 0)) {
-            vp = expectedVP;
-          }
-
-          calculatedTotalNF += total;
-          calculatedTotalVP += (vp > 0 ? vp : total);
-
-          return {
-            ...(it.toObject ? it.toObject() : it),
-            kg: roundMoney(kg),
-            pricePerKg: pKg,
-            total: roundMoney(total),
-            valorTotalVP: roundMoney(vp)
-          };
-        });
-      }
-
-      let currentTotalOp = Number(sale.totalOperation) || 0;
-      let finalTotalOp = currentTotalOp;
-
-      if (calculatedTotalNF > 0 && (currentTotalOp > 500000 || currentTotalOp === 0 || Math.abs(currentTotalOp - calculatedTotalNF) > 100000)) {
-        finalTotalOp = calculatedTotalNF;
-        needsUpdate = true;
-      } else if (currentTotalOp > 500000) {
-        finalTotalOp = currentTotalOp / 1000;
-        needsUpdate = true;
-      }
-
-      let finalValorVP = Number(sale.valorTotalVP) || 0;
-      if (calculatedTotalVP > 0 && (finalValorVP > 500000 || finalValorVP === 0 || Math.abs(finalValorVP - calculatedTotalVP) > 100000)) {
-        finalValorVP = calculatedTotalVP;
-        needsUpdate = true;
-      }
-
-      if (needsUpdate) {
-        const fiscal = calculateFiscalDeductions(finalTotalOp);
-        const commission = calculateCommission(finalValorVP > 0 ? finalValorVP : finalTotalOp, sale.feeValue || 3);
-
-        const updateData = {
-          totalOperation: roundMoney(finalTotalOp),
-          valorTotalVP: roundMoney(finalValorVP),
-          funruralTotal: fiscal.funruralTotal,
-          previdenciaSocial: fiscal.previdencia,
-          rat: fiscal.rat,
-          senar: fiscal.senar,
-          totalCommission: commission.comissao
-        };
-
-        if (newItems.length > 0) {
-          updateData.items = newItems;
-        }
-
-        if (sale.paidAmount && (sale.paidAmount > 500000 || sale.paymentStatus === 'Recebido')) {
-          updateData.paidAmount = roundMoney(finalTotalOp);
-        }
-
-        await Sale.updateOne({ _id: sale._id }, { $set: updateData });
-        fixedCount++;
-      }
-    }
-
-    res.json({ success: true, fixedCount, message: `${fixedCount} vendas com valores corrompidos foram normalizadas e reparadas com sucesso!` });
-  } catch (err) {
-    res.status(500).json({ error: `Erro ao reparar banco de dados: ${err.message}` });
+    next(err);
   }
 });
 

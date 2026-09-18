@@ -2,31 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { 
   Printer, 
   Building2, 
-  ChevronDown, 
-  ChevronUp, 
   FileSpreadsheet, 
   RefreshCw, 
   CheckCircle2, 
-  AlertCircle, 
-  Percent, 
   DollarSign, 
-  TrendingUp, 
-  Scale, 
   BadgePercent, 
-  Wallet,
-  Calendar,
-  Filter,
-  X,
-  CloudUpload,
-  FileDown,
-  Settings,
-  AlertTriangle,
-  Clock,
-  Paperclip
+  Calendar, 
+  Filter, 
+  X, 
+  CloudUpload, 
+  FileDown, 
+  Settings, 
+  AlertTriangle, 
+  Clock 
 } from 'lucide-react';
-import { formatCurrency, formatNumber } from '../utils/formatters';
+import { formatCurrency } from '../utils/formatters';
 import { api } from '../services/api';
 import { buildExcelReportHtml } from '../utils/reportExcelBuilder';
+import { calculateLiquidation } from '../utils/calculations';
+
+// Subcomponentes modulares
+import StoreSummaryTable from '../components/reports/StoreSummaryTable';
+import StoreDetailList from '../components/reports/StoreDetailList';
+import CommissionsTable from '../components/reports/CommissionsTable';
+import N8nWebhookModal from '../components/reports/N8nWebhookModal';
 
 export default function Reports({ setCurrentPage }) {
   const [activeTab, setActiveTab] = useState('geral'); // 'geral' | 'comissoes'
@@ -67,7 +66,7 @@ export default function Reports({ setCurrentPage }) {
     ? reportData.producers
     : [...new Set(stores.flatMap(s => (s.itens || []).map(it => it.producer || it.origin)).filter(Boolean))].sort();
 
-  // Filtragem dinâmica por Loja e por Produtor
+  // Filtragem dinâmica por Loja e por Produtor com cálculo preciso de liquidação
   const filteredLojas = stores
     .filter(l => selectedLoja === 'ALL' || l.loja === selectedLoja)
     .map(store => {
@@ -84,8 +83,15 @@ export default function Reports({ setCurrentPage }) {
       const totalVendaAReceber = matchingItens.reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
       const totalComissao = matchingItens.reduce((acc, it) => acc + (Number(it.comissao) || 0), 0);
       const totalLiquidoProdutor = matchingItens.reduce((acc, it) => acc + (Number(it.liquidoProdutor) || 0), 0);
-      const valorLiquidado = matchingItens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').reduce((acc, it) => acc + (Number(it.liquido) || Math.max(0, Number(it.valorVP) - Number(it.funrural))), 0);
-      const valorALiquidar = matchingItens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').reduce((acc, it) => acc + (Number(it.liquido) || Math.max(0, Number(it.valorVP) - Number(it.funrural))), 0);
+      
+      const valorLiquidado = matchingItens.reduce((acc, it) => {
+        const liq = calculateLiquidation(it);
+        return acc + liq.valorLiquidado;
+      }, 0);
+      const valorALiquidar = matchingItens.reduce((acc, it) => {
+        const liq = calculateLiquidation(it);
+        return acc + liq.valorALiquidar;
+      }, 0);
 
       return {
         ...store,
@@ -111,14 +117,17 @@ export default function Reports({ setCurrentPage }) {
   // Métricas Consolidadas de Liquidação Financeira
   const allFilteredItens = filteredLojas.flatMap(s => s.itens || []);
   const valorTotalGeralVP = allFilteredItens.reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0) || rawTotalGeral.totalVendaAReceber;
-  const valorTotalLiquidado = allFilteredItens
-    .filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido')
-    .reduce((acc, it) => acc + (Number(it.liquido) || Math.max(0, Number(it.valorVP) - Number(it.funrural))), 0);
-  const valorTotalALiquidar = allFilteredItens
-    .filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido')
-    .reduce((acc, it) => acc + (Number(it.liquido) || Math.max(0, Number(it.valorVP) - Number(it.funrural))), 0);
-  const totalVPsLiquidadas = allFilteredItens.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').length;
-  const totalVPsALiquidar = allFilteredItens.filter(it => it.paymentStatus !== 'Recebido' && it.status !== 'Concluído' && it.status !== 'Recebido').length;
+  
+  const valorTotalLiquidado = allFilteredItens.reduce((acc, it) => {
+    return acc + calculateLiquidation(it).valorLiquidado;
+  }, 0);
+
+  const valorTotalALiquidar = allFilteredItens.reduce((acc, it) => {
+    return acc + calculateLiquidation(it).valorALiquidar;
+  }, 0);
+
+  const totalVPsLiquidadas = allFilteredItens.filter(it => calculateLiquidation(it).isFullySettled).length;
+  const totalVPsALiquidar = allFilteredItens.filter(it => !calculateLiquidation(it).isFullySettled).length;
 
   // Dynamic totals: recalculates based on filteredLojas
   const currentTotal = (selectedLoja === 'ALL' && selectedProducer === 'ALL')
@@ -208,10 +217,8 @@ export default function Reports({ setCurrentPage }) {
     }
   };
 
-  // Gerador do HTML/Excel via utilitário modular reportExcelBuilder
   const buildExcelContent = () => buildExcelReportHtml(filteredLojas, currentTotal, { startDate, endDate, selectedLoja, selectedProducer });
 
-  // Download direto do Excel no navegador
   const handleDownloadExcelDirect = () => {
     const excelContent = buildExcelContent();
     const safeLoja = selectedLoja === 'ALL' ? 'Geral' : selectedLoja.replace(/[^a-zA-Z0-9]/g, '_');
@@ -243,7 +250,6 @@ export default function Reports({ setCurrentPage }) {
       if (res.ok) {
         const data = await res.json();
         setReportData(data);
-        // Expand all stores by default
         const initExpand = {};
         (data.stores || []).forEach(s => {
           initExpand[s.loja] = true;
@@ -281,7 +287,6 @@ export default function Reports({ setCurrentPage }) {
       s = '2026-08-01';
       e = '2026-08-31';
     } else {
-      // ALL
       s = '';
       e = '';
     }
@@ -438,62 +443,13 @@ export default function Reports({ setCurrentPage }) {
       )}
 
       {/* Modal de Configuração do Webhook do n8n */}
-      {showWebhookModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 print:hidden">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-              <div className="flex items-center gap-2 text-gray-900">
-                <Settings className="w-5 h-5 text-[#df7b1b]" />
-                <h3 className="text-base font-bold">Configurar Webhook do n8n</h3>
-              </div>
-              <button onClick={() => setShowWebhookModal(false)} className="text-gray-400 hover:text-gray-600 p-1">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={saveWebhookConfig} className="space-y-3">
-              <p className="text-xs text-gray-600">
-                Insira a URL do Webhook do seu n8n para que o botão <b>"Salvar no Drive"</b> envie os relatórios automaticamente:
-              </p>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">
-                  URL do Webhook do n8n (POST):
-                </label>
-                <input
-                  type="url"
-                  required
-                  placeholder="https://n8n.seusite.com/webhook/salvar-relatorio-drive"
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e] font-mono"
-                />
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-[11px] text-blue-900 space-y-1">
-                <span className="font-bold block">💡 Dica de Integração:</span>
-                <span>O sistema enviará para o n8n o período filtrado, a loja e o usuário solicitante em formato JSON via POST.</span>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setShowWebhookModal(false)}
-                  className="px-4 py-2 text-xs text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer transition-all"
-                >
-                  Salvar Configuração
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <N8nWebhookModal
+        show={showWebhookModal}
+        onClose={() => setShowWebhookModal(false)}
+        webhookUrl={webhookUrl}
+        setWebhookUrl={setWebhookUrl}
+        onSave={saveWebhookConfig}
+      />
 
       {/* Barra de Filtro de Período (Oculta na Impressão) */}
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4 print:hidden">
@@ -662,7 +618,7 @@ export default function Reports({ setCurrentPage }) {
       <div className="flex items-center gap-2 border-b border-gray-200 pb-1 print:hidden">
         <button
           onClick={() => setActiveTab('geral')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 cursor-pointer ${
             activeTab === 'geral'
               ? 'border-emerald-700 text-emerald-950 bg-white shadow-sm'
               : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-100/60'
@@ -674,7 +630,7 @@ export default function Reports({ setCurrentPage }) {
 
         <button
           onClick={() => setActiveTab('comissoes')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 ${
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-bold text-xs transition-all border-b-2 cursor-pointer ${
             activeTab === 'comissoes'
               ? 'border-blue-700 text-blue-950 bg-white shadow-sm'
               : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-100/60'
@@ -685,556 +641,37 @@ export default function Reports({ setCurrentPage }) {
         </button>
       </div>
 
-      {/* ========================================================================= */}
-      {/* ABA 1: RELATÓRIO GERAL (PADRÃO PLANILHA)                                   */}
-      {/* ========================================================================= */}
+      {/* ABA 1: RELATÓRIO GERAL */}
       {activeTab === 'geral' && (
         <div className="space-y-6">
-          {/* Tabela Principal: Resumo Geral por Loja (Folha 1 na Impressão) */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden space-y-3 page-break-after print:shadow-none print:border-none">
-            <div className="bg-[#1b4363] text-white px-6 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-sky-200" />
-                <span className="text-xs font-black uppercase tracking-wider">
-                  ResumoLojas — Relatório geral - NFs e VPs por loja
-                </span>
-              </div>
-              <span className="text-[11px] font-semibold text-sky-100 bg-sky-900/40 px-2.5 py-0.5 rounded">
-                Fórmulas 100% Conciliadas em Tempo Real
-              </span>
-            </div>
-
-            <div className="overflow-x-auto p-4 pt-1">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-[#245b85] text-white font-bold uppercase text-[10px] tracking-wider">
-                  <tr>
-                    <th className="py-2.5 px-3">Loja</th>
-                    <th className="py-2.5 px-2 text-center">NFs</th>
-                    <th className="py-2.5 px-2 text-center">Pedidos Venda</th>
-                    <th className="py-2.5 px-2 text-center">Pedidos sem NF</th>
-                    <th className="py-2.5 px-3 text-right">Peso NF (kg)</th>
-                    <th className="py-2.5 px-3 text-right">Peso total baseado na colheita (kg)</th>
-                    <th className="py-2.5 px-3 text-right">CXS Vendidas</th>
-                    <th className="py-2.5 px-3 text-right">Valor Total NF (R$)</th>
-                    <th className="py-2.5 px-3 text-right">FUNRURAL (R$)</th>
-                    <th className="py-2.5 px-3 text-right bg-[#1a4364]">Total Comercial (VP)</th>
-                    <th className="py-2.5 px-3 text-right bg-[#166534]">Valor Liquidado (R$)</th>
-                    <th className="py-2.5 px-3 text-right bg-[#b45309]">Valor a Liquidar (R$)</th>
-                    <th className="py-2.5 px-3 text-right bg-[#143753]">Líquido NF (R$)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredLojas.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-3 px-3 font-bold text-gray-900 flex items-center gap-2">
-                        <Building2 className="w-3.5 h-3.5 text-[#245b85]" />
-                        {row.loja}
-                      </td>
-                      <td className="py-3 px-2 text-center font-medium text-gray-700">{row.nfs}</td>
-                      <td className="py-3 px-2 text-center font-bold text-gray-900">{row.pedidosVenda}</td>
-                      <td className="py-3 px-2 text-center text-amber-700 font-medium">
-                        {row.pedidosSemNF > 0 ? (
-                          <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded text-[10px] font-bold">
-                            {row.pedidosSemNF}
-                          </span>
-                        ) : (
-                          '0'
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-right text-gray-700 font-medium">{formatNumber(row.pesoNF, 2)}</td>
-                      <td className="py-3 px-3 text-right font-bold text-gray-900">{formatNumber(row.pesoColheita, 2)}</td>
-                      <td className="py-3 px-3 text-right font-semibold text-gray-800">{formatNumber(row.cxsVendidas, 2)}</td>
-                      <td className="py-3 px-3 text-right font-bold text-gray-900">{formatCurrency(row.valorTotalNF)}</td>
-                      <td className="py-3 px-3 text-right text-red-600 font-medium">-{formatCurrency(row.funrural)}</td>
-                      <td className="py-3 px-3 text-right font-black text-[#1a4364] bg-sky-50/40">
-                        {formatCurrency(row.totalVendaAReceber)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-black text-emerald-800 bg-emerald-50/60">
-                        {formatCurrency(row.valorLiquidado)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-black text-amber-900 bg-amber-50/60">
-                        {formatCurrency(row.valorALiquidar)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-black text-emerald-950 bg-emerald-50/40">
-                        {formatCurrency(row.liquidoNF)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-[#bfe2a5] font-black text-xs text-gray-950 border-t-2 border-emerald-800">
-                  <tr>
-                    <td className="py-3 px-3 uppercase font-black text-gray-950">
-                      {selectedLoja === 'ALL' ? 'TOTAL GERAL' : `TOTAL (${selectedLoja})`}
-                    </td>
-                    <td className="py-3 px-2 text-center font-black">{currentTotal.nfs}</td>
-                    <td className="py-3 px-2 text-center font-black">{currentTotal.pedidosVenda}</td>
-                    <td className="py-3 px-2 text-center font-black text-amber-950">{currentTotal.pedidosSemNF}</td>
-                    <td className="py-3 px-3 text-right font-black">{formatNumber(currentTotal.pesoNF, 2)}</td>
-                    <td className="py-3 px-3 text-right font-black bg-[#9dd07b]">{formatNumber(currentTotal.pesoColheita, 2)}</td>
-                    <td className="py-3 px-3 text-right font-black">{formatNumber(currentTotal.cxsVendidas, 2)}</td>
-                    <td className="py-3 px-3 text-right font-black">{formatCurrency(currentTotal.valorTotalNF)}</td>
-                    <td className="py-3 px-3 text-right font-black text-red-900">-{formatCurrency(currentTotal.funrural)}</td>
-                    <td className="py-3 px-3 text-right font-black text-green-950 bg-[#83c457]">
-                      {formatCurrency(currentTotal.totalVendaAReceber)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-black text-emerald-950 bg-[#a7f3d0]">
-                      {formatCurrency(currentTotal.valorTotalLiquidado)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-black text-amber-950 bg-[#fde68a]">
-                      {formatCurrency(currentTotal.valorTotalALiquidar)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-black text-emerald-950 bg-[#aedb8e]">
-                      {formatCurrency(currentTotal.liquidoNF)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-
-          {/* Seção 2: Detalhamento Individual de Cada Loja (Folhas Seguintes) */}
-          <div className="space-y-4 pt-2 print:space-y-6">
-            <h2 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider flex items-center gap-2 print:text-xs">
-              <span>Detalhamento Individual das Vendas por Loja (VPs)</span>
-            </h2>
-
-            {filteredLojas.map((lojaGroup, lIdx) => {
-              const isExpanded = expandedLojas[lojaGroup.loja];
-              return (
-                <div key={lIdx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden page-break-avoid print:border print:border-gray-300 print:shadow-none print:mb-4">
-                  <div 
-                    onClick={() => toggleExpand(lojaGroup.loja)}
-                    className="bg-gray-50 hover:bg-gray-100/80 p-4 flex items-center justify-between cursor-pointer border-b border-gray-200 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Building2 className="w-4 h-4 text-[#173e27]" />
-                      <span className="text-xs font-black text-gray-900 uppercase tracking-wide">
-                        {lojaGroup.loja}
-                      </span>
-                      <span className="text-[11px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
-                        {lojaGroup.itens?.length || 0} VPs
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-4 text-xs">
-                      <span className="text-gray-500">
-                        NF: <strong className="text-gray-900">{formatCurrency(lojaGroup.valorTotalNF)}</strong>
-                      </span>
-                      <span className="text-gray-500">
-                        VP: <strong className="text-blue-900">{formatCurrency(lojaGroup.totalVendaAReceber)}</strong>
-                      </span>
-                      <span className="text-gray-500">
-                        Liquidado: <strong className="text-emerald-800">{formatCurrency(lojaGroup.valorLiquidado)}</strong>
-                      </span>
-                      <span className="text-gray-500">
-                        A Liquidar: <strong className="text-amber-800">{formatCurrency(lojaGroup.valorALiquidar)}</strong>
-                      </span>
-                      <span className="print:hidden">
-                        {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className={`overflow-x-auto p-4 pt-2 ${isExpanded ? 'block' : 'hidden print:block'}`}>
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px]">
-                        <tr>
-                          <th className="py-2 px-3">Nº VP</th>
-                          <th className="py-2 px-2">Data VP</th>
-                          <th className="py-2 px-3">Nº NF</th>
-                          <th className="py-2 px-2">Data NF</th>
-                          <th className="py-2 px-3 text-right">Peso NF (kg)</th>
-                          <th className="py-2 px-3 text-right">Peso Colheita (kg)</th>
-                          <th className="py-2 px-3 text-right">Volumes / Caixas</th>
-                          <th className="py-2 px-3 text-right">Preço/kg NF</th>
-                          <th className="py-2 px-3 text-right">Valor Total NF</th>
-                          <th className="py-2 px-3 text-right">FUNRURAL (1,63%)</th>
-                          <th className="py-2 px-3 text-right">Cotação Dia</th>
-                          <th className="py-2 px-3 text-right">Valor Total VP</th>
-                          <th className="py-2 px-3 text-right bg-emerald-50 text-emerald-950 font-bold">Valor Liquidado</th>
-                          <th className="py-2 px-3 text-right bg-amber-50 text-amber-950 font-bold">Valor a Liquidar</th>
-                          <th className="py-2 px-3 text-right">Líquido da NF</th>
-                          <th className="py-2 px-3 text-center">Vencimento</th>
-                          <th className="py-2 px-3 text-center">Status</th>
-                          <th className="py-2 px-3 text-center">Anexo / Imagem</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {lojaGroup.itens?.map((it, rIdx) => {
-                          const isSettled = it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido';
-                          const itLiquidoValor = Number(it.liquido) > 0 ? Number(it.liquido) : Math.max(0, (Number(it.valorVP) || 0) - (Number(it.funrural) || 0));
-                          const itLiquidado = isSettled ? itLiquidoValor : 0;
-                          const itALiquidar = !isSettled ? itLiquidoValor : 0;
-                          return (
-                            <tr key={rIdx} className="hover:bg-gray-50/70 transition-colors">
-                              <td className="py-2 px-3">
-                                <div className="font-bold text-[#173e27]">{it.vp}</div>
-                                <div className="text-[10px] text-gray-600 font-semibold truncate max-w-[220px]" title={it.product}>
-                                  {it.product}
-                                </div>
-                                <div className="text-[10px] text-blue-800 font-medium truncate max-w-[220px]" title={`Produtor: ${it.producer || it.origin}`}>
-                                  🌾 {it.producer || it.origin || 'Produtor Rural'}
-                                </div>
-                              </td>
-                              <td className="py-2 px-2 text-gray-600">{it.dataVP}</td>
-                              <td className="py-2 px-3 font-semibold text-gray-800">{it.nf}</td>
-                              <td className="py-2 px-2 text-gray-600">{it.dataNF}</td>
-                              <td className="py-2 px-3 text-right text-gray-600">{formatNumber(it.pesoNF, 0)} kg</td>
-                              <td className="py-2 px-3 text-right font-bold text-gray-900">{formatNumber(it.pesoColheita, 0)} kg</td>
-                              <td className="py-2 px-3 text-right font-bold text-gray-900">
-                                {formatNumber(it.cxs, 2)} {it.unit?.toLowerCase().includes('saca') || it.product?.toLowerCase().includes('batata') ? 'sc' : 'cx'}
-                              </td>
-                              <td className="py-2 px-3 text-right text-gray-700">{it.precoKg > 0 ? `R$ ${it.precoKg.toFixed(2)}` : '-'}</td>
-                              <td className="py-2 px-3 text-right font-bold text-gray-900">{formatCurrency(it.valorNF)}</td>
-                              <td className="py-2 px-3 text-right text-red-600">-{formatCurrency(it.funrural)}</td>
-                              <td className="py-2 px-3 text-right font-semibold text-blue-900">
-                                R$ {it.cotacao.toFixed(2)}/{it.cotacao <= 10.0 ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
-                              </td>
-                              <td className="py-2 px-3 text-right font-black text-blue-950 bg-blue-50/30">{formatCurrency(it.valorVP)}</td>
-                              <td className="py-2 px-3 text-right font-black text-emerald-800 bg-emerald-50/40">
-                                {itLiquidado > 0 ? formatCurrency(itLiquidado) : <span className="text-gray-400 font-normal">-</span>}
-                              </td>
-                              <td className="py-2 px-3 text-right font-black text-amber-900 bg-amber-50/40">
-                                {itALiquidar > 0 ? formatCurrency(itALiquidar) : <span className="text-gray-400 font-normal">-</span>}
-                              </td>
-                              <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/30">
-                                {formatCurrency(it.liquidoNF || Math.max(0, (Number(it.valorNF) || 0) - (Number(it.funrural) || 0)))}
-                              </td>
-                              <td className="py-2 px-3 text-center text-gray-600">{it.venc}</td>
-                              <td className="py-2 px-3 text-center">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  isSettled ? 'bg-emerald-100 text-emerald-800' : (it.status === 'Faturado' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-900')
-                                }`}>
-                                  {isSettled ? 'Liquidado' : it.status}
-                                </span>
-                              </td>
-                              <td className="py-2 px-3 text-center">
-                                {it.evidenceFile && it.evidenceFile !== '-' ? (
-                                  <a
-                                    href={`/uploads/${it.rawEvidenceFile || it.evidenceFile}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded transition-colors max-w-[130px] truncate"
-                                    title={it.evidenceFile}
-                                  >
-                                    <Paperclip className="w-3 h-3 text-blue-600 shrink-0" />
-                                    <span className="truncate">{it.evidenceFile}</span>
-                                  </a>
-                                ) : (
-                                  <span className="text-gray-400 text-[10px]">-</span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot className="bg-gray-100 font-bold text-xs border-t-2 border-gray-300">
-                        <tr>
-                          <td colSpan={4} className="py-2.5 px-3 uppercase text-gray-700 font-extrabold">
-                            TOTAL {lojaGroup.loja.split(' ')[0]}
-                          </td>
-                          <td className="py-2.5 px-3 text-right text-gray-700 font-bold">{formatNumber(lojaGroup.pesoNF, 2)}</td>
-                          <td className="py-2.5 px-3 text-right font-bold text-gray-900">{formatNumber(lojaGroup.pesoColheita, 2)}</td>
-                          <td className="py-2.5 px-3 text-right font-bold text-gray-900">{formatNumber(lojaGroup.cxsVendidas, 2)}</td>
-                          <td className="py-2.5 px-3 text-right text-gray-400">-</td>
-                          <td className="py-2.5 px-3 text-right font-black text-gray-900">{formatCurrency(lojaGroup.valorTotalNF)}</td>
-                          <td className="py-2.5 px-3 text-right font-bold text-red-600">-{formatCurrency(lojaGroup.funrural)}</td>
-                          <td className="py-2.5 px-3 text-right text-gray-400">-</td>
-                          <td className="py-2.5 px-3 text-right font-black text-blue-900 bg-blue-100/60">{formatCurrency(lojaGroup.totalVendaAReceber)}</td>
-                          <td className="py-2.5 px-3 text-right font-black text-emerald-950 bg-emerald-100/60">{formatCurrency(lojaGroup.valorLiquidado)}</td>
-                          <td className="py-2.5 px-3 text-right font-black text-amber-950 bg-amber-100/60">{formatCurrency(lojaGroup.valorALiquidar)}</td>
-                          <td className="py-2.5 px-3 text-right font-black text-emerald-950 bg-emerald-100/60">{formatCurrency(lojaGroup.liquidoNF)}</td>
-                          <td colSpan={3} className="py-2.5 px-3 text-center text-gray-600 font-bold text-[10px]">
-                            {lojaGroup.itens?.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').length} / {lojaGroup.itens?.length || 0} Pagos
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <StoreSummaryTable 
+            stores={filteredLojas} 
+            currentTotal={currentTotal} 
+            selectedLoja={selectedLoja} 
+          />
+          <StoreDetailList 
+            stores={filteredLojas} 
+            expandedLojas={expandedLojas} 
+            toggleExpand={toggleExpand} 
+            showCommissions={false}
+          />
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* ABA 2: RELATÓRIO COMPLETO COM COMISSÕES & FECHAMENTO                       */}
-      {/* ========================================================================= */}
+      {/* ABA 2: RELATÓRIO COMPLETO COM COMISSÕES */}
       {activeTab === 'comissoes' && (
         <div className="space-y-6">
-          
-          {/* Cards de Resumo Consolidado com Comissões */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            
-            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
-              <span className="text-gray-500 text-xs font-bold uppercase block">Total Comercial (VP)</span>
-              <span className="text-2xl font-black text-blue-950">{formatCurrency(currentTotal.totalVendaAReceber)}</span>
-              <span className="text-[11px] text-gray-400 block">{currentTotal.pedidosVenda} Pedidos de Venda</span>
-            </div>
-
-            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
-              <span className="text-gray-500 text-xs font-bold uppercase block">Total Faturado NF</span>
-              <span className="text-2xl font-black text-gray-900">{formatCurrency(currentTotal.valorTotalNF)}</span>
-              <span className="text-[11px] text-gray-400 block">{currentTotal.nfs} Notas Emitidas</span>
-            </div>
-
-            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
-              <span className="text-gray-500 text-xs font-bold uppercase block">(-) FUNRURAL (1,63%)</span>
-              <span className="text-2xl font-black text-red-600">-{formatCurrency(currentTotal.funrural)}</span>
-              <span className="text-[11px] text-gray-400 block">Dedução tributária</span>
-            </div>
-
-            <div className="bg-white p-5 rounded-xl border border-blue-200 bg-blue-50/20 shadow-sm space-y-1">
-              <span className="text-blue-800 text-xs font-bold uppercase block">Comissão AgroVenda (3%)</span>
-              <span className="text-2xl font-black text-blue-900">{formatCurrency(currentTotal.totalComissao)}</span>
-              <span className="text-[11px] text-blue-600 block font-semibold">Taxa média 3,0%</span>
-            </div>
-
-            <div className="bg-white p-5 rounded-xl border border-emerald-200 bg-emerald-50/30 shadow-sm space-y-1">
-              <span className="text-emerald-800 text-xs font-bold uppercase block">(=) Líquido Produtor</span>
-              <span className="text-2xl font-black text-emerald-950">{formatCurrency(currentTotal.totalLiquidoProdutor)}</span>
-              <span className="text-[11px] text-emerald-700 block font-semibold">Saldo a repassar</span>
-            </div>
-
-          </div>
-
-          {/* Matriz Geral por Loja com Comissões (Folha 1 na Impressão) */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden space-y-3 page-break-after print:shadow-none print:border-none">
-            <div className="bg-[#173e27] text-white px-6 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <BadgePercent className="w-4 h-4 text-emerald-200" />
-                <span className="text-xs font-black uppercase tracking-wider">
-                  Fechamento por Loja com Comissões & Repasse Líquido
-                </span>
-              </div>
-              <span className="text-[11px] font-semibold text-emerald-100 bg-emerald-900/40 px-2.5 py-0.5 rounded">
-                Base Comercial VP + Comissão 3,0%
-              </span>
-            </div>
-
-            <div className="overflow-x-auto p-4 pt-1">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="bg-[#1e5234] text-white font-bold uppercase text-[10px] tracking-wider">
-                  <tr>
-                    <th className="py-2.5 px-3">Loja / Comprador</th>
-                    <th className="py-2.5 px-2 text-center">NFs</th>
-                    <th className="py-2.5 px-2 text-center">VPs</th>
-                    <th className="py-2.5 px-3 text-right">CXS (29kg)</th>
-                    <th className="py-2.5 px-3 text-right">Valor Total NF</th>
-                    <th className="py-2.5 px-3 text-right">FUNRURAL</th>
-                    <th className="py-2.5 px-3 text-right bg-[#173e27]">Total Comercial (VP)</th>
-                    <th className="py-2.5 px-3 text-right bg-[#14532d]">Valor Liquidado (R$)</th>
-                    <th className="py-2.5 px-3 text-right bg-[#92400e]">Valor a Liquidar (R$)</th>
-                    <th className="py-2.5 px-2 text-center">Taxa (%)</th>
-                    <th className="py-2.5 px-3 text-right bg-blue-900/80">Comissão (R$)</th>
-                    <th className="py-2.5 px-3 text-right bg-emerald-900/90">Líquido Produtor (R$)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredLojas.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                      <td className="py-3 px-3 font-bold text-gray-900 flex items-center gap-2">
-                        <Building2 className="w-3.5 h-3.5 text-emerald-800" />
-                        {row.loja}
-                      </td>
-                      <td className="py-3 px-2 text-center font-medium text-gray-700">{row.nfs}</td>
-                      <td className="py-3 px-2 text-center font-bold text-gray-900">{row.pedidosVenda}</td>
-                      <td className="py-3 px-3 text-right font-semibold text-gray-800">{formatNumber(row.cxsVendidas, 2)}</td>
-                      <td className="py-3 px-3 text-right font-bold text-gray-900">{formatCurrency(row.valorTotalNF)}</td>
-                      <td className="py-3 px-3 text-right text-red-600 font-medium">-{formatCurrency(row.funrural)}</td>
-                      <td className="py-3 px-3 text-right font-black text-blue-950 bg-blue-50/40">
-                        {formatCurrency(row.totalVendaAReceber)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-black text-emerald-800 bg-emerald-50/50">
-                        {formatCurrency(row.valorLiquidado)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-black text-amber-900 bg-amber-50/50">
-                        {formatCurrency(row.valorALiquidar)}
-                      </td>
-                      <td className="py-3 px-2 text-center font-bold text-blue-800">3,0%</td>
-                      <td className="py-3 px-3 text-right font-black text-blue-900 bg-blue-50/60">
-                        {formatCurrency(row.totalComissao)}
-                      </td>
-                      <td className="py-3 px-3 text-right font-black text-emerald-950 bg-emerald-50/60">
-                        {formatCurrency(row.totalLiquidoProdutor)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-[#bfe2a5] font-black text-xs text-gray-950 border-t-2 border-emerald-800">
-                  <tr>
-                    <td className="py-3 px-3 uppercase font-black text-gray-950">
-                      {selectedLoja === 'ALL' ? 'TOTAL GERAL' : `TOTAL (${selectedLoja})`}
-                    </td>
-                    <td className="py-3 px-2 text-center font-black">{currentTotal.nfs}</td>
-                    <td className="py-3 px-2 text-center font-black">{currentTotal.pedidosVenda}</td>
-                    <td className="py-3 px-3 text-right font-black">{formatNumber(currentTotal.cxsVendidas, 2)}</td>
-                    <td className="py-3 px-3 text-right font-black">{formatCurrency(currentTotal.valorTotalNF)}</td>
-                    <td className="py-3 px-3 text-right font-black text-red-900">-{formatCurrency(currentTotal.funrural)}</td>
-                    <td className="py-3 px-3 text-right font-black text-blue-950 bg-sky-200">
-                      {formatCurrency(currentTotal.totalVendaAReceber)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-black text-emerald-950 bg-[#a7f3d0]">
-                      {formatCurrency(currentTotal.valorTotalLiquidado)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-black text-amber-950 bg-[#fde68a]">
-                      {formatCurrency(currentTotal.valorTotalALiquidar)}
-                    </td>
-                    <td className="py-3 px-2 text-center font-black">3,0%</td>
-                    <td className="py-3 px-3 text-right font-black text-blue-950 bg-blue-200">
-                      {formatCurrency(currentTotal.totalComissao)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-black text-emerald-950 bg-emerald-200">
-                      {formatCurrency(currentTotal.totalLiquidoProdutor)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-
-          {/* Detalhamento Individual com Comissões por VP (Folhas Seguintes) */}
-          <div className="space-y-4 pt-2 print:space-y-6">
-            <h2 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider flex items-center gap-2 print:text-xs">
-              <span>Detalhamento de Comissões por Venda / Loja (VPs)</span>
-            </h2>
-
-            {filteredLojas.map((lojaGroup, lIdx) => {
-              const isExpanded = expandedLojas[lojaGroup.loja];
-              return (
-                <div key={lIdx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden page-break-avoid print:border print:border-gray-300 print:shadow-none print:mb-4">
-                  <div 
-                    onClick={() => toggleExpand(lojaGroup.loja)}
-                    className="bg-gray-50 hover:bg-gray-100/80 p-4 flex items-center justify-between cursor-pointer border-b border-gray-200 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Building2 className="w-4 h-4 text-[#173e27]" />
-                      <span className="text-xs font-black text-gray-900 uppercase tracking-wide">
-                        {lojaGroup.loja}
-                      </span>
-                      <span className="text-[11px] font-semibold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                        {lojaGroup.itens?.length || 0} VPs
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-4 text-xs">
-                      <span className="text-gray-500">
-                        Total VP: <strong className="text-blue-900">{formatCurrency(lojaGroup.totalVendaAReceber)}</strong>
-                      </span>
-                      <span className="text-gray-500">
-                        Liquidado: <strong className="text-emerald-800">{formatCurrency(lojaGroup.valorLiquidado)}</strong>
-                      </span>
-                      <span className="text-gray-500">
-                        A Liquidar: <strong className="text-amber-800">{formatCurrency(lojaGroup.valorALiquidar)}</strong>
-                      </span>
-                      <span className="text-gray-500">
-                        Comissão (3%): <strong className="text-blue-700">{formatCurrency(lojaGroup.totalComissao)}</strong>
-                      </span>
-                      <span className="text-gray-500">
-                        Líquido Produtor: <strong className="text-emerald-800">{formatCurrency(lojaGroup.totalLiquidoProdutor)}</strong>
-                      </span>
-                      <span className="print:hidden">
-                        {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className={`overflow-x-auto p-4 pt-2 ${isExpanded ? 'block' : 'hidden print:block'}`}>
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px]">
-                        <tr>
-                          <th className="py-2 px-3">Nº VP</th>
-                          <th className="py-2 px-2">Data</th>
-                          <th className="py-2 px-3">Nº NF</th>
-                          <th className="py-2 px-3 text-right">Caixas (29kg)</th>
-                          <th className="py-2 px-3 text-right">Cotação Dia</th>
-                          <th className="py-2 px-3 text-right">Valor Total VP</th>
-                          <th className="py-2 px-3 text-right bg-emerald-50 text-emerald-950 font-bold">Valor Liquidado</th>
-                          <th className="py-2 px-3 text-right bg-amber-50 text-amber-950 font-bold">Valor a Liquidar</th>
-                          <th className="py-2 px-3 text-center">Taxa Com.</th>
-                          <th className="py-2 px-3 text-right bg-blue-50/50 font-bold text-blue-900">Comissão (R$)</th>
-                          <th className="py-2 px-3 text-right bg-emerald-50/50 font-bold text-emerald-950">Líquido Produtor (R$)</th>
-                          <th className="py-2 px-3 text-center">Vencimento</th>
-                          <th className="py-2 px-3 text-center">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {lojaGroup.itens?.map((it, rIdx) => {
-                          const isSettled = it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido';
-                          const itLiquidoValor = Number(it.liquido) > 0 ? Number(it.liquido) : Math.max(0, (Number(it.valorVP) || 0) - (Number(it.funrural) || 0));
-                          const itLiquidado = isSettled ? itLiquidoValor : 0;
-                          const itALiquidar = !isSettled ? itLiquidoValor : 0;
-                          return (
-                            <tr key={rIdx} className="hover:bg-gray-50/70 transition-colors">
-                              <td className="py-2 px-3">
-                                <div className="font-bold text-[#173e27]">{it.vp}</div>
-                                <div className="text-[10px] text-gray-500 font-medium truncate max-w-[140px]" title={it.product}>
-                                  {it.product}
-                                </div>
-                                <div className="text-[10px] text-blue-800 font-medium truncate max-w-[140px]" title={`Produtor: ${it.producer || it.origin}`}>
-                                  🌾 {it.producer || it.origin || 'Produtor Rural'}
-                                </div>
-                              </td>
-                              <td className="py-2 px-2 text-gray-600">{it.dataVP}</td>
-                              <td className="py-2 px-3 font-semibold text-gray-800">{it.nf}</td>
-                              <td className="py-2 px-3 text-right font-bold text-gray-900">
-                                {formatNumber(it.cxs, 2)} {it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
-                              </td>
-                              <td className="py-2 px-3 text-right font-semibold text-blue-900">
-                                R$ {it.cotacao.toFixed(2)}/{it.unit?.includes('Granel') ? 'kg' : (it.unit?.includes('Sacas') ? 'sc' : 'cx')}
-                              </td>
-                              <td className="py-2 px-3 text-right font-black text-blue-950">{formatCurrency(it.valorVP)}</td>
-                              <td className="py-2 px-3 text-right font-black text-emerald-800 bg-emerald-50/40">
-                                {itLiquidado > 0 ? formatCurrency(itLiquidado) : <span className="text-gray-400 font-normal">-</span>}
-                              </td>
-                              <td className="py-2 px-3 text-right font-black text-amber-900 bg-amber-50/40">
-                                {itALiquidar > 0 ? formatCurrency(itALiquidar) : <span className="text-gray-400 font-normal">-</span>}
-                              </td>
-                              <td className="py-2 px-3 text-center font-semibold text-gray-700">{it.taxaComissao.toFixed(1)}%</td>
-                              <td className="py-2 px-3 text-right font-black text-blue-900 bg-blue-50/30">
-                                {formatCurrency(it.comissao)}
-                              </td>
-                              <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/30">
-                                {formatCurrency(it.liquidoProdutor)}
-                              </td>
-                              <td className="py-2 px-3 text-center text-gray-600">{it.venc}</td>
-                              <td className="py-2 px-3 text-center">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  isSettled ? 'bg-emerald-100 text-emerald-800' : (it.status === 'Faturado' ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-900')
-                                }`}>
-                                  {isSettled ? 'Liquidado' : it.status}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot className="bg-gray-100 font-bold text-xs border-t-2 border-gray-300">
-                        <tr>
-                          <td colSpan={3} className="py-2.5 px-3 uppercase text-gray-700 font-extrabold">
-                            TOTAL {lojaGroup.loja.split(' ')[0]}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-gray-900">{formatNumber(lojaGroup.cxsVendidas, 2)}</td>
-                          <td className="py-2.5 px-3 text-right text-gray-400">-</td>
-                          <td className="py-2.5 px-3 text-right font-black text-blue-900">{formatCurrency(lojaGroup.totalVendaAReceber)}</td>
-                          <td className="py-2.5 px-3 text-right font-black text-emerald-950 bg-emerald-100/60">{formatCurrency(lojaGroup.valorLiquidado)}</td>
-                          <td className="py-2.5 px-3 text-right font-black text-amber-950 bg-amber-100/60">{formatCurrency(lojaGroup.valorALiquidar)}</td>
-                          <td className="py-2.5 px-3 text-center">3,0%</td>
-                          <td className="py-2.5 px-3 text-right font-black text-blue-950 bg-blue-100">{formatCurrency(lojaGroup.totalComissao)}</td>
-                          <td className="py-2.5 px-3 text-right font-black text-emerald-950 bg-emerald-100">{formatCurrency(lojaGroup.totalLiquidoProdutor)}</td>
-                          <td colSpan={2} className="py-2.5 px-3 text-center text-gray-600 font-bold text-[10px]">
-                            {lojaGroup.itens?.filter(it => it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido').length} / {lojaGroup.itens?.length || 0} Pagos
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
+          <CommissionsTable 
+            stores={filteredLojas} 
+            currentTotal={currentTotal} 
+            selectedLoja={selectedLoja} 
+          />
+          <StoreDetailList 
+            stores={filteredLojas} 
+            expandedLojas={expandedLojas} 
+            toggleExpand={toggleExpand} 
+            showCommissions={true}
+          />
         </div>
       )}
 

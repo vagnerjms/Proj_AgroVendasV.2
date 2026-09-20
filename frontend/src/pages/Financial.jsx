@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, FileSpreadsheet, ArrowUpRight, ArrowDownRight, ShieldCheck, CheckCircle2, Building2, Coins } from 'lucide-react';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { api } from '../services/api';
+import { calculateLiquidation } from '../utils/calculations';
 
 export default function Financial({ view = 'overview' }) {
   const [sales, setSales] = useState([]);
@@ -176,9 +177,10 @@ export default function Financial({ view = 'overview' }) {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {sales.map(s => {
-                const vp = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : Number(s.totalOperation);
-                const funrural = Number(s.funruralTotal) || (Number(s.totalOperation) * 0.0163);
-                const aLiquidar = Math.max(0, vp - funrural);
+                const liq = calculateLiquidation(s);
+                const vp = liq.valorVP;
+                const funrural = liq.funrural;
+                const aLiquidar = liq.totalLiquido;
 
                 return (
                   <tr key={s.id} className="hover:bg-gray-50/80 transition-colors">

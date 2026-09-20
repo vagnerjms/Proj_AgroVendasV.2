@@ -24,7 +24,7 @@ import {
 import { formatCurrency } from '../utils/formatters';
 import { api } from '../services/api';
 import { buildExcelReportHtml, buildProducerExcelReportHtml } from '../utils/reportExcelBuilder';
-import { calculateLiquidation, cleanProductName } from '../utils/calculations';
+import { calculateLiquidation, cleanProductName, getValorTotalVP } from '../utils/calculations';
 
 // Subcomponentes modulares
 import StoreSummaryTable from '../components/reports/StoreSummaryTable';
@@ -190,19 +190,7 @@ export default function Reports({ setCurrentPage }) {
       const subCxs = matchingSubs.reduce((acc, sub) => acc + (Number(sub.quantity) || 0), 0);
       const ratio = totalItensKg > 0 ? (subKg / totalItensKg) : 1;
 
-      const subVP = matchingSubs.reduce((acc, sub) => {
-        const itKg = Number(sub.kg) || 0;
-        const bw = Number(sub.boxWeightKg) || 25;
-        const itVol = Number(sub.quantity) || (itKg > 0 && bw > 0 ? itKg / bw : 0);
-        const q = Number(sub.dailyQuote) || 0;
-        if (q > 0) {
-          const isQKg = (q > 0 && q <= 10.0) || (sub.unit && sub.unit.includes('Granel')) || bw === 1;
-          return acc + (isQKg ? (itKg * q) : (itVol * q));
-        }
-        if (Number(sub.valorTotalVP) > 0) return acc + Number(sub.valorTotalVP);
-        if (Number(sub.total) > 0) return acc + Number(sub.total);
-        return acc;
-      }, 0);
+      const subVP = getValorTotalVP({ items: matchingSubs });
 
       const itemValorNF = Number(it.valorNF) * ratio;
       const itemFunrural = Number(it.funrural) * ratio;

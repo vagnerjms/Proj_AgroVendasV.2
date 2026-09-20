@@ -19,7 +19,7 @@ import {
 import { formatCurrency, formatDate, formatKg, formatNumber, getCleanFileName } from '../utils/formatters';
 import ContractModal from '../components/ContractModal';
 import { api } from '../services/api';
-import { calculateLiquidation } from '../utils/calculations';
+import { calculateLiquidation, getValorTotalVP } from '../utils/calculations';
 import SettleModal from '../components/sales/SettleModal';
 import SaleDetailModal from '../components/sales/SaleDetailModal';
 import SaleEditModal from '../components/sales/SaleEditModal';
@@ -289,54 +289,6 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
       console.error(err);
       showErrorNotification(err.message || 'Erro de rede ao reverter liquidação.');
     }
-  };
-
-  // Helper calculation for Valor Total de VP (Comercial)
-  const getValorTotalVP = (sale) => {
-    // 1. Prioritize multi-item sum if sale.items exists
-    if (sale.items && Array.isArray(sale.items) && sale.items.length > 0) {
-      const itemsSum = sale.items.reduce((acc, it) => {
-        const itKg = Number(it.kg) || 0;
-        const bw = Number(it.boxWeightKg) || 25;
-        const itVol = Number(it.quantity) || (itKg > 0 && bw > 0 ? (itKg / bw) : 0);
-        const q = Number(it.dailyQuote) || 0;
-        if (q > 0) {
-          const isQKg = (q > 0 && q <= 10.0) || (it.unit && it.unit.includes('Granel')) || bw === 1;
-          return acc + (isQKg ? (itKg * q) : (itVol * q));
-        }
-        if (Number(it.valorTotalVP) > 0) return acc + Number(it.valorTotalVP);
-        if (Number(it.total) > 0) return acc + Number(it.total);
-        return acc;
-      }, 0);
-
-      if (itemsSum > 0) return itemsSum;
-    }
-
-    if (Number(sale.valorTotalVP) > 0) {
-      return Number(sale.valorTotalVP);
-    }
-
-    let cotacao = Number(sale.dailyQuote) || 0;
-    if (!cotacao && sale.notes) {
-      const matchCot = sale.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
-      if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
-    }
-
-    const kg = Number(sale.totalKg) || 0;
-    const isBatata = (sale.items && sale.items.some(it => it.product?.toLowerCase().includes('batata'))) || (sale.notes && sale.notes.toLowerCase().includes('batata'));
-    const bw = isBatata ? 25 : 29;
-    const caixas = Number(sale.totalVolumes) || (kg > 0 ? (kg / bw) : 0);
-
-    // Se cotação foi informada em R$/kg (ex: R$ 2,15/kg), multiplica pelo peso total em kg
-    if (cotacao > 0 && cotacao <= 10.0 && kg > 0) {
-      return kg * cotacao;
-    }
-
-    if (cotacao > 10.0) {
-      return caixas * cotacao;
-    }
-
-    return Number(sale.totalOperation) || (caixas * (cotacao || 45.0));
   };
 
   // Helper calculation for Valor a Liquidar (Receber) = Total Comercial (VP) - Funrural (calculado sobre a NF)

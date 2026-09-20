@@ -218,7 +218,10 @@ export default function AgendaAlerts({ setCurrentPage }) {
     const dueDateObj = parseDueDate(s);
     const nfNumber = s.nfFile ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '').replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
     
-    // Cotação e Valor VP Comercial (Recebimento da Loja)
+    // Cálculos consolidados canônicos para Loja e Produtor
+    const liq = calculateLiquidation(s);
+    const valorVP = liq.valorVP;
+
     let cotacao = Number(s.dailyQuote) || 0;
     if (!cotacao && s.notes) {
       const m = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
@@ -227,12 +230,10 @@ export default function AgendaAlerts({ setCurrentPage }) {
     if (!cotacao) cotacao = 45.0;
 
     const caixas = Number(s.totalVolumes) || (Number(s.totalKg) > 0 ? (Number(s.totalKg) / 29) : 0);
-    const valorVP = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : (Number(s.totalOperation) || (caixas * cotacao));
-    const liq = calculateLiquidation(s);
 
     // Contas do Produtor (Base: Valor Total da Nota Fiscal)
     const totalNF = Number(s.totalOperation) || 0;
-    const funrural = Number(s.funruralTotal) || (totalNF * 0.0163);
+    const funrural = liq.funrural;
     const liquidoProdutor = Math.max(0, totalNF - funrural);
     const producerPaid = Number(s.producerPaidAmount) || 0;
     const saldoProdutor = Math.max(0, totalNF - producerPaid);

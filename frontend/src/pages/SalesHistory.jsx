@@ -13,7 +13,8 @@ import {
   ArrowUp, 
   ArrowDown, 
   Settings, 
-  RotateCcw 
+  RotateCcw,
+  DollarSign 
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatKg, formatNumber, getCleanFileName } from '../utils/formatters';
 import ContractModal from '../components/ContractModal';

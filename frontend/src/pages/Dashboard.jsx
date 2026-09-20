@@ -42,28 +42,22 @@ export default function Dashboard({ setCurrentPage }) {
   };
 
   const kpis = dashboardData?.kpis || {
-    salesCount: 34,
-    totalSold: 1186046.72,
-    totalSoldGrowth: '+0%',
-    totalAReceber: 1186046.72,
+    salesCount: 0,
+    totalSold: 0,
+    totalSoldGrowth: '0%',
+    totalAReceber: 0,
     totalAPagar: 0,
-    grossProfit: 35581.40,
-    targetReached: true
+    grossProfit: 0,
+    targetReached: false
   };
 
   const alerts = dashboardData?.alerts || {
     vencidos: 0,
-    notasPendentes: 3,
+    notasPendentes: 0,
     divergentes: 0
   };
 
-  const transactions = dashboardData?.lastTransactions || [
-    { date: '08/08/2026', module: 'Venda VP-09744', value: 13639.66 },
-    { date: '06/08/2026', module: 'Venda VP-09743', value: 43012.07 },
-    { date: '05/08/2026', module: 'Venda VP-09742', value: 47264.00 },
-    { date: '05/08/2026', module: 'Venda VP-09741', value: 41843.20 },
-    { date: '05/08/2026', module: 'Venda VP-09740', value: 36439.20 }
-  ];
+  const transactions = dashboardData?.lastTransactions || [];
 
   const performanceDays = dashboardData?.performanceDays || [];
 
@@ -271,25 +265,31 @@ export default function Dashboard({ setCurrentPage }) {
 
           <div className="h-60 flex flex-col justify-end relative pt-6">
             <div className="w-full h-44 flex items-end justify-between px-4 border-b border-gray-200 relative">
-              {performanceDays.map((item, idx) => {
-                const barColors = ['#eed9bf', '#e2ba87', '#d99b52', '#cc7f33', '#c87217', '#b85b1b', '#8f380f'];
-                const color = barColors[idx % barColors.length];
-                return (
-                  <div key={idx} className="flex flex-col items-center gap-2 group relative">
-                    <div className="text-[10px] text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity absolute -top-6 bg-gray-800 text-white px-1.5 py-0.5 rounded whitespace-nowrap z-10">
-                      {formatCurrency(item.total)} ({item.count} ops)
+              {performanceDays.length === 0 ? (
+                <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs italic">
+                  Nenhum dado de movimentação no período selecionado.
+                </div>
+              ) : (
+                performanceDays.map((item, idx) => {
+                  const barColors = ['#eed9bf', '#e2ba87', '#d99b52', '#cc7f33', '#c87217', '#b85b1b', '#8f380f'];
+                  const color = barColors[idx % barColors.length];
+                  return (
+                    <div key={idx} className="flex flex-col items-center gap-2 group relative">
+                      <div className="text-[10px] text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity absolute -top-6 bg-gray-800 text-white px-1.5 py-0.5 rounded whitespace-nowrap z-10">
+                        {formatCurrency(item.total)} ({item.count} ops)
+                      </div>
+                      <div 
+                        className="w-10 rounded-t-md transition-all cursor-pointer hover:brightness-110 shadow-xs"
+                        style={{ 
+                          height: `${Math.max(16, Math.min(140, (item.total / 50000) * 120))}px`,
+                          backgroundColor: color
+                        }}
+                      ></div>
+                      <span className="text-[10px] font-medium text-gray-500">{item.label}</span>
                     </div>
-                    <div 
-                      className="w-10 rounded-t-md transition-all cursor-pointer hover:brightness-110 shadow-xs"
-                      style={{ 
-                        height: `${Math.max(16, Math.min(140, (item.total / 50000) * 120))}px`,
-                        backgroundColor: color
-                      }}
-                    ></div>
-                    <span className="text-[10px] font-medium text-gray-500">{item.label}</span>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
 
             <div className="w-full h-[3px] bg-gradient-to-r from-[#eed9bf] via-[#d99b52] to-[#8f380f] rounded-full mt-3"></div>
@@ -320,15 +320,23 @@ export default function Dashboard({ setCurrentPage }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {transactions.map((tx, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="py-3 font-medium text-gray-600">{tx.date}</td>
-                    <td className="py-3 text-gray-600 font-semibold">{tx.module}</td>
-                    <td className="py-3 text-right font-bold text-gray-900">
-                      {formatCurrency(tx.value)}
+                {transactions.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="py-8 text-center text-gray-400 italic">
+                      Nenhuma transação recente encontrada.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  transactions.map((tx, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="py-3 font-medium text-gray-600">{tx.date}</td>
+                      <td className="py-3 text-gray-600 font-semibold">{tx.module}</td>
+                      <td className="py-3 text-right font-bold text-gray-900">
+                        {formatCurrency(tx.value)}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

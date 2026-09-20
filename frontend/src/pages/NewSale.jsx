@@ -25,9 +25,9 @@ import { formatCurrency, formatKg, formatNumber, getCleanFileName } from '../uti
 import { calculateSummary, calculateFunrural } from '../utils/calculations';
 import { api } from '../services/api';
 import SaleItemsTable from '../components/sales/SaleItemsTable';
-import QuickProducerModal from '../components/sales/QuickProducerModal';
-import QuickClientModal from '../components/sales/QuickClientModal';
 import SaleFiscalSummary from '../components/sales/SaleFiscalSummary';
+import NfeMatchingCards from '../components/sales/NfeMatchingCards';
+import SaleCommissionCard from '../components/sales/SaleCommissionCard';
 
 export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, onCancelEdit }) {
   // Operation types
@@ -860,151 +860,20 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         </div>
       )}
 
-      {/* Confirmação de Cadastro Rápido do Produtor */}
-      {producerRegisteredNotice && (
-        <div className="bg-emerald-100 border border-emerald-400 text-emerald-950 px-4 py-3 rounded-lg flex items-center gap-2 text-xs font-bold shadow-sm">
-          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-          <span>{producerRegisteredNotice}</span>
-        </div>
-      )}
-
-      {/* Confirmação de Cadastro Rápido do Cliente Comprador */}
-      {clientRegisteredNotice && (
-        <div className="bg-emerald-100 border border-emerald-400 text-emerald-950 px-4 py-3 rounded-lg flex items-center gap-2 text-xs font-bold shadow-sm">
-          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-          <span>{clientRegisteredNotice}</span>
-        </div>
-      )}
-
-      {/* 🏪 CARD DE VÍNCULO INTELIGENTE DO CLIENTE / COMPRADOR */}
-      {matchedClient && (
-        <div className="bg-blue-50/90 border-2 border-blue-400 p-4 rounded-xl shadow-sm space-y-2">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Store className="w-5 h-5 text-blue-700 shrink-0" />
-              <span className="text-xs font-extrabold text-blue-950 uppercase tracking-wider">
-                Cliente / Comprador Vinculado com Sucesso (Cadastro Ativo)
-              </span>
-            </div>
-            <span className="text-[11px] font-extrabold bg-blue-200 text-blue-950 px-2.5 py-0.5 rounded-full border border-blue-300 w-fit">
-              {matchedClient.type || 'Comprador'}
-            </span>
-          </div>
-          
-          <div className="text-sm font-black text-gray-900 flex flex-wrap items-center gap-2">
-            <span>🏪 {matchedClient.name}</span>
-            {matchedClient.document && (
-              <span className="text-xs font-bold text-gray-600 bg-white px-2 py-0.5 rounded border border-blue-200">
-                CNPJ/CPF: {matchedClient.document}
-              </span>
-            )}
-            {matchedClient.ie && (
-              <span className="text-xs font-bold text-gray-600 bg-white px-2 py-0.5 rounded border border-blue-200">
-                IE: {matchedClient.ie}
-              </span>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
-            <div className="bg-white p-2.5 rounded-lg border border-blue-200 shadow-2xs">
-              <span className="block text-[10px] font-bold text-gray-500 uppercase">Município / Estado</span>
-              <span className="font-bold text-gray-900">{matchedClient.city || 'São Paulo'}/{matchedClient.uf || matchedClient.state || 'SP'}</span>
-            </div>
-
-            <div className="bg-white p-2.5 rounded-lg border border-blue-200 shadow-2xs">
-              <span className="block text-[10px] font-bold text-gray-500 uppercase">Endereço Comercial</span>
-              <span className="font-bold text-gray-900 truncate block" title={matchedClient.address || 'Loja / Galpão Principal'}>
-                {matchedClient.address || 'Loja / Galpão Principal'}
-              </span>
-            </div>
-
-            <div className="bg-white p-2.5 rounded-lg border border-blue-200 shadow-2xs">
-              <span className="block text-[10px] font-bold text-gray-500 uppercase">Contato / Telefone</span>
-              <span className="font-bold text-gray-900 truncate block" title={matchedClient.phone || matchedClient.email || 'Cadastrado'}>
-                {matchedClient.phone ? `📞 ${matchedClient.phone}` : (matchedClient.email ? `✉️ ${matchedClient.email}` : 'ℹ️ Cadastro Regular')}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ⚠️ AVISO DE NOVO CLIENTE DETECTADO NA NF-E */}
-      <QuickClientModal
-        unmatchedClient={unmatchedClient}
+      {/* Vínculos Inteligentes de NF-e, Cadastro Rápido e Alerta de Duplicidade (Modular) */}
+      <NfeMatchingCards
         matchedClient={matchedClient}
+        unmatchedClient={unmatchedClient}
         registeringClient={registeringClient}
-        onQuickRegister={handleQuickRegisterClient}
-      />
-
-      {/* 🌾 CARD DE VÍNCULO INTELIGENTE DO PRODUTOR */}
-      {matchedProducer && (
-        <div className="bg-emerald-50/90 border-2 border-emerald-400 p-4 rounded-xl shadow-sm space-y-2">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <UserCheck className="w-5 h-5 text-emerald-700 shrink-0" />
-              <span className="text-xs font-extrabold text-emerald-950 uppercase tracking-wider">
-                Produtor Vinculado com Sucesso (Cadastro Ativo)
-              </span>
-            </div>
-            <span className="text-[11px] font-extrabold bg-emerald-200 text-emerald-950 px-2.5 py-0.5 rounded-full border border-emerald-300 w-fit">
-              {matchedProducer.type || 'Produtor'}
-            </span>
-          </div>
-          
-          <div className="text-sm font-black text-gray-900 flex flex-wrap items-center gap-2">
-            <span>🌾 {matchedProducer.name}</span>
-            {matchedProducer.document && (
-              <span className="text-xs font-bold text-gray-600 bg-white px-2 py-0.5 rounded border border-emerald-200">
-                Doc: {matchedProducer.document}
-              </span>
-            )}
-            {matchedProducer.ie && (
-              <span className="text-xs font-bold text-gray-600 bg-white px-2 py-0.5 rounded border border-emerald-200">
-                IE: {matchedProducer.ie}
-              </span>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
-            <div className="bg-white p-2.5 rounded-lg border border-emerald-200 shadow-2xs">
-              <span className="block text-[10px] font-bold text-gray-500 uppercase">Município / Estado</span>
-              <span className="font-bold text-gray-900">{matchedProducer.city || 'Campo Alegre'}/{matchedProducer.uf || matchedProducer.state || 'GO'}</span>
-            </div>
-
-            <div className="bg-white p-2.5 rounded-lg border border-emerald-200 shadow-2xs">
-              <span className="block text-[10px] font-bold text-gray-500 uppercase">Endereço / Fazenda</span>
-              <span className="font-bold text-gray-900 truncate block" title={matchedProducer.address || 'Fazenda Principal'}>
-                {matchedProducer.address || 'Fazenda / Sede Principal'}
-              </span>
-            </div>
-
-            <div className="bg-white p-2.5 rounded-lg border border-emerald-200 shadow-2xs">
-              <span className="block text-[10px] font-bold text-gray-500 uppercase">Dados Bancários / Pix</span>
-              <span className="font-bold text-gray-900 truncate block" title={matchedProducer.pixKey || matchedProducer.bankName || 'Pendente de preenchimento'}>
-                {matchedProducer.pixKey ? `🔑 Pix: ${matchedProducer.pixKey}` : (matchedProducer.bankName ? `🏦 ${matchedProducer.bankName} Ag:${matchedProducer.agency || '-'}` : 'ℹ️ Pendente no cadastro')}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ⚠️ AVISO DE NOVO PRODUTOR DETECTADO NA NF-E */}
-      <QuickProducerModal
-        unmatchedProducer={unmatchedProducer}
+        clientRegisteredNotice={clientRegisteredNotice}
+        handleQuickRegisterClient={handleQuickRegisterClient}
         matchedProducer={matchedProducer}
+        unmatchedProducer={unmatchedProducer}
         registeringProducer={registeringProducer}
-        onQuickRegister={handleQuickRegisterProducer}
+        producerRegisteredNotice={producerRegisteredNotice}
+        handleQuickRegisterProducer={handleQuickRegisterProducer}
+        duplicateWarning={duplicateWarning}
       />
-
-      {/* Alerta de NF-e Duplicada */}
-      {duplicateWarning && (
-        <div className="bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded-lg flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span className="font-bold">{duplicateWarning}</span>
-          </div>
-        </div>
-      )}
 
       {/* Notifications */}
       {successMessage && (
@@ -1283,40 +1152,13 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
             </div>
           </div>
 
-          {/* Card: Comissão de Corretagem */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4">
-            <h2 className="text-sm font-bold text-gray-900">Comissão de Corretagem AgroVenda</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Tipo de Taxa</label>
-                <select
-                  value={feeType}
-                  onChange={(e) => setFeeType(e.target.value)}
-                  className="w-full bg-white border border-gray-300 text-xs rounded-lg px-3 py-2 outline-none font-semibold"
-                >
-                  <option value="Porcentagem (%)">Porcentagem (%)</option>
-                  <option value="Valor Fixo por Saca/Volume">Valor Fixo por Volume / Caixa</option>
-                  <option value="Valor Fixo Total">Valor Fixo Total</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Taxa / Alíquota</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={feeValue}
-                    onChange={(e) => setFeeValue(Number(e.target.value))}
-                    className="w-full bg-white border border-gray-300 text-xs rounded-lg px-3 py-2 outline-none font-bold text-gray-900"
-                  />
-                  <span className="absolute right-3 top-2 text-xs text-gray-400 pointer-events-none">
-                    {feeType === 'Porcentagem (%)' ? '%' : 'R$'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Card: Comissão de Corretagem (Modular) */}
+          <SaleCommissionCard
+            feeType={feeType}
+            setFeeType={setFeeType}
+            feeValue={feeValue}
+            setFeeValue={setFeeValue}
+          />
         </div>
 
         {/* Right Sidebar: Resumo Financeiro Consolidado (Modular) */}

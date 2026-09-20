@@ -11,74 +11,74 @@ export default function ProducerSummaryTable({
     <div className="space-y-6">
       
       {/* 5 Cards de Resumo Exclusivo do Produtor (Base 100% Nota Fiscal) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
         
         {/* Card 1: Total Faturado NF */}
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span>Total Faturado NF</span>
-            <FileText className="w-4 h-4 text-blue-700" />
+            <span className="truncate">Total Faturado NF</span>
+            <FileText className="w-4 h-4 text-blue-700 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-black text-gray-900">
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-gray-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalGeral.valorTotalNF)}>
             {formatCurrency(totalGeral.valorTotalNF)}
           </div>
-          <span className="text-[11px] text-gray-400 block">
+          <span className="text-[11px] text-gray-400 block truncate">
             {totalGeral.nfs || 0} Notas Fiscais emitidas
           </span>
         </div>
 
         {/* Card 2: (-) FUNRURAL Retido */}
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span>(-) FUNRURAL (1,63%)</span>
-            <ShieldCheck className="w-4 h-4 text-red-600" />
+            <span className="truncate">(-) FUNRURAL (1,63%)</span>
+            <ShieldCheck className="w-4 h-4 text-red-600 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-black text-red-600">
-            -{formatCurrency(totalGeral.funrural)}
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-red-600 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={`- ${formatCurrency(totalGeral.funrural)}`}>
+            - {formatCurrency(totalGeral.funrural)}
           </div>
-          <span className="text-[11px] text-gray-400 block">
+          <span className="text-[11px] text-gray-400 block truncate">
             Dedução previdenciária oficial
           </span>
         </div>
 
         {/* Card 3: (=) Líquido a Receber */}
-        <div className="bg-white p-5 rounded-xl border-2 border-emerald-500 bg-emerald-50/30 shadow-sm space-y-1">
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border-2 border-emerald-500 bg-emerald-50/30 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs font-black text-emerald-900 uppercase">
-            <span>(=) Líquido a Receber</span>
-            <DollarSign className="w-4 h-4 text-emerald-700" />
+            <span className="truncate">(=) Líquido a Receber</span>
+            <DollarSign className="w-4 h-4 text-emerald-700 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-black text-emerald-950">
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-emerald-950 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalGeral.liquidoProdutor)}>
             {formatCurrency(totalGeral.liquidoProdutor)}
           </div>
-          <span className="text-[11px] text-emerald-800 font-semibold block">
+          <span className="text-[11px] text-emerald-800 font-semibold block truncate">
             Total NF - FUNRURAL
           </span>
         </div>
 
         {/* Card 4: Total Já Repassado */}
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span>Total Já Repassado</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span className="truncate">Total Já Repassado</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-black text-emerald-700">
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-emerald-700 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalGeral.repassesPagos)}>
             {formatCurrency(totalGeral.repassesPagos)}
           </div>
-          <span className="text-[11px] text-gray-400 block">
+          <span className="text-[11px] text-gray-400 block truncate">
             Pagamentos PIX/TED realizados
           </span>
         </div>
 
         {/* Card 5: Saldo em Aberto */}
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span>Saldo em Aberto</span>
-            <Clock className="w-4 h-4 text-amber-600" />
+            <span className="truncate">Saldo em Aberto</span>
+            <Clock className="w-4 h-4 text-amber-600 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-black text-amber-900">
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-amber-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalGeral.saldoAPagar)}>
             {formatCurrency(totalGeral.saldoAPagar)}
           </div>
-          <span className="text-[11px] text-gray-400 block">
+          <span className="text-[11px] text-gray-400 block truncate">
             Pendente de transferência
           </span>
         </div>

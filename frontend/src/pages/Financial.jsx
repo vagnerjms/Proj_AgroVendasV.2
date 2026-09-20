@@ -58,57 +58,57 @@ export default function Financial({ view = 'overview' }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white rounded-xl border border-blue-200 bg-blue-50/20 p-5 shadow-sm space-y-1">
           <div className="flex items-center justify-between text-blue-800 text-xs font-bold uppercase">
-            <span>Total Comercial (VP)</span>
-            <ArrowUpRight className="w-4 h-4 text-[#df7b1b]" />
+            <span className="truncate">Total Comercial (VP)</span>
+            <ArrowUpRight className="w-4 h-4 text-[#df7b1b] shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-extrabold text-blue-950">
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-blue-950 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(financial.totalComercialVP || financial.totalAReceberVP)}>
             {formatCurrency(financial.totalComercialVP || financial.totalAReceberVP)}
           </div>
-          <span className="text-[11px] text-blue-600 block font-medium">Base de cotação / caixas</span>
+          <span className="text-[11px] text-blue-600 block font-medium truncate">Base de cotação / caixas</span>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-1">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-4.5 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
-            <span>(-) FUNRURAL (1,63% s/ NF)</span>
-            <ShieldCheck className="w-4 h-4 text-red-600" />
+            <span className="truncate">(-) FUNRURAL (1,63% s/ NF)</span>
+            <ShieldCheck className="w-4 h-4 text-red-600 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-extrabold text-red-600">
-            -{formatCurrency(financial.totalFunrural)}
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-red-600 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={`- ${formatCurrency(financial.totalFunrural)}`}>
+            - {formatCurrency(financial.totalFunrural)}
           </div>
-          <span className="text-[11px] text-gray-400 block font-medium">Dedução apurada s/ Nota</span>
+          <span className="text-[11px] text-gray-400 block font-medium truncate">Dedução apurada s/ Nota</span>
         </div>
 
-        <div className="bg-white rounded-xl border-2 border-emerald-500 bg-emerald-50/40 p-5 shadow-md space-y-1">
+        <div className="bg-white rounded-xl border-2 border-emerald-500 bg-emerald-50/40 p-4 sm:p-4.5 shadow-md space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-emerald-900 text-xs font-black uppercase">
-            <span>(=) Valor a Liquidar</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-700" />
+            <span className="truncate">(=) Valor a Liquidar</span>
+            <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-black text-emerald-950">
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-emerald-950 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(financial.totalALiquidar || financial.totalAReceber || ((financial.totalComercialVP || financial.totalAReceberVP) - financial.totalFunrural))}>
             {formatCurrency(financial.totalALiquidar || financial.totalAReceber || ((financial.totalComercialVP || financial.totalAReceberVP) - financial.totalFunrural))}
           </div>
-          <span className="text-[11px] text-emerald-800 block font-bold">Total Comercial - FUNRURAL</span>
+          <span className="text-[11px] text-emerald-800 block font-bold truncate">Total Comercial - FUNRURAL</span>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-1">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-4.5 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
-            <span>Total Faturado (NF)</span>
-            <ArrowUpRight className="w-4 h-4 text-emerald-600" />
+            <span className="truncate">Total Faturado (NF)</span>
+            <ArrowUpRight className="w-4 h-4 text-emerald-600 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-extrabold text-gray-900">
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-gray-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(financial.totalFaturadoNF || financial.totalAReceberNF)}>
             {formatCurrency(financial.totalFaturadoNF || financial.totalAReceberNF)}
           </div>
-          <span className="text-[11px] text-gray-400 block font-medium">Líquido NF: {formatCurrency(financial.liquidoNF || ((financial.totalFaturadoNF || financial.totalAReceberNF) - financial.totalFunrural))}</span>
+          <span className="text-[11px] text-gray-400 block font-medium truncate">Líquido NF: {formatCurrency(financial.liquidoNF || ((financial.totalFaturadoNF || financial.totalAReceberNF) - financial.totalFunrural))}</span>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm space-y-1">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-4.5 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-gray-500 text-xs font-bold uppercase">
-            <span>Total a Pagar</span>
-            <ArrowDownRight className="w-4 h-4 text-red-600" />
+            <span className="truncate">Total a Pagar</span>
+            <ArrowDownRight className="w-4 h-4 text-red-600 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-extrabold text-gray-900">
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-gray-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(financial.totalAPagar)}>
             {formatCurrency(financial.totalAPagar)}
           </div>
-          <span className="text-[11px] text-gray-400 block font-medium">Compras de produtores</span>
+          <span className="text-[11px] text-gray-400 block font-medium truncate">Compras de produtores</span>
         </div>
       </div>
 

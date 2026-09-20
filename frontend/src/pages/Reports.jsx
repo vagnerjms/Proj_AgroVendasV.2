@@ -781,10 +781,10 @@ export default function Reports({ setCurrentPage }) {
       />
 
       {/* Barra de Filtro de Período (Oculta na Impressão) */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4 print:hidden">
+      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4 print:hidden">
         
         {/* Form de Seleção de Datas */}
-        <form onSubmit={handleFilterDateSubmit} className="flex flex-wrap items-center gap-3">
+        <form onSubmit={handleFilterDateSubmit} className="flex flex-wrap items-center gap-2.5 sm:gap-3">
           <div className="flex items-center gap-2 text-xs font-bold text-gray-800">
             <Calendar className="w-4 h-4 text-[#df7b1b]" />
             <span>Período do Relatório:</span>
@@ -832,13 +832,13 @@ export default function Reports({ setCurrentPage }) {
         </form>
 
         {/* Atalhos Rápidos de Safra / Período */}
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5 pt-1 xl:pt-0">
           <span className="text-[11px] font-semibold text-gray-400 mr-1">Atalhos:</span>
           
           <button
             type="button"
             onClick={() => handleApplyPreset('ALL')}
-            className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-colors ${
+            className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-colors cursor-pointer ${
               periodPreset === 'ALL' && !startDate && !endDate
                 ? 'bg-emerald-100 text-emerald-950 border-emerald-300 font-black'
                 : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
@@ -850,7 +850,7 @@ export default function Reports({ setCurrentPage }) {
           <button
             type="button"
             onClick={() => handleApplyPreset('THIS_MONTH')}
-            className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-colors ${
+            className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-colors cursor-pointer ${
               periodPreset === 'THIS_MONTH'
                 ? 'bg-emerald-100 text-emerald-950 border-emerald-300 font-black'
                 : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
@@ -862,7 +862,7 @@ export default function Reports({ setCurrentPage }) {
           <button
             type="button"
             onClick={() => handleApplyPreset('SAFRA_JUL26')}
-            className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-colors ${
+            className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-colors cursor-pointer ${
               periodPreset === 'SAFRA_JUL26'
                 ? 'bg-emerald-100 text-emerald-950 border-emerald-300 font-black'
                 : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
@@ -874,7 +874,7 @@ export default function Reports({ setCurrentPage }) {
           <button
             type="button"
             onClick={() => handleApplyPreset('SAFRA_AGO26')}
-            className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-colors ${
+            className={`text-xs font-bold px-2.5 py-1.5 rounded-lg border transition-colors cursor-pointer ${
               periodPreset === 'SAFRA_AGO26'
                 ? 'bg-emerald-100 text-emerald-950 border-emerald-300 font-black'
                 : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
@@ -960,40 +960,40 @@ export default function Reports({ setCurrentPage }) {
         {/* ABA 1: PRODUTOR */}
         <button
           onClick={() => setActiveTab('produtor')}
-          className={`flex items-center gap-2 px-5 py-3 rounded-t-xl font-bold text-xs transition-all border-b-2 cursor-pointer ${
+          className={`flex items-center gap-2.5 px-5 py-3 rounded-t-xl font-bold text-xs transition-all border-b-2 cursor-pointer ${
             activeTab === 'produtor'
               ? 'border-emerald-700 text-emerald-950 bg-white shadow-sm font-black'
               : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-100/60'
           }`}
         >
-          <Tractor className="w-4 h-4 text-emerald-700" />
-          <span>🌾 Extrato do Produtor (Prestação de Contas Base NF)</span>
+          <Tractor className="w-4 h-4 text-emerald-700 shrink-0" />
+          <span>Extrato do Produtor (Prestação de Contas Base NF)</span>
         </button>
 
         {/* ABA 2: CORRETOR */}
         <button
           onClick={() => setActiveTab('corretor')}
-          className={`flex items-center gap-2 px-5 py-3 rounded-t-xl font-bold text-xs transition-all border-b-2 cursor-pointer ${
+          className={`flex items-center gap-2.5 px-5 py-3 rounded-t-xl font-bold text-xs transition-all border-b-2 cursor-pointer ${
             activeTab === 'corretor'
               ? 'border-[#091b2e] text-[#091b2e] bg-white shadow-sm font-black'
               : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-100/60'
           }`}
         >
-          <Coins className="w-4 h-4 text-[#df7b1b]" />
-          <span>💼 Lucros do Corretor (Fechamento AgroVendas)</span>
+          <Coins className="w-4 h-4 text-[#df7b1b] shrink-0" />
+          <span>Lucros do Corretor (Fechamento AgroVendas)</span>
         </button>
 
         {/* ABA 3: LOJAS */}
         <button
           onClick={() => setActiveTab('lojas')}
-          className={`flex items-center gap-2 px-5 py-3 rounded-t-xl font-bold text-xs transition-all border-b-2 cursor-pointer ${
+          className={`flex items-center gap-2.5 px-5 py-3 rounded-t-xl font-bold text-xs transition-all border-b-2 cursor-pointer ${
             activeTab === 'lojas'
               ? 'border-blue-700 text-blue-950 bg-white shadow-sm font-black'
               : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-100/60'
           }`}
         >
-          <Building2 className="w-4 h-4 text-blue-700" />
-          <span>🏪 Visão por Lojas (Vendas e Faturamento)</span>
+          <Building2 className="w-4 h-4 text-blue-700 shrink-0" />
+          <span>Visão por Lojas (Vendas e Faturamento)</span>
         </button>
       </div>
 

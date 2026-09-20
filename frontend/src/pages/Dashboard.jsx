@@ -120,22 +120,22 @@ export default function Dashboard({ setCurrentPage }) {
       </form>
 
       {/* Row 1: 4 KPI Cards (Original Balance) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
         {/* Vendas do Período */}
         <div 
           onClick={() => setCurrentPage('sales-history')}
-          className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
+          className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer group min-w-0"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase group-hover:text-[#df7b1b] transition-colors">
+            <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase group-hover:text-[#df7b1b] transition-colors truncate">
               VENDAS DO PERÍODO
             </span>
-            <span className="w-4 h-4 bg-blue-600 rounded text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+            <span className="w-4 h-4 bg-blue-600 rounded text-white flex items-center justify-center text-[10px] font-bold shadow-xs shrink-0 ml-1">
               ✓
             </span>
           </div>
-          <div className="mt-3">
-            <div className="text-3xl font-extrabold text-gray-900 tracking-tight">
+          <div className="mt-2.5 sm:mt-3">
+            <div className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight whitespace-nowrap">
               {kpis.salesCount}
             </div>
             <span className="inline-block mt-2 text-[11px] font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
@@ -145,47 +145,47 @@ export default function Dashboard({ setCurrentPage }) {
         </div>
 
         {/* Total Vendido */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
-          <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase block">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow min-w-0">
+          <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase block truncate">
             TOTAL VENDIDO
           </span>
-          <div className="mt-3">
-            <div className="text-2xl font-extrabold text-gray-900 tracking-tight">
+          <div className="mt-2.5 sm:mt-3">
+            <div className="text-xl sm:text-2xl font-extrabold text-gray-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(kpis.totalSold)}>
               {formatCurrency(kpis.totalSold)}
             </div>
-            <span className="inline-flex items-center gap-1 mt-2 text-[11px] font-medium text-[#c87a1e]">
-              <ArrowUpRight className="w-3.5 h-3.5" />
-              {kpis.totalSoldGrowth} em relação ao período anterior
+            <span className="inline-flex items-center gap-1 mt-2 text-[11px] font-medium text-[#c87a1e] truncate">
+              <ArrowUpRight className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{kpis.totalSoldGrowth} em relação ao período anterior</span>
             </span>
           </div>
         </div>
 
         {/* Total a Receber */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
-          <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase block">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow min-w-0">
+          <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase block truncate">
             TOTAL A RECEBER
           </span>
-          <div className="mt-3">
-            <div className="text-2xl font-extrabold text-gray-900 tracking-tight">
+          <div className="mt-2.5 sm:mt-3">
+            <div className="text-xl sm:text-2xl font-extrabold text-gray-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(kpis.totalAReceber)}>
               {formatCurrency(kpis.totalAReceber)}
             </div>
-            <span className="inline-block mt-2 text-[11px] font-medium text-gray-500">
+            <span className="inline-block mt-2 text-[11px] font-medium text-gray-500 truncate" title={`Total a pagar ${formatCurrency(kpis.totalAPagar)}`}>
               Total a pagar {formatCurrency(kpis.totalAPagar)}
             </span>
           </div>
         </div>
 
         {/* Lucratividade Bruta */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow">
-          <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase block">
+        <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow min-w-0">
+          <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase block truncate">
             LUCRATIVIDADE BRUTA
           </span>
-          <div className="mt-3">
-            <div className="text-2xl font-extrabold text-gray-900 tracking-tight">
+          <div className="mt-2.5 sm:mt-3">
+            <div className="text-xl sm:text-2xl font-extrabold text-gray-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(kpis.grossProfit)}>
               {formatCurrency(kpis.grossProfit)}
             </div>
-            <span className="inline-flex items-center gap-1 mt-2 text-[11px] font-medium text-[#c87a1e]">
-              <CheckCircle2 className="w-3 h-3 text-[#d97706]" />
+            <span className="inline-flex items-center gap-1 mt-2 text-[11px] font-medium text-[#c87a1e] truncate">
+              <CheckCircle2 className="w-3 h-3 text-[#d97706] shrink-0" />
               meta atingida
             </span>
           </div>

@@ -21,74 +21,74 @@ export default function BrokerProfitTable({
     <div className="space-y-6">
       
       {/* 5 Cards de Conciliação e Lucro do Corretor */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
         
         {/* Card 1: Recebimento Loja (VP) */}
-        <div className="bg-white p-5 rounded-xl border border-blue-200 bg-blue-50/20 shadow-sm space-y-1">
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-blue-200 bg-blue-50/20 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs font-bold text-blue-900 uppercase">
-            <span>Recebimento Lojas (VP)</span>
-            <Building2 className="w-4 h-4 text-blue-700" />
+            <span className="truncate">Recebimento Lojas (VP)</span>
+            <Building2 className="w-4 h-4 text-blue-700 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-black text-blue-950">
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-blue-950 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalVP)}>
             {formatCurrency(totalVP)}
           </div>
-          <span className="text-[11px] text-blue-600 block font-medium">
+          <span className="text-[11px] text-blue-600 block font-medium truncate">
             Cotação diária das {allItens.length} vendas
           </span>
         </div>
 
         {/* Card 2: Custo das NFs dos Produtores */}
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span>(-) Total NFs Produtores</span>
-            <Tractor className="w-4 h-4 text-gray-600" />
+            <span className="truncate">(-) Total NFs Produtores</span>
+            <Tractor className="w-4 h-4 text-gray-600 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-black text-gray-900">
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-gray-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalNF)}>
             {formatCurrency(totalNF)}
           </div>
-          <span className="text-[11px] text-gray-400 block">
+          <span className="text-[11px] text-gray-400 block truncate">
             Base faturada dos produtores
           </span>
         </div>
 
         {/* Card 3: Spread Comercial Bruto */}
-        <div className="bg-white p-5 rounded-xl border border-amber-200 bg-amber-50/30 shadow-sm space-y-1">
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-amber-200 bg-amber-50/30 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs font-bold text-amber-900 uppercase">
-            <span>(=) Spread Comercial (VP - NF)</span>
-            <TrendingUp className="w-4 h-4 text-amber-700" />
+            <span className="truncate">(=) Spread Comercial (VP - NF)</span>
+            <TrendingUp className="w-4 h-4 text-amber-700 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-black text-amber-950">
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-amber-950 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalSpread)}>
             {formatCurrency(totalSpread)}
           </div>
-          <span className="text-[11px] text-amber-800 font-semibold block">
+          <span className="text-[11px] text-amber-800 font-semibold block truncate">
             Margem de negociação
           </span>
         </div>
 
         {/* Card 4: Comissões */}
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span>(+) Comissões Corretagem</span>
-            <BadgePercent className="w-4 h-4 text-blue-600" />
+            <span className="truncate">(+) Comissões Corretagem</span>
+            <BadgePercent className="w-4 h-4 text-blue-600 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-black text-blue-900">
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-blue-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalComissao)}>
             {formatCurrency(totalComissao)}
           </div>
-          <span className="text-[11px] text-gray-400 block">
+          <span className="text-[11px] text-gray-400 block truncate">
             Taxas de intermediação
           </span>
         </div>
 
         {/* Card 5: Lucro Total do Corretor */}
-        <div className="bg-white p-5 rounded-xl border-2 border-emerald-600 bg-emerald-50/40 shadow-md space-y-1">
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border-2 border-emerald-600 bg-emerald-50/40 shadow-md space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs font-black text-emerald-950 uppercase">
-            <span>(=) Lucro Total AgroVenda</span>
-            <Coins className="w-4 h-4 text-emerald-700" />
+            <span className="truncate">(=) Lucro Total AgroVenda</span>
+            <Coins className="w-4 h-4 text-emerald-700 shrink-0 ml-1" />
           </div>
-          <div className="text-2xl font-black text-emerald-950">
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-emerald-950 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalLucroAgroVenda)}>
             {formatCurrency(totalLucroAgroVenda)}
           </div>
-          <span className="text-[11px] text-emerald-800 font-bold block">
+          <span className="text-[11px] text-emerald-800 font-bold block truncate">
             Spread + Comissões
           </span>
         </div>

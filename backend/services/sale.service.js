@@ -348,7 +348,8 @@ async function settleProducerPayment(id, payload = {}) {
     checkDueDate = ''
   } = payload;
   const currentPaid = Number(sale.producerPaidAmount) || 0;
-  const remainingBalance = roundMoney(Math.max(0, liquidoProdutor - currentPaid));
+  // O valor de quitação total do produtor baseia-se no valor total da nota
+  const remainingBalance = roundMoney(Math.max(0, totalNF - currentPaid));
 
   if (isPartial) {
     const paymentValue = roundMoney(Number(inputAmount) || 0);
@@ -364,7 +365,7 @@ async function settleProducerPayment(id, payload = {}) {
       throw err;
     }
 
-    const newAccumulated = roundMoney(Math.min(liquidoProdutor, currentPaid + paymentValue));
+    const newAccumulated = roundMoney(Math.min(totalNF, currentPaid + paymentValue));
     sale.producerPaidAmount = newAccumulated;
 
     if (!Array.isArray(sale.producerPaymentHistory)) sale.producerPaymentHistory = [];
@@ -379,27 +380,27 @@ async function settleProducerPayment(id, payload = {}) {
       notes: notes || 'Repasse parcial ao produtor registrado'
     });
 
-    if (newAccumulated >= liquidoProdutor - 0.01) {
-      sale.producerPaidAmount = liquidoProdutor;
+    if (newAccumulated >= totalNF - 0.01) {
+      sale.producerPaidAmount = totalNF;
       sale.producerPaymentStatus = 'Pago';
     } else {
       sale.producerPaymentStatus = 'Parcial';
     }
   } else {
-    // Quitação Total do Produtor
-    const remainingToSettle = roundMoney(Math.max(0, liquidoProdutor - currentPaid));
-    sale.producerPaidAmount = liquidoProdutor;
+    // Quitação Total do Produtor baseada no Valor Total da Nota
+    const remainingToSettle = roundMoney(Math.max(0, totalNF - currentPaid));
+    sale.producerPaidAmount = totalNF;
 
     if (!Array.isArray(sale.producerPaymentHistory)) sale.producerPaymentHistory = [];
     sale.producerPaymentHistory.push({
-      amount: remainingToSettle > 0 ? remainingToSettle : liquidoProdutor,
+      amount: remainingToSettle > 0 ? remainingToSettle : totalNF,
       date: paymentDate || new Date().toISOString().split('T')[0],
       paymentMethod: paymentMethod || 'PIX',
       checkNumber: checkNumber || '',
       checkBank: checkBank || '',
       checkDueDate: checkDueDate || '',
       paymentProofFile: paymentProofFile || null,
-      notes: notes || 'Repasse integral ao produtor quitado'
+      notes: notes || 'Repasse integral ao produtor quitado (Valor Total da Nota)'
     });
 
     sale.producerPaymentStatus = 'Pago';
@@ -440,7 +441,7 @@ async function unsettleProducerPayment(id, payload = {}) {
     if (sale.producerPaidAmount <= 0) {
       sale.producerPaymentStatus = 'A Pagar';
       sale.producerPaymentProofFile = null;
-    } else if (sale.producerPaidAmount < liquidoProdutor - 0.01) {
+    } else if (sale.producerPaidAmount < totalNF - 0.01) {
       sale.producerPaymentStatus = 'Parcial';
       const lastWithProof = [...sale.producerPaymentHistory].reverse().find(p => p.paymentProofFile);
       sale.producerPaymentProofFile = lastWithProof ? lastWithProof.paymentProofFile : null;

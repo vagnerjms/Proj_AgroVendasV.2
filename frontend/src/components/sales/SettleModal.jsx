@@ -34,7 +34,8 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
   const funrural = Number(sale.funruralTotal) || (totalNF * 0.0163);
   const liquidoProdutor = Math.max(0, totalNF - funrural);
 
-  const netTargetTotal = isProducer ? liquidoProdutor : summary.totalLiquido;
+  // O Valor da quitação total para o produtor deve ser o valor total da nota
+  const netTargetTotal = isProducer ? totalNF : summary.totalLiquido;
   const alreadyPaid = isProducer ? (Number(sale.producerPaidAmount) || 0) : (Number(sale.paidAmount) || 0);
   const remainingBalance = Math.max(0, netTargetTotal - alreadyPaid);
   const historyList = isProducer ? (sale.producerPaymentHistory || []) : (sale.paymentHistory || []);

@@ -229,16 +229,16 @@ export default function AgendaAlerts({ setCurrentPage }) {
     const valorVP = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : (Number(s.totalOperation) || (caixas * cotacao));
     const liq = calculateLiquidation(s);
 
-    // Contas do Produtor (Base: Valor da Nota Fiscal com dedução do FUNRURAL 1,63%)
+    // Contas do Produtor (Base: Valor Total da Nota Fiscal)
     const totalNF = Number(s.totalOperation) || 0;
     const funrural = Number(s.funruralTotal) || (totalNF * 0.0163);
     const liquidoProdutor = Math.max(0, totalNF - funrural);
     const producerPaid = Number(s.producerPaidAmount) || 0;
-    const saldoProdutor = Math.max(0, liquidoProdutor - producerPaid);
+    const saldoProdutor = Math.max(0, totalNF - producerPaid);
     
-    const isProducerFullySettled = s.producerPaymentStatus === 'Pago' || (liquidoProdutor > 0 && producerPaid >= liquidoProdutor - 0.01);
-    const isProducerPartial = s.producerPaymentStatus === 'Parcial' || (producerPaid > 0 && producerPaid < liquidoProdutor - 0.01);
-    const producerPercentPaid = liquidoProdutor > 0 ? (producerPaid / liquidoProdutor) * 100 : 0;
+    const isProducerFullySettled = s.producerPaymentStatus === 'Pago' || (totalNF > 0 && producerPaid >= totalNF - 0.01);
+    const isProducerPartial = s.producerPaymentStatus === 'Parcial' || (producerPaid > 0 && producerPaid < totalNF - 0.01);
+    const producerPercentPaid = totalNF > 0 ? (producerPaid / totalNF) * 100 : 0;
     const producerStatus = s.producerPaymentStatus || (isProducerFullySettled ? 'Pago' : (isProducerPartial ? 'Parcial' : 'A Pagar'));
 
     return {

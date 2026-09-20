@@ -18,8 +18,8 @@ app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use('/uploads', express.static(uploadDir));
 
 // Modular API Routes
-app.use('/api', require('./routes/upload.routes'));
 app.use('/api/auth', require('./routes/auth.routes'));
+app.use('/api', require('./routes/upload.routes'));
 app.use('/api/users', require('./routes/users.routes'));
 app.use('/api/dashboard', require('./routes/dashboard.routes'));
 app.use('/api/sales', require('./routes/sales.routes'));

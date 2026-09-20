@@ -7,11 +7,8 @@ const NfeParserService = require('../services/nfeParser.service');
 const { ensureProductsRegistered } = require('../services/product.service');
 const { cleanupOrphanUploads } = require('../services/cleanup.service');
 
-// Protect all upload, parse and cleanup endpoints with JWT authentication
-router.use(requireAuth);
-
 // POST /api/upload (Generic upload for canhotos, recibos, fotos with proper error handling)
-router.post('/upload', (req, res, next) => {
+router.post('/upload', requireAuth, (req, res, next) => {
   upload.single('file')(req, res, (err) => {
     if (err) {
       return res.status(400).json({ error: `Erro no upload: ${err.message}` });
@@ -29,7 +26,7 @@ router.post('/upload', (req, res, next) => {
 });
 
 // POST /api/nfe/parse (Parse XML/PDF DANFE with automatic orphan cleanup on failure)
-router.post('/nfe/parse', (req, res) => {
+router.post('/nfe/parse', requireAuth, (req, res) => {
   upload.single('file')(req, res, async (err) => {
     if (err) {
       return res.status(400).json({ error: `Erro no upload do documento fiscal: ${err.message}` });
@@ -69,7 +66,7 @@ router.post('/nfe/parse', (req, res) => {
 });
 
 // POST /api/upload/cleanup (Limpar arquivos temporários órfãos que não foram salvos em nenhuma venda)
-router.post('/upload/cleanup', async (req, res) => {
+router.post('/upload/cleanup', requireAuth, async (req, res) => {
   try {
     const result = await cleanupOrphanUploads();
     res.json(result);

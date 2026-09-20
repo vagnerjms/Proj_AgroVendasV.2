@@ -103,16 +103,18 @@ router.delete('/:id', async (req, res) => {
     const client = await Client.findOne({ id: req.params.id });
     if (!client) return res.status(404).json({ error: 'Cliente não encontrado' });
 
-    const [salesCount, slipsCount, purchasesCount] = await Promise.all([
+    const [salesAsClientCount, salesAsProducerCount, slipsCount, purchasesCount] = await Promise.all([
       Sale.countDocuments({ client: client.name }),
+      Sale.countDocuments({ origin: client.name }),
       WeighingSlip.countDocuments({ client: client.name }),
       Purchase ? Purchase.countDocuments({ producer: client.name }) : 0
     ]);
 
-    const totalRelations = salesCount + slipsCount + purchasesCount;
+    const totalSales = salesAsClientCount + salesAsProducerCount;
+    const totalRelations = totalSales + slipsCount + purchasesCount;
     if (totalRelations > 0) {
       return res.status(400).json({ 
-        error: `Não é possível excluir o parceiro "${client.name}" pois existem registros vinculados (${salesCount} vendas, ${slipsCount} romaneios, ${purchasesCount} compras).` 
+        error: `Não é possível excluir o parceiro "${client.name}" pois existem registros vinculados (${totalSales} vendas, ${slipsCount} romaneios, ${purchasesCount} compras).` 
       });
     }
 

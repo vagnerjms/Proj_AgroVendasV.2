@@ -148,25 +148,17 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
 
     setUploadingTicket(true);
     try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const fname = data.filename || file.name;
-        if (isEdit) {
-          setEditForm(prev => ({ ...prev, ticketImage: fname }));
-        } else {
-          setNewForm(prev => ({ ...prev, ticketImage: fname }));
-        }
-        showNotification('Imagem do romaneio anexada com sucesso!');
+      const data = await api.upload('/api/upload', formData);
+      const fname = data?.filename || file.name;
+      if (isEdit) {
+        setEditForm(prev => ({ ...prev, ticketImage: fname }));
       } else {
-        showErrorNotification('Erro ao enviar imagem do romaneio.');
+        setNewForm(prev => ({ ...prev, ticketImage: fname }));
       }
+      showNotification('Imagem do romaneio anexada com sucesso!');
     } catch (err) {
       console.error(err);
-      showErrorNotification('Falha no upload da imagem.');
+      showErrorNotification(err.message || 'Falha no upload da imagem.');
     } finally {
       setUploadingTicket(false);
     }

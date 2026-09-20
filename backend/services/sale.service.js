@@ -189,8 +189,19 @@ async function settleSale(id, payload = {}) {
   const valorVP = Number(sale.valorTotalVP) > 0 ? Number(sale.valorTotalVP) : Number(sale.totalOperation);
   const totalLiquido = roundMoney(Math.max(0, valorVP - fiscal.funruralTotal));
 
-  const { paidAmount: inputAmount, isPartial, paymentProofFile, paymentDate, notes } = payload;
+  const { 
+    paidAmount: inputAmount, 
+    isPartial, 
+    paymentProofFile, 
+    paymentDate, 
+    notes,
+    paymentMethod = 'PIX',
+    checkNumber = '',
+    checkBank = '',
+    checkDueDate = ''
+  } = payload;
   const currentPaid = Number(sale.paidAmount) || 0;
+  const remainingBalance = roundMoney(Math.max(0, totalLiquido - currentPaid));
 
   if (isPartial) {
     const paymentValue = roundMoney(Number(inputAmount) || 0);
@@ -200,18 +211,29 @@ async function settleSale(id, payload = {}) {
       throw err;
     }
 
-    const newAccumulated = roundMoney(currentPaid + paymentValue);
+    if (paymentValue > remainingBalance + 0.05) {
+      const err = new Error(`O valor informado (R$ ${paymentValue.toFixed(2)}) não pode ser maior que o saldo em aberto (R$ ${remainingBalance.toFixed(2)}).`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const newAccumulated = roundMoney(Math.min(totalLiquido, currentPaid + paymentValue));
     sale.paidAmount = newAccumulated;
 
     if (!Array.isArray(sale.paymentHistory)) sale.paymentHistory = [];
     sale.paymentHistory.push({
       amount: paymentValue,
       date: paymentDate || new Date().toISOString().split('T')[0],
+      paymentMethod: paymentMethod || 'PIX',
+      checkNumber: checkNumber || '',
+      checkBank: checkBank || '',
+      checkDueDate: checkDueDate || '',
       paymentProofFile: paymentProofFile || null,
       notes: notes || 'Pagamento parcial registrado'
     });
 
-    if (newAccumulated >= totalLiquido) {
+    if (newAccumulated >= totalLiquido - 0.01) {
+      sale.paidAmount = totalLiquido;
       sale.paymentStatus = 'Recebido';
       sale.status = 'Concluído';
     } else {
@@ -226,6 +248,10 @@ async function settleSale(id, payload = {}) {
     sale.paymentHistory.push({
       amount: remainingToSettle > 0 ? remainingToSettle : totalLiquido,
       date: paymentDate || new Date().toISOString().split('T')[0],
+      paymentMethod: paymentMethod || 'PIX',
+      checkNumber: checkNumber || '',
+      checkBank: checkBank || '',
+      checkDueDate: checkDueDate || '',
       paymentProofFile: paymentProofFile || null,
       notes: notes || 'Quitação integral registrada'
     });
@@ -233,6 +259,8 @@ async function settleSale(id, payload = {}) {
     sale.paymentStatus = 'Recebido';
     sale.status = 'Concluído';
   }
+
+  sale.paymentMethod = paymentMethod || 'PIX';
 
   if (paymentProofFile) {
     sale.paymentProofFile = paymentProofFile;
@@ -245,9 +273,9 @@ async function settleSale(id, payload = {}) {
 }
 
 /**
- * Reverter Liquidação de Venda
+ * Reverter Liquidação de Venda (Total ou Última Parcela)
  */
-async function unsettleSale(id) {
+async function unsettleSale(id, payload = {}) {
   const sale = await Sale.findOne({ id });
   if (!sale) {
     const err = new Error('Venda não encontrada');
@@ -255,12 +283,178 @@ async function unsettleSale(id) {
     throw err;
   }
 
-  sale.paymentStatus = 'A Receber';
-  sale.paidAmount = 0;
-  sale.paymentHistory = [];
-  sale.status = sale.nfFile ? 'Faturado' : 'Pendente NF';
+  if (payload.mode === 'last' && Array.isArray(sale.paymentHistory) && sale.paymentHistory.length > 0) {
+    sale.paymentHistory.pop();
+    const remainingPaid = sale.paymentHistory.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+    sale.paidAmount = roundMoney(Math.max(0, remainingPaid));
+
+    const fiscal = calculateFiscalDeductions(sale.totalOperation);
+    const valorVP = Number(sale.valorTotalVP) > 0 ? Number(sale.valorTotalVP) : Number(sale.totalOperation);
+    const totalLiquido = roundMoney(Math.max(0, valorVP - fiscal.funruralTotal));
+
+    if (sale.paidAmount <= 0) {
+      sale.paymentStatus = 'A Receber';
+      sale.status = sale.nfFile ? 'Faturado' : 'Pendente NF';
+      sale.paymentProofFile = null;
+    } else if (sale.paidAmount < totalLiquido - 0.01) {
+      sale.paymentStatus = 'Parcial';
+      sale.status = sale.nfFile ? 'Faturado' : 'Pendente NF';
+      const lastWithProof = [...sale.paymentHistory].reverse().find(p => p.paymentProofFile);
+      sale.paymentProofFile = lastWithProof ? lastWithProof.paymentProofFile : null;
+    } else {
+      sale.paymentStatus = 'Recebido';
+      sale.status = 'Concluído';
+    }
+  } else {
+    sale.paymentStatus = 'A Receber';
+    sale.paidAmount = 0;
+    sale.paymentHistory = [];
+    sale.paymentProofFile = null;
+    sale.status = sale.nfFile ? 'Faturado' : 'Pendente NF';
+  }
+
   await sale.save();
 
+  sendSaleWebhook('sale.updated', sale);
+
+  return sale;
+}
+
+/**
+ * Liquidação Total ou Parcial de Repasse ao Produtor Rural (Base: Total NF - FUNRURAL)
+ */
+async function settleProducerPayment(id, payload = {}) {
+  const sale = await Sale.findOne({ id });
+  if (!sale) {
+    const err = new Error('Venda não encontrada');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const fiscal = calculateFiscalDeductions(sale.totalOperation);
+  const totalNF = roundMoney(sale.totalOperation);
+  const funruralTotal = fiscal.funruralTotal;
+  const liquidoProdutor = roundMoney(Math.max(0, totalNF - funruralTotal));
+
+  const { 
+    paidAmount: inputAmount, 
+    isPartial, 
+    paymentProofFile, 
+    paymentDate, 
+    notes,
+    paymentMethod = 'PIX',
+    checkNumber = '',
+    checkBank = '',
+    checkDueDate = ''
+  } = payload;
+  const currentPaid = Number(sale.producerPaidAmount) || 0;
+  const remainingBalance = roundMoney(Math.max(0, liquidoProdutor - currentPaid));
+
+  if (isPartial) {
+    const paymentValue = roundMoney(Number(inputAmount) || 0);
+    if (paymentValue <= 0) {
+      const err = new Error('Informe um valor de repasse ao produtor válido maior que zero.');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    if (paymentValue > remainingBalance + 0.05) {
+      const err = new Error(`O valor informado (R$ ${paymentValue.toFixed(2)}) não pode ser maior que o saldo em aberto do produtor (R$ ${remainingBalance.toFixed(2)}).`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const newAccumulated = roundMoney(Math.min(liquidoProdutor, currentPaid + paymentValue));
+    sale.producerPaidAmount = newAccumulated;
+
+    if (!Array.isArray(sale.producerPaymentHistory)) sale.producerPaymentHistory = [];
+    sale.producerPaymentHistory.push({
+      amount: paymentValue,
+      date: paymentDate || new Date().toISOString().split('T')[0],
+      paymentMethod: paymentMethod || 'PIX',
+      checkNumber: checkNumber || '',
+      checkBank: checkBank || '',
+      checkDueDate: checkDueDate || '',
+      paymentProofFile: paymentProofFile || null,
+      notes: notes || 'Repasse parcial ao produtor registrado'
+    });
+
+    if (newAccumulated >= liquidoProdutor - 0.01) {
+      sale.producerPaidAmount = liquidoProdutor;
+      sale.producerPaymentStatus = 'Pago';
+    } else {
+      sale.producerPaymentStatus = 'Parcial';
+    }
+  } else {
+    // Quitação Total do Produtor
+    const remainingToSettle = roundMoney(Math.max(0, liquidoProdutor - currentPaid));
+    sale.producerPaidAmount = liquidoProdutor;
+
+    if (!Array.isArray(sale.producerPaymentHistory)) sale.producerPaymentHistory = [];
+    sale.producerPaymentHistory.push({
+      amount: remainingToSettle > 0 ? remainingToSettle : liquidoProdutor,
+      date: paymentDate || new Date().toISOString().split('T')[0],
+      paymentMethod: paymentMethod || 'PIX',
+      checkNumber: checkNumber || '',
+      checkBank: checkBank || '',
+      checkDueDate: checkDueDate || '',
+      paymentProofFile: paymentProofFile || null,
+      notes: notes || 'Repasse integral ao produtor quitado'
+    });
+
+    sale.producerPaymentStatus = 'Pago';
+  }
+
+  sale.producerPaymentMethod = paymentMethod || 'PIX';
+
+  if (paymentProofFile) {
+    sale.producerPaymentProofFile = paymentProofFile;
+  }
+
+  await sale.save();
+  sendSaleWebhook('sale.producer_settled', sale);
+
+  return sale;
+}
+
+/**
+ * Reverter Repasse ao Produtor Rural
+ */
+async function unsettleProducerPayment(id, payload = {}) {
+  const sale = await Sale.findOne({ id });
+  if (!sale) {
+    const err = new Error('Venda não encontrada');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const fiscal = calculateFiscalDeductions(sale.totalOperation);
+  const totalNF = roundMoney(sale.totalOperation);
+  const liquidoProdutor = roundMoney(Math.max(0, totalNF - fiscal.funruralTotal));
+
+  if (payload.mode === 'last' && Array.isArray(sale.producerPaymentHistory) && sale.producerPaymentHistory.length > 0) {
+    sale.producerPaymentHistory.pop();
+    const remainingPaid = sale.producerPaymentHistory.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+    sale.producerPaidAmount = roundMoney(Math.max(0, remainingPaid));
+
+    if (sale.producerPaidAmount <= 0) {
+      sale.producerPaymentStatus = 'A Pagar';
+      sale.producerPaymentProofFile = null;
+    } else if (sale.producerPaidAmount < liquidoProdutor - 0.01) {
+      sale.producerPaymentStatus = 'Parcial';
+      const lastWithProof = [...sale.producerPaymentHistory].reverse().find(p => p.paymentProofFile);
+      sale.producerPaymentProofFile = lastWithProof ? lastWithProof.paymentProofFile : null;
+    } else {
+      sale.producerPaymentStatus = 'Pago';
+    }
+  } else {
+    sale.producerPaymentStatus = 'A Pagar';
+    sale.producerPaidAmount = 0;
+    sale.producerPaymentHistory = [];
+    sale.producerPaymentProofFile = null;
+  }
+
+  await sale.save();
   sendSaleWebhook('sale.updated', sale);
 
   return sale;
@@ -305,10 +499,168 @@ async function deleteSale(id) {
   return deleted;
 }
 
+/**
+ * Normaliza flags e status de pendência de NF-e na venda
+ */
+function normalizeSaleNfStatus(s) {
+  if (!s) return s;
+  const doc = s.toObject ? s.toObject() : { ...s };
+  const hasNf = !!(doc.nfFile && doc.nfFile.trim());
+  if (hasNf) {
+    doc.nfPending = false;
+    if (doc.status === 'Pendente NF') {
+      doc.status = doc.paymentStatus === 'Recebido' ? 'Concluído' : 'Faturado';
+    }
+  } else {
+    doc.nfPending = true;
+    if (!doc.status || doc.status === 'Faturado') {
+      doc.status = 'Pendente NF';
+    }
+  }
+  return doc;
+}
+
+/**
+ * Gera lista de eventos de recebimento por vencimento para o n8n e Google Calendar
+ */
+async function getAgendaEvents() {
+  const sales = await Sale.find().sort({ saleDate: -1 }).lean();
+  return sales.map(s => {
+    let dueDate = s.dueDate || '';
+    if (!dueDate && s.notes) {
+      const match = s.notes.match(/Vencimento:\s*([^\s|]+)/i);
+      if (match && match[1]) {
+        const parts = match[1].split('/');
+        if (parts.length === 3) {
+          dueDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+      }
+    }
+    if (!dueDate && s.saleDate) {
+      const days = Number(s.paymentTermDays) >= 0 ? Number(s.paymentTermDays) : 30;
+      const d = new Date(s.saleDate + 'T12:00:00');
+      d.setDate(d.getDate() + days);
+      dueDate = d.toISOString().split('T')[0];
+    }
+    if (!dueDate) dueDate = new Date().toISOString().split('T')[0];
+
+    const valorFinal = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : (Number(s.totalOperation) || 0);
+    const fiscal = calculateFiscalDeductions(s.totalOperation);
+    const valorLiquidar = roundMoney(Math.max(0, valorFinal - fiscal.funruralTotal));
+    const clientShort = s.client ? s.client.split(' ')[0] : 'Cliente';
+    const volumesInt = Math.round(Number(s.totalVolumes) || (Number(s.totalKg) > 0 ? Number(s.totalKg) / 29 : 0));
+
+    return {
+      id: s.id,
+      client: s.client,
+      saleDate: s.saleDate,
+      dueDate: dueDate,
+      totalOperation: Number(s.totalOperation) || 0,
+      valorVP: valorFinal,
+      valorLiquidar: valorLiquidar,
+      paidAmount: Number(s.paidAmount) || 0,
+      status: s.status,
+      paymentStatus: s.paymentStatus || 'A Receber',
+      summary: `💰 ${clientShort} · R$ ${valorLiquidar.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${s.id})`,
+      start: `${dueDate}T09:00:00-03:00`,
+      end: `${dueDate}T10:00:00-03:00`,
+      description: `🏪 Comprador: ${s.client}\n📅 Vencimento: ${dueDate.split('-').reverse().join('/')}\n💰 Valor a Liquidar: R$ ${valorLiquidar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📊 Total Comercial (VP): R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📦 Volumes: ${volumesInt} cx\n📄 Nota Fiscal: ${s.nfFile || 'Pendente'}\n📌 Status: ${s.paymentStatus || 'A Receber'}`
+    };
+  });
+}
+
+/**
+ * Sincroniza e recalcula venda vinculada a partir da pesagem de romaneio
+ */
+async function syncSaleWeightFromSlip(slip, chosenWeightKg, weightChoice) {
+  if (!slip || !chosenWeightKg || chosenWeightKg <= 0) return null;
+
+  const rawSaleRef = slip.saleId || slip.id.replace('ROM-', '');
+  const digits = rawSaleRef.replace(/[^0-9]/g, '');
+  const possibleIds = [
+    rawSaleRef,
+    rawSaleRef.replace('ROM-', ''),
+    `VP${digits.padStart(3, '0')}`,
+    `VP${digits}`
+  ];
+
+  const sale = await Sale.findOne({ id: { $in: possibleIds } });
+  if (!sale) return null;
+
+  const newTotalKg = Number(chosenWeightKg);
+  const isBatata = (sale.items && sale.items.some(it => it.product?.toLowerCase().includes('batata'))) || (sale.notes && sale.notes.toLowerCase().includes('batata'));
+  const boxWeight = Number(sale.items?.[0]?.boxWeightKg) || (isBatata ? 25 : 29);
+  const newVolumes = boxWeight === 1 ? newTotalKg : Number((newTotalKg / boxWeight).toFixed(2));
+
+  // Recalcula totais da venda
+  if (sale.items && sale.items.length > 0) {
+    const unitPriceKg = sale.totalKg > 0 ? (sale.totalOperation / sale.totalKg) : (sale.items[0].price || 2.0);
+    sale.items[0].kg = newTotalKg;
+    sale.items[0].quantity = Math.round(newVolumes);
+    sale.items[0].total = roundMoney(newTotalKg * unitPriceKg);
+    sale.totalOperation = sale.items[0].total;
+  } else if (sale.totalKg > 0) {
+    const pricePerKg = sale.totalOperation / sale.totalKg;
+    sale.totalOperation = roundMoney(newTotalKg * pricePerKg);
+  }
+
+  sale.totalKg = newTotalKg;
+  sale.totalVolumes = newVolumes;
+
+  // Recalcula impostos fiscais (FUNRURAL)
+  const fiscal = calculateFiscalDeductions(sale.totalOperation);
+  sale.funruralTotal = fiscal.funruralTotal;
+  sale.previdenciaSocial = fiscal.previdencia;
+  sale.rat = fiscal.rat;
+  sale.senar = fiscal.senar;
+
+  // Recalcula Valor Total VP
+  let cotacao = Number(sale.dailyQuote) || 0;
+  if (!cotacao && sale.notes) {
+    const matchCot = sale.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
+    if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
+  }
+
+  if (cotacao > 0 && cotacao <= 10.0) {
+    sale.valorTotalVP = roundMoney(newTotalKg * cotacao);
+  } else if (cotacao > 10.0) {
+    sale.valorTotalVP = roundMoney(newVolumes * cotacao);
+  } else {
+    sale.valorTotalVP = roundMoney(sale.totalOperation);
+  }
+
+  // Recalcula comissão
+  const comm = calculateCommission(sale.valorTotalVP, sale.feeValue);
+  sale.totalCommission = comm.comissao;
+
+  sale.isDivergent = false;
+
+  // Anota no histórico da venda
+  const choiceText = weightChoice === 'dest' ? 'Peso Destino' : (weightChoice === 'origin' ? 'Peso Origem' : 'Peso Ajustado');
+  const adjustTag = `[Pesagem: ${choiceText} (${newTotalKg.toLocaleString('pt-BR')} kg - ${newVolumes} cx)]`;
+  const existingNotes = typeof sale.notes === 'string' ? sale.notes : '';
+  if (!existingNotes.includes('[Pesagem:')) {
+    sale.notes = existingNotes ? `${existingNotes} | ${adjustTag}` : adjustTag;
+  }
+
+  await sale.save();
+
+  try {
+    sendSaleWebhook('sale.weight_synced', sale);
+  } catch (e) {}
+
+  return sale;
+}
+
 module.exports = {
   createSale,
   updateSale,
   settleSale,
   unsettleSale,
-  deleteSale
+  settleProducerPayment,
+  unsettleProducerPayment,
+  deleteSale,
+  normalizeSaleNfStatus,
+  getAgendaEvents,
+  syncSaleWeightFromSlip
 };

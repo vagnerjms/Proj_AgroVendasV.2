@@ -2,9 +2,13 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const { upload } = require('../middlewares/upload');
+const { requireAuth } = require('../middlewares/auth');
 const NfeParserService = require('../services/nfeParser.service');
 const { ensureProductsRegistered } = require('../services/product.service');
 const { cleanupOrphanUploads } = require('../services/cleanup.service');
+
+// Protect all upload, parse and cleanup endpoints with JWT authentication
+router.use(requireAuth);
 
 // POST /api/upload (Generic upload for canhotos, recibos, fotos with proper error handling)
 router.post('/upload', (req, res, next) => {

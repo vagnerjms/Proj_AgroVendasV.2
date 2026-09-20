@@ -23,9 +23,11 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatKg, formatNumber, getCleanFileName } from '../utils/formatters';
 import { calculateSummary, calculateFunrural } from '../utils/calculations';
+import { api } from '../services/api';
 import SaleItemsTable from '../components/sales/SaleItemsTable';
 import QuickProducerModal from '../components/sales/QuickProducerModal';
 import QuickClientModal from '../components/sales/QuickClientModal';
+import SaleFiscalSummary from '../components/sales/SaleFiscalSummary';
 
 export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, onCancelEdit }) {
   // Operation types
@@ -235,14 +237,12 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   }, [editingSale]);
 
   useEffect(() => {
-    fetch('/api/clients')
-      .then(res => res.json())
-      .then(data => setClients(data))
+    api.get('/api/clients')
+      .then(data => setClients(data || []))
       .catch(console.error);
 
-    fetch('/api/products')
-      .then(res => res.json())
-      .then(data => setProducts(data))
+    api.get('/api/products')
+      .then(data => setProducts(data || []))
       .catch(console.error);
   }, []);
 
@@ -457,17 +457,8 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       const formData = new FormData();
       formData.append('file', file);
 
-      const res = await fetch('/api/nfe/parse', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!res.ok) {
-        throw new Error('Falha ao interpretar arquivo XML');
-      }
-
-      const data = await res.json();
-      setNfeKey(data.nfeKey || '');
+      const data = await api.upload('/api/nfe/parse', formData);
+      setNfeKey(data?.nfeKey || '');
       setNfFile(data.filename || file.name);
       if (data.saleDate) setSaleDate(data.saleDate);
       if (data.notes && !notes) setNotes(data.notes);
@@ -603,14 +594,11 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       // Check if this NF-e was already imported in another sale
       if (data.nfeKey) {
         try {
-          const chkRes = await fetch(`/api/sales/check-nfe/${data.nfeKey}`);
-          if (chkRes.ok) {
-            const chkData = await chkRes.json();
-            if (chkData.exists && (!editingSale || editingSale.id !== chkData.saleId)) {
-              setDuplicateWarning(`Atenção: Esta NF-e (Chave final ...${data.nfeKey.slice(-8)}) já foi cadastrada na venda ${chkData.saleId} (${chkData.client}).`);
-            } else {
-              setDuplicateWarning('');
-            }
+          const chkData = await api.get(`/api/sales/check-nfe/${data.nfeKey}`);
+          if (chkData && chkData.exists && (!editingSale || editingSale.id !== chkData.saleId)) {
+            setDuplicateWarning(`Atenção: Esta NF-e (Chave final ...${data.nfeKey.slice(-8)}) já foi cadastrada na venda ${chkData.saleId} (${chkData.client}).`);
+          } else {
+            setDuplicateWarning('');
           }
         } catch (e) {
           console.error(e);
@@ -631,25 +619,16 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     setRegisteringProducer(true);
     setErrorMessage('');
     try {
-      const res = await fetch('/api/clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: unmatchedProducer.name,
-          document: unmatchedProducer.document,
-          ie: unmatchedProducer.ie,
-          type: 'Produtor',
-          city: unmatchedProducer.city,
-          uf: unmatchedProducer.uf,
-          address: unmatchedProducer.address
-        })
+      const newProd = await api.post('/api/clients', {
+        name: unmatchedProducer.name,
+        document: unmatchedProducer.document,
+        ie: unmatchedProducer.ie,
+        type: 'Produtor',
+        city: unmatchedProducer.city,
+        uf: unmatchedProducer.uf,
+        address: unmatchedProducer.address
       });
 
-      if (!res.ok) {
-        throw new Error('Erro ao salvar produtor no banco de dados');
-      }
-
-      const newProd = await res.json();
       setClients(prev => [...prev, newProd]);
       setMatchedProducer(newProd);
       setUnmatchedProducer(null);
@@ -668,25 +647,16 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     setRegisteringClient(true);
     setErrorMessage('');
     try {
-      const res = await fetch('/api/clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: unmatchedClient.name,
-          document: unmatchedClient.document,
-          ie: unmatchedClient.ie,
-          type: 'Comprador',
-          city: unmatchedClient.city,
-          uf: unmatchedClient.uf,
-          address: unmatchedClient.address
-        })
+      const newCli = await api.post('/api/clients', {
+        name: unmatchedClient.name,
+        document: unmatchedClient.document,
+        ie: unmatchedClient.ie,
+        type: 'Comprador',
+        city: unmatchedClient.city,
+        uf: unmatchedClient.uf,
+        address: unmatchedClient.address
       });
 
-      if (!res.ok) {
-        throw new Error('Erro ao salvar cliente no banco de dados');
-      }
-
-      const newCli = await res.json();
       setClients(prev => [...prev, newCli]);
       setMatchedClient(newCli);
       setUnmatchedClient(null);
@@ -711,18 +681,10 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     formData.append('file', file);
 
     try {
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setEvidenceFile(data.filename || file.name);
-        setSuccessMessage('Comprovante/Anexo da venda carregado com sucesso!');
-        setTimeout(() => setSuccessMessage(''), 3500);
-      } else {
-        setEvidenceFile(file.name);
-      }
+      const data = await api.upload('/api/upload', formData);
+      setEvidenceFile(data?.filename || file.name);
+      setSuccessMessage('Comprovante/Anexo da venda carregado com sucesso!');
+      setTimeout(() => setSuccessMessage(''), 3500);
     } catch (err) {
       console.error(err);
       setEvidenceFile(file.name);
@@ -820,29 +782,22 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         senar: funrural.senar
       };
 
-      const url = editingSale ? `/api/sales/${editingSale.id}` : '/api/sales';
-      const method = editingSale ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        const result = await res.json();
-        const msg = editingSale ? `Venda ${editingSale.id} atualizada com sucesso!` : `Venda ${result.id} gravada com sucesso!`;
-        setSuccessMessage(msg);
-        setTimeout(() => {
-          if (onSaleCreated) onSaleCreated();
-          setCurrentPage('sales-history');
-        }, 1000);
+      let result;
+      if (editingSale) {
+        result = await api.put(`/api/sales/${editingSale.id}`, payload);
       } else {
-        setErrorMessage(editingSale ? 'Erro ao atualizar a venda.' : 'Erro ao registrar a venda.');
+        result = await api.post('/api/sales', payload);
       }
+
+      const msg = editingSale ? `Venda ${editingSale.id} atualizada com sucesso!` : `Venda ${result?.id || ''} gravada com sucesso!`;
+      setSuccessMessage(msg);
+      setTimeout(() => {
+        if (onSaleCreated) onSaleCreated();
+        setCurrentPage('sales-history');
+      }, 1000);
     } catch (err) {
       console.error(err);
-      setErrorMessage('Falha na comunicação com o servidor.');
+      setErrorMessage(err.message || (editingSale ? 'Erro ao atualizar a venda.' : 'Erro ao registrar a venda.'));
     } finally {
       setSubmitting(false);
     }
@@ -1364,79 +1319,20 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
           </div>
         </div>
 
-        {/* Right Sidebar: Resumo Financeiro Consolidado */}
+        {/* Right Sidebar: Resumo Financeiro Consolidado (Modular) */}
         <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4 sticky top-6">
-            <h2 className="text-sm font-extrabold text-gray-900 border-b border-gray-100 pb-3 flex items-center justify-between">
-              <span>Resumo da Operação</span>
-              <Calculator className="w-4 h-4 text-emerald-700" />
-            </h2>
-
-            <div className="space-y-3 text-xs">
-              <div className="flex justify-between text-gray-600">
-                <span>Produtos ({saleItems.length}):</span>
-                <span className="font-bold text-gray-900 truncate max-w-[170px]" title={saleItems.map(it => it.product).filter(Boolean).join(', ')}>
-                  {saleItems.map(it => it.product).filter(Boolean).join(', ') || 'Nenhum'}
-                </span>
-              </div>
-
-              <div className="flex justify-between text-gray-600">
-                <span>Peso Total Carga:</span>
-                <span className="font-bold text-gray-900">{formatNumber(totalWeightKg, 0)} kg</span>
-              </div>
-
-              <div className="flex justify-between text-gray-600">
-                <span>Total Volumes:</span>
-                <span className="font-bold text-gray-900">
-                  {formatNumber(totalVolumes, 2)} {saleItems.some(it => it.unit?.toLowerCase().includes('saca') || it.product?.toLowerCase().includes('batata')) ? 'sc' : 'cx'}
-                </span>
-              </div>
-
-              <div className="flex justify-between text-gray-800 font-bold border-t border-gray-100 pt-2 text-sm">
-                <span>Valor Total da NF:</span>
-                <span className="text-[#173e27] font-black">{formatCurrency(effectiveTotalNF)}</span>
-              </div>
-
-              <div className="flex justify-between text-red-600 font-semibold">
-                <span>(-) FUNRURAL Retido (1,63%):</span>
-                <span>-{formatCurrency(funrural.funruralTotal)}</span>
-              </div>
-
-              <div className="pl-3 text-[11px] text-gray-400 space-y-0.5 border-l-2 border-red-200">
-                <div className="flex justify-between"><span>↳ Previdência (1,30%):</span><span>{formatCurrency(funrural.previdencia)}</span></div>
-                <div className="flex justify-between"><span>↳ RAT (0,10%):</span><span>{formatCurrency(funrural.rat)}</span></div>
-                <div className="flex justify-between"><span>↳ SENAR (0,23%):</span><span>{formatCurrency(funrural.senar)}</span></div>
-              </div>
-
-              <div className="flex justify-between text-emerald-950 font-bold bg-emerald-50/50 p-2 rounded-lg border border-emerald-200">
-                <span>(=) Líquido a Receber:</span>
-                <span className="font-black text-sm">{formatCurrency(liquidoAReceber)}</span>
-              </div>
-
-              {/* VALOR TOTAL COMERCIAL (VP) EM EVIDÊNCIA */}
-              <div className="flex justify-between items-center text-blue-950 font-black text-sm border border-blue-200 bg-blue-50/70 p-2.5 rounded-xl shadow-xs">
-                <span className="text-blue-900 font-bold">
-                  Valor Total Comercial:
-                </span>
-                <span className="text-blue-950 font-black text-base">
-                  {formatCurrency(valorTotalVP)}
-                </span>
-              </div>
-
-              <div className="flex justify-between text-gray-800 font-bold border-t border-gray-100 pt-2">
-                <span>Comissão AgroVenda ({feeValue}%):</span>
-                <span className="text-sm">{formatCurrency(totalCommission)}</span>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full bg-[#091b2e] hover:bg-[#132c4a] text-white font-bold text-xs py-3.5 rounded-lg shadow-md transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer"
-            >
-              {submitting ? 'Gravando no MongoDB...' : 'Confirmar & Gravar Venda'}
-            </button>
-          </div>
+          <SaleFiscalSummary
+            saleItems={saleItems}
+            totalWeightKg={totalWeightKg}
+            totalVolumes={totalVolumes}
+            effectiveTotalNF={effectiveTotalNF}
+            funrural={funrural}
+            liquidoAReceber={liquidoAReceber}
+            valorTotalVP={valorTotalVP}
+            feeValue={feeValue}
+            totalCommission={totalCommission}
+            submitting={submitting}
+          />
         </div>
       </form>
     </div>

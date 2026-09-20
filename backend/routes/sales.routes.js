@@ -7,53 +7,10 @@ const { escapeRegex } = require('../utils/security');
 const { requireAuth } = require('../middlewares/auth');
 const saleService = require('../services/sale.service');
 
-// GET /api/sales/agenda-events (Recebíveis formatados por Data de Vencimento para n8n & Google Calendar)
+// GET /api/sales/agenda-events (Recebíveis formatados por Data de Vencimento para n8n & Google Calendar via sale.service.js)
 router.get('/agenda-events', async (req, res, next) => {
   try {
-    const sales = await Sale.find().sort({ saleDate: -1 }).lean();
-    const events = sales.map(s => {
-      let dueDate = s.dueDate || '';
-      if (!dueDate && s.notes) {
-        const match = s.notes.match(/Vencimento:\s*([^\s|]+)/i);
-        if (match && match[1]) {
-          const parts = match[1].split('/');
-          if (parts.length === 3) {
-            dueDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
-          }
-        }
-      }
-      if (!dueDate && s.saleDate) {
-        const days = Number(s.paymentTermDays) >= 0 ? Number(s.paymentTermDays) : 30;
-        const d = new Date(s.saleDate + 'T12:00:00');
-        d.setDate(d.getDate() + days);
-        dueDate = d.toISOString().split('T')[0];
-      }
-      if (!dueDate) dueDate = new Date().toISOString().split('T')[0];
-
-      const valorFinal = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : (Number(s.totalOperation) || 0);
-      const fiscal = calculateFiscalDeductions(s.totalOperation);
-      const valorLiquidar = roundMoney(Math.max(0, valorFinal - fiscal.funruralTotal));
-      const clientShort = s.client ? s.client.split(' ')[0] : 'Cliente';
-      const volumesInt = Math.round(Number(s.totalVolumes) || (Number(s.totalKg) > 0 ? Number(s.totalKg) / 29 : 0));
-
-      return {
-        id: s.id,
-        client: s.client,
-        saleDate: s.saleDate,
-        dueDate: dueDate,
-        totalOperation: Number(s.totalOperation) || 0,
-        valorVP: valorFinal,
-        valorLiquidar: valorLiquidar,
-        paidAmount: Number(s.paidAmount) || 0,
-        status: s.status,
-        paymentStatus: s.paymentStatus || 'A Receber',
-        summary: `💰 ${clientShort} · R$ ${valorLiquidar.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${s.id})`,
-        start: `${dueDate}T09:00:00-03:00`,
-        end: `${dueDate}T10:00:00-03:00`,
-        description: `🏪 Comprador: ${s.client}\n📅 Vencimento: ${dueDate.split('-').reverse().join('/')}\n💰 Valor a Liquidar: R$ ${valorLiquidar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📊 Total Comercial (VP): R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📦 Volumes: ${volumesInt} cx\n📄 Nota Fiscal: ${s.nfFile || 'Pendente'}\n📌 Status: ${s.paymentStatus || 'A Receber'}`
-      };
-    });
-
+    const events = await saleService.getAgendaEvents();
     res.json(events);
   } catch (err) {
     next(err);
@@ -108,23 +65,7 @@ router.get('/', async (req, res, next) => {
       query = query.skip((pageNum - 1) * limitNum).limit(limitNum);
     }
     const sales = await query.lean();
-
-    const normalized = sales.map(s => {
-      const hasNf = !!(s.nfFile && s.nfFile.trim());
-      if (hasNf) {
-        s.nfPending = false;
-        if (s.status === 'Pendente NF') {
-          s.status = s.paymentStatus === 'Recebido' ? 'Concluído' : 'Faturado';
-        }
-      } else {
-        s.nfPending = true;
-        if (!s.status || s.status === 'Faturado') {
-          s.status = 'Pendente NF';
-        }
-      }
-      return s;
-    });
-
+    const normalized = sales.map(s => saleService.normalizeSaleNfStatus(s));
     res.json(normalized);
   } catch (err) {
     next(err);
@@ -151,19 +92,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const sale = await Sale.findOne({ id: req.params.id }).lean();
     if (!sale) return res.status(404).json({ error: 'Venda não encontrada' });
-    const hasNf = !!(sale.nfFile && sale.nfFile.trim());
-    if (hasNf) {
-      sale.nfPending = false;
-      if (sale.status === 'Pendente NF') {
-        sale.status = sale.paymentStatus === 'Recebido' ? 'Concluído' : 'Faturado';
-      }
-    } else {
-      sale.nfPending = true;
-      if (!sale.status || sale.status === 'Faturado') {
-        sale.status = 'Pendente NF';
-      }
-    }
-    res.json(sale);
+    res.json(saleService.normalizeSaleNfStatus(sale));
   } catch (err) {
     next(err);
   }
@@ -199,7 +128,7 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-// POST /api/sales/:id/settle (Liquidação Total ou Parcial via sale.service.js)
+// POST /api/sales/:id/settle (Liquidação Total ou Parcial da Loja via sale.service.js)
 router.post('/:id/settle', async (req, res, next) => {
   try {
     const sale = await saleService.settleSale(req.params.id, req.body);
@@ -209,10 +138,30 @@ router.post('/:id/settle', async (req, res, next) => {
   }
 });
 
-// POST /api/sales/:id/unsettle (Reverter liquidação via sale.service.js)
+// POST /api/sales/:id/unsettle (Reverter liquidação da Loja via sale.service.js)
 router.post('/:id/unsettle', async (req, res, next) => {
   try {
-    const sale = await saleService.unsettleSale(req.params.id);
+    const sale = await saleService.unsettleSale(req.params.id, req.body);
+    res.json({ success: true, sale });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/sales/:id/settle-producer (Liquidação de Repasse ao Produtor Rural)
+router.post('/:id/settle-producer', async (req, res, next) => {
+  try {
+    const sale = await saleService.settleProducerPayment(req.params.id, req.body);
+    res.json({ success: true, sale });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/sales/:id/unsettle-producer (Reverter Repasse ao Produtor Rural)
+router.post('/:id/unsettle-producer', async (req, res, next) => {
+  try {
+    const sale = await saleService.unsettleProducerPayment(req.params.id, req.body);
     res.json({ success: true, sale });
   } catch (err) {
     next(err);

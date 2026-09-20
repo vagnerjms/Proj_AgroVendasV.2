@@ -1,10 +1,10 @@
 // Centralized Agricultural & Tax Constants for AgroVenda V2
 
 const TAX_RATES = {
-  PREVIDENCIA: 0.0130, // 1.30%
-  RAT: 0.0010,         // 0.10%
-  SENAR: 0.0023,       // 0.23%
-  FUNRURAL_TOTAL: 0.0163 // 1.63%
+  PREVIDENCIA: 0.0120, // 1.20% Previdência Social
+  RAT: 0.0010,         // 0.10% Riscos Ambientais do Trabalho
+  SENAR: 0.0033,       // 0.33% Fundo SENAR
+  FUNRURAL_TOTAL: 0.0163 // 1.63% Total Consolidado
 };
 
 const COMMERCIAL_DEFAULTS = {

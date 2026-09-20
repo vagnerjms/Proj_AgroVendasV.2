@@ -165,15 +165,22 @@ export default function StoreDetailList({
                           </td>
                           <td className="py-2 px-3 text-center text-gray-600">{it.venc}</td>
                           <td className="py-2 px-3 text-center">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              isSettled 
-                                ? 'bg-emerald-100 text-emerald-800' 
-                                : (isPartial 
-                                    ? 'bg-blue-100 text-blue-900 border border-blue-200' 
-                                    : 'bg-amber-100 text-amber-900')
-                            }`}>
-                              {isSettled ? 'Liquidado' : (isPartial ? 'Parcial' : 'A Receber')}
-                            </span>
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                isSettled 
+                                  ? 'bg-emerald-100 text-emerald-800' 
+                                  : (isPartial 
+                                      ? 'bg-blue-100 text-blue-900 border border-blue-200' 
+                                      : 'bg-amber-100 text-amber-900')
+                              }`}>
+                                {isSettled ? 'Liquidado' : (isPartial ? 'Parcial' : 'A Receber')}
+                              </span>
+                              {itLiquidado > 0 && (
+                                <span className="text-[9px] font-extrabold text-gray-500">
+                                  {it.paymentMethod === 'Cheque' ? '📄 Cheque' : (it.paymentMethod === 'TED/DOC' ? '🏦 TED/DOC' : '⚡ PIX')}
+                                </span>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -215,15 +222,22 @@ export default function StoreDetailList({
                         </td>
                         <td className="py-2 px-3 text-center text-gray-600">{it.venc}</td>
                         <td className="py-2 px-3 text-center">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            isSettled 
-                              ? 'bg-emerald-100 text-emerald-800' 
-                              : (isPartial 
-                                  ? 'bg-blue-100 text-blue-900 border border-blue-200' 
-                                  : 'bg-amber-100 text-amber-900')
-                          }`}>
-                            {isSettled ? 'Liquidado' : (isPartial ? 'Parcial' : 'A Receber')}
-                          </span>
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              isSettled 
+                                ? 'bg-emerald-100 text-emerald-800' 
+                                : (isPartial 
+                                    ? 'bg-blue-100 text-blue-900 border border-blue-200' 
+                                    : 'bg-amber-100 text-amber-900')
+                            }`}>
+                              {isSettled ? 'Liquidado' : (isPartial ? 'Parcial' : 'A Receber')}
+                            </span>
+                            {itLiquidado > 0 && (
+                              <span className="text-[9px] font-extrabold text-gray-500">
+                                {it.paymentMethod === 'Cheque' ? '📄 Cheque' : (it.paymentMethod === 'TED/DOC' ? '🏦 TED/DOC' : '⚡ PIX')}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-2 px-3 text-center">
                           {it.evidenceFile && it.evidenceFile !== '-' ? (

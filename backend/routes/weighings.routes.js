@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const fs = require('fs');
-const { WeighingSlip, Sale } = require('../db');
+const { WeighingSlip } = require('../db');
 const { escapeRegex } = require('../utils/security');
 const { requireAuth } = require('../middlewares/auth');
-const { roundMoney, calculateFiscalDeductions, calculateCommission } = require('../utils/money');
 const { uploadDir } = require('../middlewares/upload');
+const saleService = require('../services/sale.service');
 
 // Protect all weighings endpoints with JWT authentication
 router.use(requireAuth);
@@ -110,93 +110,6 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Helper para sincronizar e recalcular a venda vinculada ao peso escolhido
-async function syncLinkedSaleWeight(slip, chosenWeightKg, weightChoice) {
-  if (!slip || !chosenWeightKg || chosenWeightKg <= 0) return null;
-
-  const rawSaleRef = slip.saleId || slip.id.replace('ROM-', '');
-  // Aceita formatos como 'ROM-VP046', 'VP046', 'VP46', '46'
-  const digits = rawSaleRef.replace(/[^0-9]/g, '');
-  const possibleIds = [
-    rawSaleRef,
-    rawSaleRef.replace('ROM-', ''),
-    `VP${digits.padStart(3, '0')}`,
-    `VP${digits}`
-  ];
-
-  const sale = await Sale.findOne({ id: { $in: possibleIds } });
-  if (!sale) return null;
-
-  const newTotalKg = Number(chosenWeightKg);
-  const isBatata = (sale.items && sale.items.some(it => it.product?.toLowerCase().includes('batata'))) || (sale.notes && sale.notes.toLowerCase().includes('batata'));
-  const boxWeight = Number(sale.items?.[0]?.boxWeightKg) || (isBatata ? 25 : 29);
-  const newVolumes = boxWeight === 1 ? newTotalKg : Number((newTotalKg / boxWeight).toFixed(2));
-
-  // Recalcula totais da venda
-  if (sale.items && sale.items.length > 0) {
-    const unitPriceKg = sale.totalKg > 0 ? (sale.totalOperation / sale.totalKg) : (sale.items[0].price || 2.0);
-    sale.items[0].kg = newTotalKg;
-    sale.items[0].quantity = Math.round(newVolumes);
-    sale.items[0].total = roundMoney(newTotalKg * unitPriceKg);
-    sale.totalOperation = sale.items[0].total;
-  } else if (sale.totalKg > 0) {
-    const pricePerKg = sale.totalOperation / sale.totalKg;
-    sale.totalOperation = roundMoney(newTotalKg * pricePerKg);
-  }
-
-  sale.totalKg = newTotalKg;
-  sale.totalVolumes = newVolumes;
-
-  // Recalcula impostos fiscais (FUNRURAL)
-  const fiscal = calculateFiscalDeductions(sale.totalOperation);
-  sale.funruralTotal = fiscal.funruralTotal;
-  sale.previdenciaSocial = fiscal.previdencia;
-  sale.rat = fiscal.rat;
-  sale.senar = fiscal.senar;
-
-  // Recalcula Valor Total VP
-  let cotacao = Number(sale.dailyQuote) || 0;
-  if (!cotacao && sale.notes) {
-    const matchCot = sale.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
-    if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
-  }
-
-  if (cotacao > 0 && cotacao <= 10.0) {
-    // Cotação informada em R$/kg (ex: R$ 2,15/kg para Cebola/Granel)
-    sale.valorTotalVP = roundMoney(newTotalKg * cotacao);
-  } else if (cotacao > 10.0) {
-    // Cotação informada em R$/caixa
-    sale.valorTotalVP = roundMoney(newVolumes * cotacao);
-  } else {
-    sale.valorTotalVP = roundMoney(sale.totalOperation);
-  }
-
-  // Recalcula comissão
-  const comm = calculateCommission(sale.valorTotalVP, sale.feeValue);
-  sale.totalCommission = comm.comissao;
-
-  sale.isDivergent = false;
-
-  // Anota no histórico da venda
-  const choiceText = weightChoice === 'dest' ? 'Peso Destino' : (weightChoice === 'origin' ? 'Peso Origem' : 'Peso Ajustado');
-  const adjustTag = `[Pesagem: ${choiceText} (${newTotalKg.toLocaleString('pt-BR')} kg - ${newVolumes} cx)]`;
-  const existingNotes = typeof sale.notes === 'string' ? sale.notes : '';
-  if (!existingNotes.includes('[Pesagem:')) {
-    sale.notes = existingNotes ? `${existingNotes} | ${adjustTag}` : adjustTag;
-  } else {
-    sale.notes = existingNotes.replace(/\[Pesagem:[^\]]+\]/, adjustTag);
-  }
-
-  await sale.save();
-
-  try {
-    const { sendSaleWebhook } = require('../services/webhook.service');
-    sendSaleWebhook('sale.updated', sale).catch(() => {});
-  } catch (e) {}
-
-  return sale;
-}
-
 // PUT /api/weighings/:id
 router.put('/:id', async (req, res) => {
   try {
@@ -254,7 +167,7 @@ router.put('/:id', async (req, res) => {
 
     let updatedSale = null;
     if (body.applyWeightToSale || weightChoice) {
-      updatedSale = await syncLinkedSaleWeight(updated, chosenWeight, weightChoice || 'dest');
+      updatedSale = await saleService.syncSaleWeightFromSlip(updated, chosenWeight, weightChoice || 'dest');
     }
 
     res.json({
@@ -314,7 +227,7 @@ router.put('/:id/resolve', async (req, res) => {
     await slip.save();
 
     // Sincroniza e recalcula a Venda vinculada
-    const updatedSale = await syncLinkedSaleWeight(slip, chosenWeight, choice);
+    const updatedSale = await saleService.syncSaleWeightFromSlip(slip, chosenWeight, choice);
 
     res.json({
       success: true,

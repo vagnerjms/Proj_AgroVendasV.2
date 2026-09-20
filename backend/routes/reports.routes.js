@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth } = require('../middlewares/auth');
-const { getStoresSummary, triggerN8nReport } = require('../services/report.service');
+const { getStoresSummary, getProducersSummary, triggerN8nReport } = require('../services/report.service');
 
 // Protect all reports endpoints with JWT authentication
 router.use(requireAuth);
@@ -10,6 +10,16 @@ router.use(requireAuth);
 router.get('/stores-summary', async (req, res, next) => {
   try {
     const summary = await getStoresSummary(req.query);
+    res.json(summary);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/reports/producers-summary - Extrato analítico exclusivo do Produtor Rural (baseado em NF)
+router.get('/producers-summary', async (req, res, next) => {
+  try {
+    const summary = await getProducersSummary(req.query);
     res.json(summary);
   } catch (err) {
     next(err);

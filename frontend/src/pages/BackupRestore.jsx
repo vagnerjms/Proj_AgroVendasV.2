@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
 import { 
   Database, 
   Download, 
@@ -28,13 +29,11 @@ export default function BackupRestore({ setCurrentPage }) {
   const fetchStats = async () => {
     setLoadingStats(true);
     try {
-      const res = await fetch('/api/backup/stats');
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
+      const data = await api.get('/api/backup/stats');
+      setStats(data);
     } catch (err) {
       console.error('Erro ao buscar estatísticas:', err);
+      setErrorMessage(err.message || 'Erro ao carregar estatísticas do backup.');
     } finally {
       setLoadingStats(false);
     }
@@ -49,10 +48,7 @@ export default function BackupRestore({ setCurrentPage }) {
     setErrorMessage('');
     setSuccessMessage('');
     try {
-      const res = await fetch('/api/backup/export');
-      if (!res.ok) throw new Error('Erro ao gerar arquivo de backup');
-
-      const blob = await res.blob();
+      const blob = await api.getBlob('/api/backup/export');
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -92,18 +88,13 @@ export default function BackupRestore({ setCurrentPage }) {
       const formData = new FormData();
       formData.append('backupFile', restoreFile);
 
-      const res = await fetch('/api/backup/restore', {
-        method: 'POST',
-        body: formData
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
+      const data = await api.upload('/api/backup/restore', formData);
+      if (data && data.success) {
         setRestoreResult(data.restoredStats);
         setSuccessMessage('Sistema restaurado com sucesso no novo servidor!');
         fetchStats();
       } else {
-        throw new Error(data.error || 'Erro ao processar arquivo de restauração');
+        throw new Error(data?.error || 'Erro ao processar arquivo de restauração');
       }
     } catch (err) {
       console.error(err);

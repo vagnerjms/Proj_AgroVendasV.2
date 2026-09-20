@@ -73,7 +73,23 @@ export const api = {
   upload: (endpoint, formData) => request(endpoint, {
     method: 'POST',
     body: formData
-  })
+  }),
+
+  getBlob: async (endpoint, params) => {
+    const url = buildUrl(endpoint, params);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('agrovenda_token') : null;
+    const headers = {
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+    const response = await fetch(url, { method: 'GET', headers });
+    if (!response.ok) {
+      let errData = null;
+      try { errData = await response.json(); } catch (e) {}
+      const msg = errData?.error || errData?.message || `Erro no download (${response.status}): ${response.statusText}`;
+      throw new ApiError(msg, response.status, errData);
+    }
+    return response.blob();
+  }
 };
 
 export { ApiError };

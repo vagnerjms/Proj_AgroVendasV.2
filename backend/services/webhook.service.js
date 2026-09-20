@@ -4,7 +4,8 @@ const fs = require('fs');
 const { uploadDir } = require('../middlewares/upload');
 const { roundMoney } = require('../utils/money');
 
-const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || 'http://179.197.231.106:5678/webhook/agrovenda-sale';
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || '';
+const APP_BASE_URL = (process.env.APP_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
 
 function parseDueDate(sale) {
   if (sale.dueDate) {
@@ -83,7 +84,7 @@ async function sendSaleWebhook(event, sale) {
                   mimeType,
                   sizeBytes: stat.size,
                   contentBase64: dataBuffer.toString('base64'),
-                  downloadUrl: `https://agrovendas.cloud/uploads/${diskMatch}`
+                  downloadUrl: `${APP_BASE_URL}/uploads/${diskMatch}`
                 });
               }
             } catch (eRead) {}
@@ -126,8 +127,9 @@ async function sendSaleWebhook(event, sale) {
     const targetUrls = [
       N8N_WEBHOOK_URL,
       'http://n8n_application:5678/webhook/agrovenda-sale',
-      'http://127.0.0.1:5678/webhook/agrovenda-sale'
-    ].filter((v, i, a) => a.indexOf(v) === i);
+      'http://127.0.0.1:5678/webhook/agrovenda-sale',
+      'http://localhost:5678/webhook/agrovenda-sale'
+    ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
     let sent = false;
     for (const url of targetUrls) {

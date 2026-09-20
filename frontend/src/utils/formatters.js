@@ -1,5 +1,3 @@
-import { TAX_RATES } from '../constants/agriConstants';
-
 export const formatCurrency = (val) => {
   return (Number(val) || 0).toLocaleString('pt-BR', {
     style: 'currency',
@@ -29,19 +27,6 @@ export const formatKg = (val) => {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2
   }) + ' kg';
-};
-
-export const calculateFunrural = (totalOperation) => {
-  const total = Number(totalOperation) || 0;
-  const previdencia = total * TAX_RATES.PREVIDENCIA;
-  const rat = total * TAX_RATES.RAT;
-  const senar = total * TAX_RATES.SENAR;
-  return {
-    previdencia,
-    rat,
-    senar,
-    funruralTotal: total * TAX_RATES.FUNRURAL_TOTAL
-  };
 };
 
 export const getCleanFileName = (fileName) => {

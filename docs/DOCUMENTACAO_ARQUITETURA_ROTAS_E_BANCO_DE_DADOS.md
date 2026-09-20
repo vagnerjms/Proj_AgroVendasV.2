@@ -115,7 +115,7 @@ O banco de dados `agrovenda` possui as seguintes coleções principais modeladas
 | `totalKg` | Number | Peso total da carga em quilogramas |
 | `totalOperation` | Number | Valor Faturado da Nota Fiscal (R$) |
 | `totalCommission`| Number | Valor da comissão apurada (R$) |
-| `funruralTotal` | Number | Retenção tributária (1,63% = 1,5% Previdência + 0,1% RAT + 0,2% SENAR / 1,5% Simples) |
+| `funruralTotal` | Number | Retenção tributária oficial (1,63% = 1,20% Previdência + 0,10% RAT + 0,33% SENAR) |
 | `status` | String (Indexed) | Status fiscal (`Faturado`, `Pendente NF`, `Concluído`, `Cancelado`) |
 | `paymentStatus` | String (Indexed) | Status financeiro (`A Receber`, `Recebido`, `Em Atraso`) |
 | `paymentTerms` | String | Prazo acordado (ex: `30 dias`) |
@@ -239,9 +239,9 @@ Todas as rotas de negócio são autenticadas via header `Authorization: Bearer <
 
 ### 🏛️ 2. Retenção Tributária (FUNRURAL - 1,63%)
 * **Dedução Total:** $1,63\%$ sobre o faturamento bruto da Nota Fiscal.
-  * **Previdência Social:** $1,50\%$
+  * **Previdência Social:** $1,20\%$
   * **RAT / GILRAT:** $0,10\%$
-  * **SENAR:** $0,20\%$ (ou $1,50\%$ alíquota consolidada do Simples).
+  * **SENAR:** $0,33\%$
 * **Líquido da NF:** $\text{Líquido NF} = \text{Valor Total NF} - \text{FUNRURAL}$
 
 ### 🤝 3. Apuração da Comissão AgroVenda & Repasse ao Produtor

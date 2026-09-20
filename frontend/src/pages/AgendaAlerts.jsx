@@ -2,42 +2,47 @@ import React, { useState, useEffect } from 'react';
 import { 
   Calendar, 
   Building2, 
-  Clock, 
   CheckCircle2, 
-  AlertCircle, 
-  Search, 
-  Filter, 
-  DollarSign, 
   Printer, 
-  ArrowUpRight,
-  TrendingUp,
   FileText,
   RefreshCw,
   Paperclip,
   X,
-  Eye,
   ExternalLink,
-  Camera,
-  Image,
-  Upload,
-  RotateCcw
+  Tractor
 } from 'lucide-react';
 import { formatCurrency, formatNumber, getCleanFileName } from '../utils/formatters';
 import { api } from '../services/api';
 import { calculateLiquidation } from '../utils/calculations';
 import SettleModal from '../components/sales/SettleModal';
+import AgendaKpiCards from '../components/agenda/AgendaKpiCards';
+import AgendaLojasTable from '../components/agenda/AgendaLojasTable';
+import AgendaProdutoresTable from '../components/agenda/AgendaProdutoresTable';
 
 export default function AgendaAlerts({ setCurrentPage }) {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [notification, setNotification] = useState('');
+  
+  // Controle de Abas: 'lojas' (Contas a Receber) vs 'produtores' (Contas a Pagar)
+  const [activeTab, setActiveTab] = useState('lojas');
+
+  // Filtros - Aba Lojas
   const [selectedLoja, setSelectedLoja] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [search, setSearch] = useState('');
-  const [notification, setNotification] = useState('');
+
+  // Filtros - Aba Produtores
+  const [selectedProducer, setSelectedProducer] = useState('ALL');
+  const [producerStatusFilter, setProducerStatusFilter] = useState('ALL');
+  const [searchProducer, setSearchProducer] = useState('');
+
+  // Estados de Upload / Modal / Visualização
   const [uploadingSaleId, setUploadingSaleId] = useState(null);
   const [previewEvidence, setPreviewEvidence] = useState(null);
   const [settleSaleModal, setSettleSaleModal] = useState(null);
+  const [settleTarget, setSettleTarget] = useState('client'); // 'client' | 'producer'
 
   const fetchSales = async () => {
     setLoading(true);
@@ -47,7 +52,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
         setSales(data);
       }
     } catch (err) {
-      console.error('Erro ao buscar agenda de recebimentos:', err);
+      console.error('Erro ao buscar agenda:', err);
     } finally {
       setLoading(false);
     }
@@ -59,7 +64,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
 
   const showNotification = (msg) => {
     setNotification(msg);
-    setTimeout(() => setNotification(''), 3500);
+    setTimeout(() => setNotification(''), 4000);
   };
 
   const handleSyncAll = async () => {
@@ -75,31 +80,30 @@ export default function AgendaAlerts({ setCurrentPage }) {
     }
   };
 
-  const handleUnsettle = async (saleId) => {
-    if (!window.confirm(`Deseja reverter a liquidação da venda ${saleId} (retornar para status 'A Receber')?`)) return;
+  // --- Handlers de Recebimento de Lojas ---
+  const handleUnsettleClient = async (saleId) => {
+    if (!window.confirm(`Deseja reverter o recebimento da venda ${saleId} (retornar para status 'A Receber')?`)) return;
     try {
       await api.post(`/api/sales/${saleId}/unsettle`);
-      showNotification(`Liquidação da venda ${saleId} revertida com sucesso! Status alterado para 'A Receber'.`);
+      showNotification(`Recebimento da venda ${saleId} revertido com sucesso! Status alterado para 'A Receber'.`);
       fetchSales();
     } catch (err) {
       console.error(err);
-      alert(err.message || 'Erro ao reverter liquidação.');
+      alert(err.message || 'Erro ao reverter liquidação da loja.');
     }
   };
 
-  const handleUploadEvidence = async (saleId, file) => {
+  const handleUploadClientEvidence = async (saleId, file) => {
     if (!file) return;
     const formData = new FormData();
     formData.append('file', file);
 
-    setUploadingSaleId(saleId);
+    setUploadingSaleId(`client-${saleId}`);
     try {
       const data = await api.upload('/api/upload', formData);
       const fname = data?.filename || file.name;
-      
-      // Atualiza a venda no backend com o arquivo de comprovante de liquidação (sem sobrescrever a imagem da venda)
       await api.put(`/api/sales/${saleId}`, { paymentProofFile: fname });
-      showNotification(`Comprovante de liquidação anexado à venda ${saleId} com sucesso!`);
+      showNotification(`Comprovante de recebimento anexado à venda ${saleId} com sucesso!`);
       fetchSales();
     } catch (err) {
       console.error(err);
@@ -109,13 +113,13 @@ export default function AgendaAlerts({ setCurrentPage }) {
     }
   };
 
-  const handleRemoveEvidence = async (saleId, e) => {
+  const handleRemoveClientEvidence = async (saleId, e) => {
     e?.stopPropagation?.();
-    if (!window.confirm(`Deseja excluir o comprovante de liquidação anexado da venda ${saleId}?`)) return;
+    if (!window.confirm(`Deseja excluir o comprovante de recebimento da venda ${saleId}?`)) return;
 
     try {
       await api.put(`/api/sales/${saleId}`, { paymentProofFile: null });
-      showNotification(`Comprovante de liquidação da venda ${saleId} removido com sucesso.`);
+      showNotification(`Comprovante de recebimento da venda ${saleId} removido com sucesso.`);
       fetchSales();
     } catch (err) {
       console.error(err);
@@ -123,7 +127,54 @@ export default function AgendaAlerts({ setCurrentPage }) {
     }
   };
 
-  // Helper to extract due date from sale.dueDate, notes or saleDate + paymentTermDays
+  // --- Handlers de Repasse a Produtores ---
+  const handleUnsettleProducer = async (saleId) => {
+    if (!window.confirm(`Deseja reverter o repasse ao produtor da venda ${saleId} (retornar para status 'A Pagar')?`)) return;
+    try {
+      await api.post(`/api/sales/${saleId}/unsettle-producer`);
+      showNotification(`Repasse ao produtor da venda ${saleId} revertido com sucesso! Status alterado para 'A Pagar'.`);
+      fetchSales();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Erro ao reverter repasse do produtor.');
+    }
+  };
+
+  const handleUploadProducerEvidence = async (saleId, file) => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setUploadingSaleId(`producer-${saleId}`);
+    try {
+      const data = await api.upload('/api/upload', formData);
+      const fname = data?.filename || file.name;
+      await api.put(`/api/sales/${saleId}`, { producerPaymentProofFile: fname });
+      showNotification(`Comprovante de repasse ao produtor anexado à venda ${saleId} com sucesso!`);
+      fetchSales();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Erro no upload do comprovante.');
+    } finally {
+      setUploadingSaleId(null);
+    }
+  };
+
+  const handleRemoveProducerEvidence = async (saleId, e) => {
+    e?.stopPropagation?.();
+    if (!window.confirm(`Deseja excluir o comprovante de repasse ao produtor da venda ${saleId}?`)) return;
+
+    try {
+      await api.put(`/api/sales/${saleId}`, { producerPaymentProofFile: null });
+      showNotification(`Comprovante de repasse da venda ${saleId} removido com sucesso.`);
+      fetchSales();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Erro de conexão ao remover comprovante.');
+    }
+  };
+
+  // Helper para extrair data de vencimento
   const parseDueDate = (sale) => {
     if (sale.dueDate) {
       const parts = sale.dueDate.split('-');
@@ -146,7 +197,6 @@ export default function AgendaAlerts({ setCurrentPage }) {
         }
       }
     }
-    // Default fallback using paymentTermDays or 30 days
     if (sale.saleDate) {
       const days = Number(sale.paymentTermDays) !== undefined && !isNaN(Number(sale.paymentTermDays)) ? Number(sale.paymentTermDays) : 30;
       const d = new Date(sale.saleDate + 'T12:00:00');
@@ -162,12 +212,12 @@ export default function AgendaAlerts({ setCurrentPage }) {
     return { formatted: 'A Definir', isoDate: '9999-12-31' };
   };
 
-  // Process schedule list with dynamic calculation
+  // Processa a lista com os cálculos para Loja e Produtor
   const scheduleList = sales.map(s => {
     const dueDateObj = parseDueDate(s);
     const nfNumber = s.nfFile ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '').replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
     
-    // Extract Cotação and VP Value
+    // Cotação e Valor VP Comercial (Recebimento da Loja)
     let cotacao = Number(s.dailyQuote) || 0;
     if (!cotacao && s.notes) {
       const m = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
@@ -177,8 +227,19 @@ export default function AgendaAlerts({ setCurrentPage }) {
 
     const caixas = Number(s.totalVolumes) || (Number(s.totalKg) > 0 ? (Number(s.totalKg) / 29) : 0);
     const valorVP = Number(s.valorTotalVP) > 0 ? Number(s.valorTotalVP) : (Number(s.totalOperation) || (caixas * cotacao));
-    const funrural = Number(s.funruralTotal) || (Number(s.totalOperation) * 0.0163);
     const liq = calculateLiquidation(s);
+
+    // Contas do Produtor (Base: Valor da Nota Fiscal com dedução do FUNRURAL 1,63%)
+    const totalNF = Number(s.totalOperation) || 0;
+    const funrural = Number(s.funruralTotal) || (totalNF * 0.0163);
+    const liquidoProdutor = Math.max(0, totalNF - funrural);
+    const producerPaid = Number(s.producerPaidAmount) || 0;
+    const saldoProdutor = Math.max(0, liquidoProdutor - producerPaid);
+    
+    const isProducerFullySettled = s.producerPaymentStatus === 'Pago' || (liquidoProdutor > 0 && producerPaid >= liquidoProdutor - 0.01);
+    const isProducerPartial = s.producerPaymentStatus === 'Parcial' || (producerPaid > 0 && producerPaid < liquidoProdutor - 0.01);
+    const producerPercentPaid = liquidoProdutor > 0 ? (producerPaid / liquidoProdutor) * 100 : 0;
+    const producerStatus = s.producerPaymentStatus || (isProducerFullySettled ? 'Pago' : (isProducerPartial ? 'Parcial' : 'A Pagar'));
 
     return {
       ...s,
@@ -187,8 +248,8 @@ export default function AgendaAlerts({ setCurrentPage }) {
       nfNumber,
       cotacao,
       caixas,
+      // Loja
       valorVP,
-      funrural,
       valorLiquidado: liq.valorLiquidado,
       valorALiquidar: liq.valorALiquidar,
       totalLiquido: liq.totalLiquido,
@@ -196,15 +257,26 @@ export default function AgendaAlerts({ setCurrentPage }) {
       isFullySettled: liq.isFullySettled,
       isPartial: liq.isPartial,
       percentPaid: liq.percentPaid,
-      valorLiquidoNF: Math.max(0, (Number(s.totalOperation) || 0) - funrural)
+      // Produtor
+      producerOrigin: s.origin || 'Produtor Rural',
+      totalNF,
+      funrural,
+      liquidoProdutor,
+      producerPaid,
+      saldoProdutor,
+      isProducerFullySettled,
+      isProducerPartial,
+      producerPercentPaid,
+      producerStatus
     };
   }).sort((a, b) => a.dueDateIso.localeCompare(b.dueDateIso));
 
-  // Extract unique stores
+  // Opções de Lojas e Produtores para filtros
   const uniqueLojas = Array.from(new Set(sales.map(s => s.client))).filter(Boolean);
+  const uniqueProducers = Array.from(new Set(sales.map(s => s.origin))).filter(Boolean);
 
-  // Filtered List
-  const filteredSchedule = scheduleList.filter(item => {
+  // Filtros aplicados para Lojas
+  const filteredScheduleLojas = scheduleList.filter(item => {
     const matchLoja = selectedLoja === 'ALL' || item.client === selectedLoja;
     const matchStatus = statusFilter === 'ALL' || 
       (statusFilter === 'RECEBIDO' && item.isFullySettled) ||
@@ -216,27 +288,48 @@ export default function AgendaAlerts({ setCurrentPage }) {
     return matchLoja && matchStatus && matchSearch;
   });
 
-  // KPI Calculations (Harmonizadas com Valor a Liquidar e Parciais)
+  // Filtros aplicados para Produtores
+  const filteredScheduleProdutores = scheduleList.filter(item => {
+    const matchProducer = selectedProducer === 'ALL' || item.producerOrigin === selectedProducer;
+    const matchStatus = producerStatusFilter === 'ALL' || 
+      (producerStatusFilter === 'PAGO' && item.isProducerFullySettled) ||
+      (producerStatusFilter === 'PARCIAL' && item.isProducerPartial) ||
+      (producerStatusFilter === 'A_PAGAR' && !item.isProducerFullySettled && !item.isProducerPartial);
+    const matchSearch = (item.producerOrigin || '').toLowerCase().includes(searchProducer.toLowerCase()) ||
+      (item.client || '').toLowerCase().includes(searchProducer.toLowerCase()) ||
+      (item.id || '').toLowerCase().includes(searchProducer.toLowerCase()) ||
+      (item.nfNumber || '').toLowerCase().includes(searchProducer.toLowerCase());
+    return matchProducer && matchStatus && matchSearch;
+  });
+
+  // KPIs - Aba Lojas (Recebimentos)
   const totalALiquidarProgramado = scheduleList.reduce((acc, s) => acc + s.valorALiquidar, 0);
   const totalRecebido = scheduleList.reduce((acc, s) => acc + s.valorLiquidado, 0);
   const totalVPProgramado = scheduleList.reduce((acc, s) => acc + s.valorVP, 0);
   const totalPedidosAbertos = scheduleList.filter(s => !s.isFullySettled).length;
 
+  // KPIs - Aba Produtores (Repasses)
+  const totalProdutorAPagar = scheduleList.reduce((acc, s) => acc + s.saldoProdutor, 0);
+  const totalNFProgramado = scheduleList.reduce((acc, s) => acc + s.totalNF, 0);
+  const totalFunruralRetido = scheduleList.reduce((acc, s) => acc + s.funrural, 0);
+  const totalProdutorPago = scheduleList.reduce((acc, s) => acc + s.producerPaid, 0);
+  const totalProdutoresPendentes = scheduleList.filter(s => !s.isProducerFullySettled).length;
+
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto space-y-6">
       
-      {/* Header */}
+      {/* Header Principal */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
         <div>
           <div className="text-xs font-bold text-[#091b2e] tracking-wider uppercase flex items-center gap-1.5">
             <Calendar className="w-4 h-4 text-[#df7b1b]" />
-            <span>AGROVENDA — CRONOGRAMA FINANCEIRO</span>
+            <span>AGROVENDA — CRONOGRAMA FINANCEIRO SEPARADO</span>
           </div>
           <h1 className="text-2xl font-black text-gray-900 mt-1">
-            Agenda & Alertas de Recebimento por Loja
+            Agenda & Alertas Financeiros
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Acompanhamento de datas de vencimento, prazos de pagamento e liquidação dos pedidos de venda.
+            Gestão segregada entre <strong>Recebimento de Lojas (VP Comercial)</strong> e <strong>Repasse a Produtores (Valor NF com FUNRURAL)</strong>.
           </p>
         </div>
 
@@ -261,284 +354,130 @@ export default function AgendaAlerts({ setCurrentPage }) {
         </div>
       </div>
 
-      {/* Notifications */}
+      {/* Notificação Toast */}
       {notification && (
-        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
+        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 px-4 py-3 rounded-lg flex items-center gap-2 text-sm shadow-xs animate-in fade-in duration-150">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-          <span>{notification}</span>
+          <span className="font-medium">{notification}</span>
         </div>
       )}
 
-      {/* 4 Cards de Resumo da Agenda */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
-          <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span>Total a Liquidar (Em Aberto)</span>
-            <DollarSign className="w-4 h-4 text-amber-700" />
+      {/* Seletor de Abas Dedicadas (Lojas vs Produtores) */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 border-b border-gray-200 pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab('lojas')}
+          className={`flex items-center justify-between sm:justify-start gap-3 px-5 py-3 rounded-xl font-bold text-sm transition-all cursor-pointer ${
+            activeTab === 'lojas'
+              ? 'bg-[#091b2e] text-white shadow-md'
+              : 'bg-white text-gray-600 hover:text-gray-900 border border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Building2 className={`w-4 h-4 ${activeTab === 'lojas' ? 'text-[#df7b1b]' : 'text-gray-400'}`} />
+            <span>📥 Recebimentos de Lojas (Contas a Receber)</span>
           </div>
-          <div className="text-2xl font-black text-amber-900">
-            {formatCurrency(totalALiquidarProgramado)}
-          </div>
-          <span className="text-[11px] text-gray-400 block">Saldo pendente a receber</span>
-        </div>
+          <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
+            activeTab === 'lojas' ? 'bg-[#df7b1b] text-white' : 'bg-gray-100 text-gray-700'
+          }`}>
+            {totalPedidosAbertos} abertos
+          </span>
+        </button>
 
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
-          <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span>Total Comercial VP Programado</span>
-            <TrendingUp className="w-4 h-4 text-blue-700" />
+        <button
+          type="button"
+          onClick={() => setActiveTab('produtores')}
+          className={`flex items-center justify-between sm:justify-start gap-3 px-5 py-3 rounded-xl font-bold text-sm transition-all cursor-pointer ${
+            activeTab === 'produtores'
+              ? 'bg-emerald-800 text-white shadow-md'
+              : 'bg-white text-gray-600 hover:text-gray-900 border border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Tractor className={`w-4 h-4 ${activeTab === 'produtores' ? 'text-amber-300' : 'text-gray-400'}`} />
+            <span>📤 Repasses a Produtores (Contas a Pagar)</span>
           </div>
-          <div className="text-2xl font-black text-blue-950">
-            {formatCurrency(totalVPProgramado)}
-          </div>
-          <span className="text-[11px] text-gray-400 block">Cotação comercial das {scheduleList.length} VPs</span>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
-          <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span>Pedidos em Aberto</span>
-            <Clock className="w-4 h-4 text-amber-600" />
-          </div>
-          <div className="text-2xl font-black text-amber-900">
-            {totalPedidosAbertos} entregas
-          </div>
-          <span className="text-[11px] text-gray-400 block">Pendentes ou liquidação parcial</span>
-        </div>
-
-        <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-1">
-          <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span>Total Liquidado (Recebido)</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="text-2xl font-black text-emerald-700">
-            {formatCurrency(totalRecebido)}
-          </div>
-          <span className="text-[11px] text-gray-400 block">Valores já quitados / recebidos</span>
-        </div>
+          <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
+            activeTab === 'produtores' ? 'bg-amber-400 text-emerald-950' : 'bg-gray-100 text-gray-700'
+          }`}>
+            {totalProdutoresPendentes} a pagar
+          </span>
+        </button>
       </div>
 
-      {/* Filtros da Agenda */}
-      <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              placeholder="Buscar por Loja, VP ou NF..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="bg-gray-50 border border-gray-300 text-xs rounded-lg pl-8 pr-3 py-2 outline-none w-64 focus:ring-2 focus:ring-emerald-700"
-            />
-          </div>
+      {/* Cards de Resumo (KPIs) Modular */}
+      <AgendaKpiCards
+        activeTab={activeTab}
+        totalALiquidarProgramado={totalALiquidarProgramado}
+        totalVPProgramado={totalVPProgramado}
+        totalPedidosAbertos={totalPedidosAbertos}
+        totalRecebido={totalRecebido}
+        scheduleListCount={scheduleList.length}
+        totalProdutorAPagar={totalProdutorAPagar}
+        totalNFProgramado={totalNFProgramado}
+        totalFunruralRetido={totalFunruralRetido}
+        totalProdutorPago={totalProdutorPago}
+      />
 
-          <select
-            value={selectedLoja}
-            onChange={(e) => setSelectedLoja(e.target.value)}
-            className="bg-white border border-gray-300 text-xs rounded-lg px-3 py-2 font-semibold text-gray-800 outline-none"
-          >
-            <option value="ALL">Todas as Lojas / Redes</option>
-            {uniqueLojas.map((loja, idx) => (
-              <option key={idx} value={loja}>{loja}</option>
-            ))}
-          </select>
+      {/* Tabela de Recebimentos de Lojas (Modular) */}
+      {activeTab === 'lojas' && (
+        <AgendaLojasTable
+          filteredScheduleLojas={filteredScheduleLojas}
+          scheduleListCount={scheduleList.length}
+          search={search}
+          setSearch={setSearch}
+          selectedLoja={selectedLoja}
+          setSelectedLoja={setSelectedLoja}
+          uniqueLojas={uniqueLojas}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          uploadingSaleId={uploadingSaleId}
+          onSettleClick={(item) => {
+            setSettleTarget('client');
+            setSettleSaleModal(item);
+          }}
+          onUnsettleClick={handleUnsettleClient}
+          onPreviewEvidence={setPreviewEvidence}
+          onRemoveEvidence={handleRemoveClientEvidence}
+          onUploadEvidence={handleUploadClientEvidence}
+        />
+      )}
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-white border border-gray-300 text-xs rounded-lg px-3 py-2 font-semibold text-gray-800 outline-none"
-          >
-            <option value="ALL">Todos os Status</option>
-            <option value="PENDENTE">Pendentes (A Receber / Parcial)</option>
-            <option value="PARCIAL">Parcialmente Pagos</option>
-            <option value="RECEBIDO">Liquidados (Recebidos)</option>
-          </select>
-        </div>
+      {/* Tabela de Repasses a Produtores (Modular) */}
+      {activeTab === 'produtores' && (
+        <AgendaProdutoresTable
+          filteredScheduleProdutores={filteredScheduleProdutores}
+          scheduleListCount={scheduleList.length}
+          searchProducer={searchProducer}
+          setSearchProducer={setSearchProducer}
+          selectedProducer={selectedProducer}
+          setSelectedProducer={setSelectedProducer}
+          uniqueProducers={uniqueProducers}
+          producerStatusFilter={producerStatusFilter}
+          setProducerStatusFilter={setProducerStatusFilter}
+          uploadingSaleId={uploadingSaleId}
+          onSettleClick={(item) => {
+            setSettleTarget('producer');
+            setSettleSaleModal(item);
+          }}
+          onUnsettleClick={handleUnsettleProducer}
+          onPreviewEvidence={setPreviewEvidence}
+          onRemoveEvidence={handleRemoveProducerEvidence}
+          onUploadEvidence={handleUploadProducerEvidence}
+        />
+      )}
 
-        <span className="text-xs font-semibold text-gray-500">
-          Exibindo <strong>{filteredSchedule.length}</strong> de {scheduleList.length} recebimentos
-        </span>
-      </div>
-
-      {/* Tabela da Agenda com as Datas de Vencimento por Loja */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead className="bg-gray-50 text-gray-700 font-bold uppercase text-[10px] tracking-wider border-b border-gray-200">
-              <tr>
-                <th className="py-3 px-4">Data Vencimento</th>
-                <th className="py-3 px-4">Loja / Comprador</th>
-                <th className="py-3 px-3 text-center">Nº VP</th>
-                <th className="py-3 px-3 text-center">Nº NF</th>
-                <th className="py-3 px-3 text-right">Caixas</th>
-                <th className="py-3 px-3 text-right font-black text-blue-900">Total VP (Comercial)</th>
-                <th className="py-3 px-3 text-right text-red-600">(-) FUNRURAL (NF)</th>
-                <th className="py-3 px-3 text-right font-black text-emerald-800 bg-emerald-50/40">Valor Liquidado</th>
-                <th className="py-3 px-3 text-right font-black text-amber-900 bg-amber-50/40">Valor a Liquidar</th>
-                <th className="py-3 px-3 text-center">Status Pagamento</th>
-                <th className="py-3 px-4 text-center">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredSchedule.map((item, idx) => {
-                const isPaid = item.isFullySettled;
-                const isPartial = item.isPartial;
-                return (
-                  <tr key={idx} className={`hover:bg-gray-50/80 transition-colors ${isPaid ? 'bg-gray-50/40 opacity-75' : ''}`}>
-                    
-                    {/* Data Vencimento */}
-                    <td className="py-3 px-4 font-black text-gray-900 flex items-center gap-2">
-                      <Calendar className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                      <span>{item.dueDateFormatted}</span>
-                    </td>
-
-                    {/* Loja / Comprador */}
-                    <td className="py-3 px-4 font-bold text-gray-900">
-                      <div className="flex items-center gap-1.5">
-                        <Building2 className="w-3.5 h-3.5 text-gray-400" />
-                        <span>{item.client}</span>
-                      </div>
-                    </td>
-
-                    {/* Nº VP */}
-                    <td className="py-3 px-3 text-center font-bold text-[#173e27]">
-                      {item.id}
-                    </td>
-
-                    {/* Nº NF */}
-                    <td className="py-3 px-3 text-center text-gray-700 font-semibold">
-                      {item.nfNumber}
-                    </td>
-
-                    {/* Caixas */}
-                    <td className="py-3 px-3 text-right font-semibold text-gray-800">
-                      {formatNumber(item.caixas, 2)} cx
-                    </td>
-
-                    {/* Total VP */}
-                    <td className="py-3 px-3 text-right font-black text-blue-950 bg-blue-50/30">
-                      {formatCurrency(item.valorVP)}
-                    </td>
-
-                    {/* FUNRURAL */}
-                    <td className="py-3 px-3 text-right font-medium text-red-600">
-                      -{formatCurrency(item.funrural)}
-                    </td>
-
-                    {/* Valor Liquidado */}
-                    <td className="py-3 px-3 text-right font-black text-emerald-800 bg-emerald-50/40">
-                      {item.valorLiquidado > 0 ? formatCurrency(item.valorLiquidado) : <span className="text-gray-400 font-normal">-</span>}
-                    </td>
-
-                    {/* Valor a Liquidar */}
-                    <td className="py-3 px-3 text-right font-black text-amber-900 bg-amber-50/40">
-                      {item.valorALiquidar > 0 ? formatCurrency(item.valorALiquidar) : <span className="text-gray-400 font-normal">-</span>}
-                    </td>
-
-                    {/* Status */}
-                    <td className="py-3 px-3 text-center">
-                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
-                        isPaid 
-                          ? 'bg-emerald-100 text-emerald-800' 
-                          : (isPartial 
-                              ? 'bg-blue-100 text-blue-900 border border-blue-200' 
-                              : 'bg-amber-100 text-amber-900 border border-amber-200')
-                      }`}>
-                        {isPaid ? 'Recebido' : (isPartial ? `Parcial (${item.percentPaid?.toFixed(0)}%)` : 'A Receber')}
-                      </span>
-                    </td>
-
-                    {/* Ação */}
-                    <td className="py-3 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        
-                        {/* Botão Liquidar / Quitar / Parcial */}
-                        {!isPaid ? (
-                          <button
-                            type="button"
-                            onClick={() => setSettleSaleModal(item)}
-                            className={`${isPartial ? 'bg-blue-700 hover:bg-blue-800' : 'bg-emerald-700 hover:bg-emerald-800'} text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer shadow-xs`}
-                            title={isPartial ? 'Adicionar novo pagamento ou quitar saldo' : 'Registrar quitação total ou liquidação parcial'}
-                          >
-                            {isPartial ? 'Liquidar (+)' : 'Liquidar'}
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleUnsettle(item.id)}
-                            className="text-[10px] text-emerald-800 hover:text-amber-900 font-bold bg-emerald-50 hover:bg-amber-100 px-2.5 py-1 rounded-md border border-emerald-200 hover:border-amber-300 transition-all cursor-pointer group flex items-center gap-1 shadow-2xs"
-                            title="Clique para reverter liquidação (voltar para 'A Receber')"
-                          >
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600 group-hover:hidden" />
-                            <RotateCcw className="w-3 h-3 text-amber-700 hidden group-hover:inline" />
-                            <span className="group-hover:hidden">Liquidado</span>
-                            <span className="hidden group-hover:inline">Reverter</span>
-                          </button>
-                        )}
-
-                        {/* Comprovante de Pagamento / Liquidação (Upload / Preview / Excluir) */}
-                        {item.paymentProofFile ? (
-                          <div className="inline-flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-lg p-0.5">
-                            <button
-                              type="button"
-                              onClick={() => setPreviewEvidence(item.paymentProofFile)}
-                              className="text-blue-700 hover:text-blue-900 px-1.5 py-1 text-[10px] font-bold flex items-center gap-1 hover:underline cursor-pointer"
-                              title="Visualizar comprovante de liquidação anexado"
-                            >
-                              <Paperclip className="w-3 h-3 text-blue-600" />
-                              <span className="hidden sm:inline">Comprovante</span>
-                            </button>
-                            
-                            {/* Botão X para excluir o comprovante de liquidação */}
-                            <button
-                              type="button"
-                              onClick={(e) => handleRemoveEvidence(item.id, e)}
-                              className="text-red-500 hover:text-red-700 hover:bg-red-100 p-1 rounded-md transition-colors cursor-pointer"
-                              title="Excluir comprovante de liquidação"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <label 
-                            className={`p-1.5 rounded-lg border border-dashed border-gray-300 hover:border-emerald-600 bg-gray-50 hover:bg-emerald-50/50 text-gray-500 hover:text-emerald-800 cursor-pointer transition-all flex items-center gap-1 text-[10px] font-semibold ${
-                              uploadingSaleId === item.id ? 'opacity-50 pointer-events-none' : ''
-                            }`}
-                            title="Anexar comprovante de liquidação / PIX"
-                          >
-                            <input
-                              type="file"
-                              accept="image/*,.pdf"
-                              disabled={uploadingSaleId === item.id}
-                              onChange={(e) => handleUploadEvidence(item.id, e.target.files?.[0])}
-                              className="hidden"
-                            />
-                            {uploadingSaleId === item.id ? (
-                              <div className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <Paperclip className="w-3.5 h-3.5" />
-                            )}
-                            <span className="hidden xl:inline">Anexar</span>
-                          </label>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* SettleModal para quitação total e parcial */}
+      {/* SettleModal para quitação total e parcial (Loja ou Produtor) */}
       <SettleModal
         isOpen={!!settleSaleModal}
         sale={settleSaleModal}
+        target={settleTarget}
         onClose={() => setSettleSaleModal(null)}
         onSettled={() => {
           fetchSales();
-          showNotification('Recebimento / liquidação registrado com sucesso!');
+          showNotification(settleTarget === 'producer' 
+            ? 'Repasse ao produtor registrado com sucesso!' 
+            : 'Recebimento da loja registrado com sucesso!');
         }}
       />
 
@@ -555,7 +494,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
             <div className="flex items-center justify-between border-b border-gray-100 pb-2">
               <div className="flex items-center gap-2">
                 <Paperclip className="w-4 h-4 text-emerald-700" />
-                <span className="text-xs font-bold text-gray-900">Comprovante de Pagamento</span>
+                <span className="text-xs font-bold text-gray-900">Comprovante Financeiro</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <a
@@ -581,7 +520,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
               {previewEvidence.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
                 <img 
                   src={`/uploads/${previewEvidence}`} 
-                  alt="Comprovante de Pagamento" 
+                  alt="Comprovante Financeiro" 
                   className="max-h-[65vh] w-auto object-contain rounded-lg shadow-sm"
                 />
               ) : (

@@ -101,6 +101,35 @@ export function calculateSummary(params = {}) {
 }
 
 /**
+ * Converte com precisão entradas monetárias digitadas pelo usuário (pt-BR ou en-US) para número decimal puro.
+ * Suporta: "1200,23", "1200.23", "1.200,23", "1,200.23", números puros e strings com prefixo R$.
+ */
+export function parseMoneyInput(val) {
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  if (!val) return 0;
+  let s = String(val).replace(/R\$\s*/gi, '').trim();
+  if (!s) return 0;
+
+  // Se contém tanto ponto quanto vírgula
+  if (s.includes('.') && s.includes(',')) {
+    if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+      // Padrão brasileiro: "1.200,23" -> remove o ponto de milhar e troca vírgula por ponto
+      s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+      // Padrão americano: "1,200.23" -> remove a vírgula de milhar
+      s = s.replace(/,/g, '');
+    }
+  } else if (s.includes(',')) {
+    // Apenas vírgula: "1200,23" -> troca vírgula por ponto decimal
+    s = s.replace(',', '.');
+  }
+  // Se tem apenas ponto ("1200.23" gerado por input[type=number] ou digitado), mantém o ponto como separador decimal!
+
+  const num = parseFloat(s);
+  return isNaN(num) || !isFinite(num) ? 0 : Math.round((num + Number.EPSILON) * 100) / 100;
+}
+
+/**
  * Limpa o nome do produto removendo sufixos de embalagem
  */
 export function cleanProductName(name) {
@@ -114,4 +143,6 @@ export function cleanProductName(name) {
        .trim();
   return n || name.trim();
 }
+
+
 

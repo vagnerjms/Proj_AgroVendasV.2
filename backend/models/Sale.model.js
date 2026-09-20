@@ -57,10 +57,32 @@ const SaleSchema = new mongoose.Schema({
   paymentTermDays: { type: Number, default: 30 },
   dueDate: { type: String, default: '' },
   paidAmount: { type: Number, default: 0 },
+  paymentMethod: { type: String, default: 'PIX' },
   paymentHistory: [
     {
       amount: { type: Number, default: 0 },
       date: { type: String, default: '' },
+      paymentMethod: { type: String, default: 'PIX' },
+      checkNumber: { type: String, default: '' },
+      checkBank: { type: String, default: '' },
+      checkDueDate: { type: String, default: '' },
+      paymentProofFile: { type: String, default: null },
+      notes: { type: String, default: '' },
+      createdAt: { type: Date, default: Date.now }
+    }
+  ],
+  producerPaymentStatus: { type: String, default: 'A Pagar' },
+  producerPaidAmount: { type: Number, default: 0 },
+  producerPaymentMethod: { type: String, default: 'PIX' },
+  producerPaymentProofFile: { type: String, default: null },
+  producerPaymentHistory: [
+    {
+      amount: { type: Number, default: 0 },
+      date: { type: String, default: '' },
+      paymentMethod: { type: String, default: 'PIX' },
+      checkNumber: { type: String, default: '' },
+      checkBank: { type: String, default: '' },
+      checkDueDate: { type: String, default: '' },
       paymentProofFile: { type: String, default: null },
       notes: { type: String, default: '' },
       createdAt: { type: Date, default: Date.now }

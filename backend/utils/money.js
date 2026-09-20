@@ -53,20 +53,46 @@ function calculateFiscalDeductions(totalOperation) {
 }
 
 /**
- * Calcula comissão do intermediador/corretor e o saldo líquido a repassar ao produtor.
+ * Calcula comissão do intermediador/corretor, spread comercial e o saldo líquido a repassar ao produtor.
  * @param {number|string} valorComercialVP
+ * @param {number|string} totalOperationNF
  * @param {number|string} taxaPercentual (padrão 3%)
- * @returns {{ taxaPercentual: number, comissao: number, liquidoProdutor: number }}
+ * @returns {{ taxaPercentual: number, comissao: number, liquidoProdutor: number, spreadComercial: number, lucroCorretor: number }}
  */
-function calculateCommission(valorComercialVP, taxaPercentual = 3.0) {
+function calculateCommission(valorComercialVP, totalOperationNF, taxaPercentual = 3.0) {
   const valorVP = roundMoney(valorComercialVP);
-  const taxa = Number(taxaPercentual) || 3.0;
+  let valorNF = 0;
+  let taxa = 3.0;
+
+  if (arguments.length === 2 && Number(totalOperationNF) <= 100.0 && Number(totalOperationNF) > 0) {
+    // Compatibilidade para chamada calculateCommission(valorVP, feeValue)
+    taxa = Number(totalOperationNF);
+    valorNF = 0;
+  } else {
+    valorNF = roundMoney(totalOperationNF || 0);
+    taxa = Number(taxaPercentual) || 3.0;
+  }
+
+  // Dedução de FUNRURAL é calculada sobre a NF
+  const fiscal = calculateFiscalDeductions(valorNF > 0 ? valorNF : valorVP);
+  // O repasse líquido ao produtor é rigorosamente o valor da NF menos FUNRURAL
+  const liquidoProdutor = roundMoney(Math.max(0, (valorNF > 0 ? valorNF : valorVP) - fiscal.funruralTotal));
+
+  // Comissão de corretagem (calculada sobre a base comercial da venda)
   const comissao = roundMoney(valorVP * (taxa / 100));
-  const liquidoProdutor = roundMoney(valorVP - comissao);
+
+  // Spread comercial: diferença entre o valor recebido da loja (VP) e o valor faturado da NF do produtor
+  const spreadComercial = roundMoney(Math.max(0, valorVP - (valorNF > 0 ? valorNF : valorVP)));
+
+  // Lucro total da AgroVenda: spread comercial + comissão de corretagem
+  const lucroCorretor = roundMoney(spreadComercial + comissao);
+
   return {
     taxaPercentual: taxa,
     comissao,
-    liquidoProdutor
+    liquidoProdutor,
+    spreadComercial,
+    lucroCorretor
   };
 }
 

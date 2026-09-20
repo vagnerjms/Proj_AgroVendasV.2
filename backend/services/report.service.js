@@ -143,7 +143,7 @@ async function getStoresSummary({ startDate, endDate, producer }) {
       totalVendaAReceber = roundMoney(totalVendaAReceber + valorVP);
 
       const nfNumber = s.nfFile ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '').replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
-      const comm = calculateCommission(valorVP, s.feeValue);
+      const comm = calculateCommission(valorVP, itemValorNF, s.feeValue);
 
       // Nome / discriminação dos produtos
       let productLabel = 'Cenoura';
@@ -190,11 +190,14 @@ async function getStoresSummary({ startDate, endDate, producer }) {
         valorLiquidado: itemLiquidado,
         valorALiquidar: itemALiquidar,
         paidAmount: paid,
+        paymentMethod: s.paymentMethod || (s.paymentHistory && s.paymentHistory.length > 0 ? s.paymentHistory[s.paymentHistory.length - 1].paymentMethod : 'PIX'),
         paymentHistory: s.paymentHistory || [],
         liquidoNF: roundMoney(itemValorNF - itemFunrural),
         taxaComissao: comm.taxaPercentual,
         comissao: comm.comissao,
         liquidoProdutor: comm.liquidoProdutor,
+        spreadComercial: comm.spreadComercial,
+        lucroCorretor: comm.lucroCorretor,
         venc: s.dueDate ? s.dueDate.split('-').reverse().join('/') : (s.notes?.match(/Vencimento:\s*([^\s|]+)/i)?.[1] || 'Em aberto'),
         status: s.status,
         paymentStatus: s.paymentStatus || 'A Receber',
@@ -208,6 +211,8 @@ async function getStoresSummary({ startDate, endDate, producer }) {
 
     const totalComissaoLoja = roundMoney(itens.reduce((a, b) => a + b.comissao, 0));
     const totalLiquidoProdutorLoja = roundMoney(itens.reduce((a, b) => a + b.liquidoProdutor, 0));
+    const totalSpreadComercialLoja = roundMoney(itens.reduce((a, b) => a + (b.spreadComercial || 0), 0));
+    const totalLucroCorretorLoja = roundMoney(itens.reduce((a, b) => a + (b.lucroCorretor || 0), 0));
     const valorLiquidadoLoja = roundMoney(itens.reduce((a, b) => a + (b.valorLiquidado || 0), 0));
     const valorALiquidarLoja = roundMoney(itens.reduce((a, b) => a + (b.valorALiquidar || 0), 0));
 
@@ -225,6 +230,8 @@ async function getStoresSummary({ startDate, endDate, producer }) {
       liquidoNF: roundMoney(valorTotalNF - funrural),
       totalComissao: totalComissaoLoja,
       totalLiquidoProdutor: totalLiquidoProdutorLoja,
+      totalSpreadComercial: totalSpreadComercialLoja,
+      totalLucroCorretor: totalLucroCorretorLoja,
       valorLiquidado: valorLiquidadoLoja,
       valorALiquidar: valorALiquidarLoja,
       itens
@@ -244,6 +251,8 @@ async function getStoresSummary({ startDate, endDate, producer }) {
     liquidoNF: roundMoney(stores.reduce((a, b) => a + b.liquidoNF, 0)),
     totalComissao: roundMoney(stores.reduce((a, b) => a + b.totalComissao, 0)),
     totalLiquidoProdutor: roundMoney(stores.reduce((a, b) => a + b.totalLiquidoProdutor, 0)),
+    totalSpreadComercial: roundMoney(stores.reduce((a, b) => a + (b.totalSpreadComercial || 0), 0)),
+    totalLucroCorretor: roundMoney(stores.reduce((a, b) => a + (b.totalLucroCorretor || 0), 0)),
     valorTotalLiquidado: roundMoney(stores.reduce((a, b) => a + (b.valorLiquidado || 0), 0)),
     valorTotalALiquidar: roundMoney(stores.reduce((a, b) => a + (b.valorALiquidar || 0), 0))
   };
@@ -364,7 +373,159 @@ async function triggerN8nReport(user, body) {
   };
 }
 
+/**
+ * Agregação analítica exclusiva por Produtor Rural (Prestação de Contas baseada na NF)
+ * Não contém VP Comercial ou Cotação negociada com a loja.
+ */
+async function getProducersSummary({ startDate, endDate, producer }) {
+  let query = {};
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  const validStart = (typeof startDate === 'string' && dateRegex.test(startDate.trim())) ? startDate.trim() : null;
+  const validEnd = (typeof endDate === 'string' && dateRegex.test(endDate.trim())) ? endDate.trim() : null;
+
+  if (validStart && validEnd) {
+    query.saleDate = { $gte: validStart, $lte: validEnd };
+  } else if (validStart) {
+    query.saleDate = { $gte: validStart };
+  } else if (validEnd) {
+    query.saleDate = { $lte: validEnd };
+  }
+
+  if (producer && producer !== 'ALL') {
+    const baseName = producer.replace(/\s*\(.*\)/, '').trim();
+    if (baseName.length >= 4) {
+      const escapedBase = escapeRegex ? escapeRegex(baseName) : baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.origin = { $regex: new RegExp(escapedBase, 'i') };
+    } else {
+      query.origin = producer;
+    }
+  }
+
+  const allSales = await Sale.find(query).sort({ saleDate: 1 }).lean();
+  
+  // Agrupar por Produtor (Origem)
+  const producerGroups = {};
+  for (const s of allSales) {
+    const prodName = s.origin || (s.notes?.match(/Produtor:\s*([^|]+)/i)?.[1]?.trim()) || 'Produtor Rural';
+    if (!producerGroups[prodName]) {
+      producerGroups[prodName] = [];
+    }
+    producerGroups[prodName].push(s);
+  }
+
+  const producers = Object.keys(producerGroups).map(prodName => {
+    const sales = producerGroups[prodName];
+    let nfs = 0;
+    let pedidos = sales.length;
+    let pesoNF = 0;
+    let cxs = 0;
+    let valorTotalNF = 0;
+    let funrural = 0;
+    let liquidoProdutor = 0;
+    let repassesPagos = 0;
+    let saldoAPagar = 0;
+
+    const itens = sales.map(s => {
+      const nfNumber = s.nfFile ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '').replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
+      if (s.status === 'Faturado' || s.nfFile) nfs++;
+
+      const itemPeso = Number(s.totalKg) || 0;
+      const itemValorNF = roundMoney(s.totalOperation);
+      const fiscal = calculateFiscalDeductions(itemValorNF);
+      const itemFunrural = fiscal.funruralTotal;
+      const itemPrecoKg = itemPeso > 0 ? roundMoney(itemValorNF / itemPeso) : 0;
+      const itemLiquido = roundMoney(Math.max(0, itemValorNF - itemFunrural));
+
+      const isBatata = (s.items && s.items.some(it => it.product?.toLowerCase().includes('batata'))) || (s.notes && s.notes.toLowerCase().includes('batata'));
+      const unitKg = isBatata ? 25 : (s.items?.[0]?.boxWeightKg || 29);
+      const itemCaixas = Number(s.totalVolumes) > 0 ? Number(s.totalVolumes) : (itemPeso > 0 ? Number((itemPeso / unitKg).toFixed(2)) : 0);
+
+      const pago = roundMoney(Number(s.producerPaidAmount) || 0);
+      const saldo = roundMoney(Math.max(0, itemLiquido - pago));
+      
+      pesoNF += itemPeso;
+      cxs = Number((cxs + itemCaixas).toFixed(2));
+      valorTotalNF = roundMoney(valorTotalNF + itemValorNF);
+      funrural = roundMoney(funrural + itemFunrural);
+      liquidoProdutor = roundMoney(liquidoProdutor + itemLiquido);
+      repassesPagos = roundMoney(repassesPagos + pago);
+      saldoAPagar = roundMoney(saldoAPagar + saldo);
+
+      let productLabel = 'Cenoura';
+      if (s.items && s.items.length > 1) {
+        productLabel = s.items.map(it => it.product || 'Item').join(' + ');
+      } else if (s.items && s.items.length === 1) {
+        productLabel = s.items[0].product || 'Cenoura';
+      }
+
+      const cleanProof = s.producerPaymentProofFile ? s.producerPaymentProofFile.replace(/^\d{10,15}(-\d+)?-/, '') : '';
+
+      return {
+        id: s.id,
+        date: s.saleDate ? s.saleDate.split('-').reverse().join('/') : '-',
+        nf: nfNumber,
+        lojaDestino: s.client || 'Mercado Destino',
+        product: productLabel,
+        items: s.items || [],
+        pesoNF: itemPeso,
+        cxs: itemCaixas,
+        precoKg: itemPrecoKg,
+        valorNF: itemValorNF,
+        funrural: itemFunrural,
+        funruralDetails: {
+          previdencia: fiscal.previdencia,
+          rat: fiscal.rat,
+          senar: fiscal.senar
+        },
+        liquidoProdutor: itemLiquido,
+        repassado: pago,
+        saldo: saldo,
+        statusRepasse: s.producerPaymentStatus || (pago >= itemLiquido && itemLiquido > 0 ? 'Pago' : (pago > 0 ? 'Parcial' : 'A Pagar')),
+        producerProofFile: cleanProof || null,
+        rawProducerProofFile: s.producerPaymentProofFile || null,
+        paymentMethod: s.producerPaymentMethod || (s.producerPaymentHistory && s.producerPaymentHistory.length > 0 ? s.producerPaymentHistory[s.producerPaymentHistory.length - 1].paymentMethod : 'PIX'),
+        producerPaymentHistory: s.producerPaymentHistory || [],
+        venc: s.dueDate ? s.dueDate.split('-').reverse().join('/') : '-'
+      };
+    });
+
+    const isFullyPaid = saldoAPagar <= 0.01 && liquidoProdutor > 0;
+    const isPartial = repassesPagos > 0 && !isFullyPaid;
+
+    return {
+      producer: prodName,
+      nfs,
+      pedidos,
+      pesoNF: roundMoney(pesoNF),
+      cxsVendidas: Number(cxs.toFixed(2)),
+      valorTotalNF: roundMoney(valorTotalNF),
+      funrural: roundMoney(funrural),
+      liquidoProdutor: roundMoney(liquidoProdutor),
+      repassesPagos: roundMoney(repassesPagos),
+      saldoAPagar: roundMoney(saldoAPagar),
+      status: isFullyPaid ? 'Quitado' : (isPartial ? 'Parcial' : 'A Pagar'),
+      itens
+    };
+  });
+
+  const totalGeral = {
+    produtoresCount: producers.length,
+    pedidos: producers.reduce((a, b) => a + b.pedidos, 0),
+    nfs: producers.reduce((a, b) => a + b.nfs, 0),
+    pesoNF: roundMoney(producers.reduce((a, b) => a + b.pesoNF, 0)),
+    cxsVendidas: roundMoney(producers.reduce((a, b) => a + b.cxsVendidas, 0)),
+    valorTotalNF: roundMoney(producers.reduce((a, b) => a + b.valorTotalNF, 0)),
+    funrural: roundMoney(producers.reduce((a, b) => a + b.funrural, 0)),
+    liquidoProdutor: roundMoney(producers.reduce((a, b) => a + b.liquidoProdutor, 0)),
+    repassesPagos: roundMoney(producers.reduce((a, b) => a + b.repassesPagos, 0)),
+    saldoAPagar: roundMoney(producers.reduce((a, b) => a + b.saldoAPagar, 0))
+  };
+
+  return { producers, totalGeral };
+}
+
 module.exports = {
   getStoresSummary,
+  getProducersSummary,
   triggerN8nReport
 };

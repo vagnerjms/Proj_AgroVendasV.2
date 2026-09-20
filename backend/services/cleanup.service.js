@@ -12,7 +12,14 @@ async function cleanupOrphanUploads() {
     if (!fs.existsSync(uploadDir)) return { deletedCount: 0 };
 
     const [sales, slips] = await Promise.all([
-      Sale.find({}, { nfFile: 1, evidenceFile: 1, paymentProofFile: 1 }).lean(),
+      Sale.find({}, { 
+        nfFile: 1, 
+        evidenceFile: 1, 
+        paymentProofFile: 1,
+        producerPaymentProofFile: 1,
+        paymentHistory: 1,
+        producerPaymentHistory: 1 
+      }).lean(),
       WeighingSlip.find({}, { ticketImage: 1, attachment: 1 }).lean()
     ]);
 
@@ -21,6 +28,17 @@ async function cleanupOrphanUploads() {
       if (s.nfFile) activeFiles.add(s.nfFile);
       if (s.evidenceFile) activeFiles.add(s.evidenceFile);
       if (s.paymentProofFile) activeFiles.add(s.paymentProofFile);
+      if (s.producerPaymentProofFile) activeFiles.add(s.producerPaymentProofFile);
+      if (Array.isArray(s.paymentHistory)) {
+        s.paymentHistory.forEach(p => {
+          if (p.paymentProofFile) activeFiles.add(p.paymentProofFile);
+        });
+      }
+      if (Array.isArray(s.producerPaymentHistory)) {
+        s.producerPaymentHistory.forEach(p => {
+          if (p.paymentProofFile) activeFiles.add(p.paymentProofFile);
+        });
+      }
     });
 
     slips.forEach(sl => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
 import { 
   Users, 
   UserPlus, 
@@ -75,13 +76,11 @@ export default function UserManagement({ setCurrentPage }) {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/users');
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data);
-      }
+      const data = await api.get('/api/users');
+      setUsers(data || []);
     } catch (err) {
       console.error('Erro ao buscar usuários:', err);
+      showError(err.message || 'Erro ao carregar lista de usuários.');
     } finally {
       setLoading(false);
     }
@@ -181,26 +180,18 @@ export default function UserManagement({ setCurrentPage }) {
 
     setSubmittingUser(true);
     try {
-      const url = editingUser ? `/api/users/${editingUser.id}` : '/api/users';
-      const method = editingUser ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
-      if (res.ok) {
-        showNotification(editingUser ? `Usuário ${editingUser.name} atualizado!` : 'Novo usuário cadastrado com sucesso!');
-        setModalOpen(false);
-        fetchUsers();
+      if (editingUser) {
+        await api.put(`/api/users/${editingUser.id}`, formData);
+        showNotification(`Usuário ${editingUser.name} atualizado!`);
       } else {
-        const data = await res.json();
-        showError(data.error || 'Erro ao salvar usuário.');
+        await api.post('/api/users', formData);
+        showNotification('Novo usuário cadastrado com sucesso!');
       }
+      setModalOpen(false);
+      fetchUsers();
     } catch (err) {
       console.error(err);
-      showError('Falha de conexão com o servidor.');
+      showError(err.message || 'Erro ao salvar usuário.');
     } finally {
       setSubmittingUser(false);
     }
@@ -209,17 +200,12 @@ export default function UserManagement({ setCurrentPage }) {
   const handleDelete = async (user) => {
     if (!window.confirm(`Tem certeza que deseja excluir o usuário ${user.name}?`)) return;
     try {
-      const res = await fetch(`/api/users/${user.id}`, { method: 'DELETE' });
-      if (res.ok) {
-        showNotification('Usuário excluído com sucesso.');
-        fetchUsers();
-      } else {
-        const data = await res.json();
-        showError(data.error || 'Erro ao excluir usuário.');
-      }
+      await api.delete(`/api/users/${user.id}`);
+      showNotification('Usuário excluído com sucesso.');
+      fetchUsers();
     } catch (err) {
       console.error(err);
-      showError('Falha ao excluir usuário.');
+      showError(err.message || 'Erro ao excluir usuário.');
     }
   };
 

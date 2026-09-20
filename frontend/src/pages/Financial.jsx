@@ -1,5 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { DollarSign, FileSpreadsheet, ArrowUpRight, ArrowDownRight, ShieldCheck, CheckCircle2, Building2, Coins } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  DollarSign, 
+  FileSpreadsheet, 
+  ArrowUpRight, 
+  ArrowDownRight, 
+  ShieldCheck, 
+  CheckCircle2, 
+  Building2, 
+  Coins,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  X
+} from 'lucide-react';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { api } from '../services/api';
 import { calculateLiquidation } from '../utils/calculations';
@@ -22,6 +36,10 @@ export default function Financial({ view = 'overview' }) {
     salesCount: 0
   });
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
 
   const loadData = async () => {
     setLoading(true);
@@ -42,6 +60,35 @@ export default function Financial({ view = 'overview' }) {
   useEffect(() => {
     loadData();
   }, []);
+
+  const filteredSales = useMemo(() => {
+    return sales.filter(s => {
+      // Status filter
+      if (statusFilter === 'RECEIVED' && s.paymentStatus !== 'Recebido') return false;
+      if (statusFilter === 'PENDING' && s.paymentStatus === 'Recebido') return false;
+
+      // Search term filter
+      if (!searchTerm.trim()) return true;
+      const term = searchTerm.toLowerCase();
+      const idMatch = (s.id || '').toLowerCase().includes(term);
+      const clientMatch = (s.client || '').toLowerCase().includes(term);
+      const docMatch = (s.clientDocument || '').toLowerCase().includes(term);
+      const originMatch = (s.origin || '').toLowerCase().includes(term);
+      const statusMatch = (s.paymentStatus || '').toLowerCase().includes(term);
+      return idMatch || clientMatch || docMatch || originMatch || statusMatch;
+    });
+  }, [sales, statusFilter, searchTerm]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSales.length / pageSize));
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(1);
+    }
+  }, [totalPages, currentPage]);
+
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedSales = filteredSales.slice(startIndex, startIndex + pageSize);
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto space-y-6">
@@ -154,11 +201,106 @@ export default function Financial({ view = 'overview' }) {
 
       {/* Receivables Table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50/50">
-          <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Títulos e Notas Vinculadas</h2>
-          <span className="text-xs font-semibold text-gray-500 bg-white px-2.5 py-0.5 rounded border border-gray-200">
-            {sales.length} registros no banco
-          </span>
+        {/* Header & Controls Bar */}
+        <div className="p-4 border-b border-gray-200 bg-gray-50/50 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-xs font-bold text-gray-700 uppercase tracking-wider">Títulos e Notas Vinculadas</h2>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Exibindo {filteredSales.length === 0 ? 0 : startIndex + 1} a {Math.min(startIndex + pageSize, filteredSales.length)} de {filteredSales.length} registros
+                {filteredSales.length !== sales.length && ` (filtrado de ${sales.length} vendas)`}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-gray-500 bg-white px-2.5 py-1 rounded-lg border border-gray-200 shadow-2xs">
+                {sales.length} no banco
+              </span>
+            </div>
+          </div>
+
+          {/* Search & Filter Toolbar */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-1">
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Buscar por código VP, cliente ou documento..."
+                className="w-full pl-9 pr-8 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#091b2e] focus:border-transparent outline-none transition-all shadow-2xs"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Status Filters & Page Size */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200 text-xs">
+                <button
+                  type="button"
+                  onClick={() => { setStatusFilter('ALL'); setCurrentPage(1); }}
+                  className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
+                    statusFilter === 'ALL'
+                      ? 'bg-white text-gray-900 shadow-2xs font-bold'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  Todos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setStatusFilter('PENDING'); setCurrentPage(1); }}
+                  className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
+                    statusFilter === 'PENDING'
+                      ? 'bg-amber-100 text-amber-900 shadow-2xs font-bold'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  A Receber
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setStatusFilter('RECEIVED'); setCurrentPage(1); }}
+                  className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
+                    statusFilter === 'RECEIVED'
+                      ? 'bg-emerald-100 text-emerald-900 shadow-2xs font-bold'
+                      : 'text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  Recebidos
+                </button>
+              </div>
+
+              {/* Page Size Selector */}
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <span className="hidden sm:inline">Exibir:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="bg-white border border-gray-200 text-xs rounded-lg px-2 py-1 font-semibold text-gray-700 outline-none shadow-2xs cursor-pointer"
+                >
+                  <option value={15}>15 por pág.</option>
+                  <option value={30}>30 por pág.</option>
+                  <option value={50}>50 por pág.</option>
+                  <option value={100}>100 por pág.</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -176,39 +318,111 @@ export default function Financial({ view = 'overview' }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {sales.map(s => {
-                const liq = calculateLiquidation(s);
-                const vp = liq.valorVP;
-                const funrural = liq.funrural;
-                const aLiquidar = liq.totalLiquido;
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-gray-400">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="w-5 h-5 border-2 border-[#091b2e] border-t-transparent rounded-full animate-spin" />
+                      <span>Carregando dados financeiros...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : paginatedSales.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center text-gray-400 italic">
+                    Nenhum título ou registro financeiro encontrado para os critérios pesquisados.
+                  </td>
+                </tr>
+              ) : (
+                paginatedSales.map(s => {
+                  const liq = calculateLiquidation(s);
+                  const vp = liq.valorVP;
+                  const funrural = liq.funrural;
+                  const aLiquidar = liq.totalLiquido;
 
-                return (
-                  <tr key={s.id} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="py-3 px-4 font-bold text-gray-900">
-                      {s.id} 
-                      <span className="block font-normal text-gray-400 text-[11px]">{formatDate(s.saleDate)}</span>
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-gray-800">{s.client}</td>
-                    <td className="py-3 px-4 text-right font-bold text-blue-950">{formatCurrency(vp)}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-gray-700">{formatCurrency(s.totalOperation)}</td>
-                    <td className="py-3 px-4 text-right text-red-600 font-medium">-{formatCurrency(funrural)}</td>
-                    <td className="py-3 px-4 text-right font-black text-emerald-950 bg-emerald-50/30">{formatCurrency(aLiquidar)}</td>
-                    <td className="py-3 px-4 text-right font-semibold text-blue-900">{formatCurrency(s.totalCommission)}</td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
-                        s.paymentStatus === 'Recebido' 
-                          ? 'bg-emerald-100 text-emerald-800' 
-                          : 'bg-amber-100 text-amber-900'
-                      }`}>
-                        {s.paymentStatus || 'A Receber'}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+                  return (
+                    <tr key={s.id} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="py-3 px-4 font-bold text-gray-900">
+                        {s.id} 
+                        <span className="block font-normal text-gray-400 text-[11px]">{formatDate(s.saleDate)}</span>
+                      </td>
+                      <td className="py-3 px-4 font-semibold text-gray-800">{s.client}</td>
+                      <td className="py-3 px-4 text-right font-bold text-blue-950">{formatCurrency(vp)}</td>
+                      <td className="py-3 px-4 text-right font-semibold text-gray-700">{formatCurrency(s.totalOperation)}</td>
+                      <td className="py-3 px-4 text-right text-red-600 font-medium">-{formatCurrency(funrural)}</td>
+                      <td className="py-3 px-4 text-right font-black text-emerald-950 bg-emerald-50/30">{formatCurrency(aLiquidar)}</td>
+                      <td className="py-3 px-4 text-right font-semibold text-blue-900">{formatCurrency(s.totalCommission)}</td>
+                      <td className="py-3 px-4 text-center">
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
+                          s.paymentStatus === 'Recebido' 
+                            ? 'bg-emerald-100 text-emerald-800' 
+                            : 'bg-amber-100 text-amber-900'
+                        }`}>
+                          {s.paymentStatus || 'A Receber'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Footer */}
+        {totalPages > 1 && (
+          <div className="p-3 border-t border-gray-200 bg-gray-50/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div className="text-gray-500 font-medium">
+              Página <span className="font-bold text-gray-900">{currentPage}</span> de <span className="font-bold text-gray-900">{totalPages}</span>
+            </div>
+            
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>Anterior</span>
+              </button>
+
+              <div className="flex items-center gap-1 px-2">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                  .map((page, idx, arr) => {
+                    const prev = arr[idx - 1];
+                    return (
+                      <React.Fragment key={page}>
+                        {prev && page - prev > 1 && <span className="text-gray-400 px-1">...</span>}
+                        <button
+                          type="button"
+                          onClick={() => setCurrentPage(page)}
+                          className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            currentPage === page
+                              ? 'bg-[#091b2e] text-white shadow-2xs'
+                              : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-gray-200 rounded-lg font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-2xs cursor-pointer"
+              >
+                <span>Próxima</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

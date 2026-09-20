@@ -3,6 +3,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const { WeighingSlip } = require('../db');
+const { getNextSequence } = require('../services/sequence.service');
 const { escapeRegex } = require('../utils/security');
 const { requireAuth } = require('../middlewares/auth');
 const { uploadDir } = require('../middlewares/upload');
@@ -63,18 +64,7 @@ router.post('/', async (req, res) => {
     if (saleRef) {
       slipId = saleRef.startsWith('ROM-') ? saleRef : `ROM-${saleRef}`;
     } else {
-      const allSlips = await WeighingSlip.find({}, { id: 1 }).lean();
-      let maxId = 0;
-      for (const s of allSlips) {
-        if (s.id) {
-          const match = s.id.match(/ROM-VP0*(\d+)/i) || s.id.match(/(\d+)/);
-          if (match) {
-            const num = parseInt(match[1], 10);
-            if (!isNaN(num) && num > maxId) maxId = num;
-          }
-        }
-      }
-      const nextSeq = maxId + 1;
+      const nextSeq = await getNextSequence('weighing_slip_id', WeighingSlip, 'ROM-VP');
       saleRef = `VP${String(nextSeq).padStart(3, '0')}`;
       slipId = `ROM-${saleRef}`;
     }

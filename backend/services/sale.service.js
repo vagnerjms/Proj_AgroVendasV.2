@@ -3,7 +3,7 @@ const fs = require('fs').promises;
 const { Sale, WeighingSlip, getNextSequence } = require('../db');
 const { uploadDir } = require('../middlewares/upload');
 const { roundMoney, calculateFiscalDeductions, calculateCommission } = require('../utils/money');
-const { normalizeProducerOrigin } = require('../utils/producer');
+const { normalizeProducerOrigin } = require('./producer.service');
 const { sendSaleWebhook } = require('./webhook.service');
 const { ensureProductsRegistered } = require('./product.service');
 

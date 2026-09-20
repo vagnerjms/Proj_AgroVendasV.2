@@ -1,6 +1,6 @@
 const { Sale } = require('../db');
 const { roundMoney, calculateFiscalDeductions, calculateCommission } = require('../utils/money');
-const { normalizeProducerOrigin } = require('../utils/producer');
+const { normalizeProducerOrigin } = require('./producer.service');
 const { escapeRegex } = require('../utils/security');
 
 /**

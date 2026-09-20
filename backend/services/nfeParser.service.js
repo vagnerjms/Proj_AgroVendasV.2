@@ -7,7 +7,7 @@ try {
   console.warn('Aviso: módulo pdf-parse não carregado antecipadamente:', e.message);
 }
 const { TAX_RATES, roundMoney, calculateFiscalDeductions } = require('../utils/money');
-const { normalizeProducerOrigin } = require('../utils/producer');
+const { normalizeProducerOrigin } = require('./producer.service');
 
 class NfeParserService {
   /**

@@ -35,6 +35,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
 
   // Filtros - Aba Produtores
   const [selectedProducer, setSelectedProducer] = useState('ALL');
+  const [selectedProducerLoja, setSelectedProducerLoja] = useState('ALL');
   const [producerStatusFilter, setProducerStatusFilter] = useState('ALL');
   const [searchProducer, setSearchProducer] = useState('');
 
@@ -291,6 +292,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
   // Filtros aplicados para Produtores
   const filteredScheduleProdutores = scheduleList.filter(item => {
     const matchProducer = selectedProducer === 'ALL' || item.producerOrigin === selectedProducer;
+    const matchLoja = selectedProducerLoja === 'ALL' || item.client === selectedProducerLoja;
     const matchStatus = producerStatusFilter === 'ALL' || 
       (producerStatusFilter === 'PAGO' && item.isProducerFullySettled) ||
       (producerStatusFilter === 'PARCIAL' && item.isProducerPartial) ||
@@ -299,7 +301,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
       (item.client || '').toLowerCase().includes(searchProducer.toLowerCase()) ||
       (item.id || '').toLowerCase().includes(searchProducer.toLowerCase()) ||
       (item.nfNumber || '').toLowerCase().includes(searchProducer.toLowerCase());
-    return matchProducer && matchStatus && matchSearch;
+    return matchProducer && matchLoja && matchStatus && matchSearch;
   });
 
   // KPIs - Aba Lojas (Recebimentos)
@@ -453,6 +455,9 @@ export default function AgendaAlerts({ setCurrentPage }) {
           selectedProducer={selectedProducer}
           setSelectedProducer={setSelectedProducer}
           uniqueProducers={uniqueProducers}
+          selectedLoja={selectedProducerLoja}
+          setSelectedLoja={setSelectedProducerLoja}
+          uniqueLojas={uniqueLojas}
           producerStatusFilter={producerStatusFilter}
           setProducerStatusFilter={setProducerStatusFilter}
           uploadingSaleId={uploadingSaleId}

@@ -24,6 +24,9 @@ export default function AgendaProdutoresTable({
   selectedProducer = 'ALL',
   setSelectedProducer,
   uniqueProducers = [],
+  selectedLoja = 'ALL',
+  setSelectedLoja,
+  uniqueLojas = [],
   producerStatusFilter = 'ALL',
   setProducerStatusFilter,
   uploadingSaleId = null,
@@ -57,6 +60,18 @@ export default function AgendaProdutoresTable({
             <option value="ALL">Todos os Produtores / Origens</option>
             {uniqueProducers.map((prod, idx) => (
               <option key={idx} value={prod}>{prod}</option>
+            ))}
+          </select>
+
+          <select
+            value={selectedLoja}
+            onChange={(e) => setSelectedLoja && setSelectedLoja(e.target.value)}
+            className="bg-white border border-gray-300 text-xs rounded-lg px-3 py-2 font-semibold text-gray-800 outline-none"
+            title="Filtrar por Loja Destino"
+          >
+            <option value="ALL">Todas as Lojas Destino</option>
+            {uniqueLojas.map((loja, idx) => (
+              <option key={idx} value={loja}>{loja}</option>
             ))}
           </select>
 

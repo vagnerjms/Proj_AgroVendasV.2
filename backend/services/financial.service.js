@@ -50,8 +50,10 @@ async function getFinancialSummary(queryParams = {}) {
     const fiscal = calculateFiscalDeductions(valorNF > 0 ? valorNF : valorVP);
     const valorLiquidar = roundMoney(Math.max(0, valorVP - fiscal.funruralTotal));
 
-    const isRecebido = s.paymentStatus === 'Recebido';
-    const paid = roundMoney(Number(s.paidAmount) || 0);
+    const pagoProdutor = roundMoney(Number(s.producerPaidAmount) || 0);
+    const pagoCliente = roundMoney(Number(s.paidAmount) || 0);
+    const paid = Math.max(pagoProdutor, pagoCliente);
+    const isRecebido = s.paymentStatus === 'Recebido' || s.producerPaymentStatus === 'Pago' || s.status === 'Concluído';
 
     if (isRecebido) {
       const recebidoEfetivo = paid > 0 ? paid : valorLiquidar;

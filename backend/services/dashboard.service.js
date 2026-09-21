@@ -17,9 +17,9 @@ const getSaleLiquidationValue = (s) => {
 };
 
 const getSalePendingReceivable = (s) => {
-  if (s.paymentStatus === 'Recebido') return 0;
+  if (s.paymentStatus === 'Recebido' || s.producerPaymentStatus === 'Pago' || s.status === 'Concluído') return 0;
   const totalLiq = getSaleLiquidationValue(s);
-  const paid = roundMoney(Number(s.paidAmount) || 0);
+  const paid = roundMoney(Math.max(Number(s.producerPaidAmount) || 0, Number(s.paidAmount) || 0));
   return roundMoney(Math.max(0, totalLiq - paid));
 };
 

@@ -405,24 +405,28 @@ export default function Reports({ setCurrentPage }) {
       
       const queryStr = params.toString() ? `?${params.toString()}` : '';
 
-      // Busca dados de lojas/corretor e dados exclusivos de produtores em paralelo
-      const [resStores, resProducers] = await Promise.all([
+      // Busca dados de lojas/corretor e dados exclusivos de produtores com resiliência
+      const [resStoresResult, resProducersResult] = await Promise.allSettled([
         api.get(`/api/reports/stores-summary${queryStr}`),
         api.get(`/api/reports/producers-summary${queryStr}`)
       ]);
 
-      if (resStores) {
-        setReportData(resStores);
+      if (resStoresResult.status === 'fulfilled' && resStoresResult.value) {
+        setReportData(resStoresResult.value);
         const initExpand = {};
-        (resStores.stores || []).forEach(s => { initExpand[s.loja] = true; });
+        (resStoresResult.value.stores || []).forEach(s => { initExpand[s.loja] = true; });
         setExpandedLojas(initExpand);
+      } else if (resStoresResult.status === 'rejected') {
+        console.error('Erro ao buscar stores-summary:', resStoresResult.reason);
       }
 
-      if (resProducers) {
-        setProducersData(resProducers);
+      if (resProducersResult.status === 'fulfilled' && resProducersResult.value) {
+        setProducersData(resProducersResult.value);
         const initExpandProd = {};
-        (resProducers.producers || []).forEach(p => { initExpandProd[p.producer] = true; });
+        (resProducersResult.value.producers || []).forEach(p => { initExpandProd[p.producer] = true; });
         setExpandedProducers(initExpandProd);
+      } else if (resProducersResult.status === 'rejected') {
+        console.error('Erro ao buscar producers-summary:', resProducersResult.reason);
       }
     } catch (err) {
       console.error('Erro ao buscar relatórios no MongoDB:', err);

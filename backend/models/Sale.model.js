@@ -95,14 +95,7 @@ const SaleSchema = new mongoose.Schema({
 
 // Database Performance Indexes (B-Tree)
 SaleSchema.index({ client: 1, saleDate: -1 });
-SaleSchema.index(
-  { nfeKey: 1 }, 
-  { 
-    unique: true, 
-    sparse: true, 
-    partialFilterExpression: { nfeKey: { $type: 'string', $gt: '' } } 
-  }
-);
+SaleSchema.index({ nfeKey: 1 });
 SaleSchema.index({ origin: 1, saleDate: -1 });
 SaleSchema.index({ saleDate: -1, status: 1 });
 SaleSchema.index({ status: 1 });

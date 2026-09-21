@@ -11,7 +11,8 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://mongodb:27017/agrovenda';
 async function connectDB() {
   const options = {
     serverSelectionTimeoutMS: 5000,
-    connectTimeoutMS: 10000
+    connectTimeoutMS: 10000,
+    autoIndex: false
   };
 
   const tryConnect = async (retries = 5, delay = 3000) => {

@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "update-quotes": "node scripts/update_daily_quotes_vp001_vp034.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

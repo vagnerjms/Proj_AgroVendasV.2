@@ -139,10 +139,10 @@ async function getStoresSummary({ startDate, endDate, producer }) {
         itemALiquidar = 0;
       } else if (isParcial) {
         itemLiquidado = pagoEfetivo;
-        itemALiquidar = roundMoney(Math.max(0, itemLiquido - pagoEfetivo));
+        itemALiquidar = roundMoney(Math.max(0, itemValorNF - pagoEfetivo));
       } else {
         itemLiquidado = 0;
-        itemALiquidar = itemLiquido;
+        itemALiquidar = itemValorNF;
       }
 
       totalVendaAReceber = roundMoney(totalVendaAReceber + valorVP);
@@ -448,7 +448,7 @@ async function getProducersSummary({ startDate, endDate, producer }) {
       const pagoProdutor = roundMoney(Number(s.producerPaidAmount) || 0);
       const pagoCliente = roundMoney(Number(s.paidAmount) || 0);
       const pago = Math.max(pagoProdutor, pagoCliente);
-      const saldo = roundMoney(Math.max(0, itemLiquido - pago));
+      const saldo = roundMoney(Math.max(0, itemValorNF - pago));
       
       pesoNF += itemPeso;
       cxs = Number((cxs + itemCaixas).toFixed(2));

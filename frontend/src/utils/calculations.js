@@ -141,7 +141,7 @@ export function calculateLiquidation(sale = {}) {
 
   const valorALiquidar = isSettled 
     ? 0 
-    : (isPartial ? roundMoney(Math.max(0, liquidoNF - paidAmount)) : liquidoNF);
+    : (isPartial ? roundMoney(Math.max(0, itemValorNF - paidAmount)) : itemValorNF);
 
   let statusLabel = 'A Receber';
   if (isSettled) statusLabel = 'Recebido';

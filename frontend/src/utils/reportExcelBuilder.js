@@ -416,7 +416,7 @@ export function buildProducerExcelReportHtml(producers = [], customTotal = null,
               Data de Emissão: <b>${hojeFormatado}</b> | Período: <b>${periodoStr}</b> | Produtor(es): <b>${produtorStr}</b> | Lojas: <b>${lojasStr}</b> | Produto: <b>${produtoStr}</b>
             </div>
             <div style="font-size: 8pt; color: #059669; font-weight: bold; margin-top: 2px;">
-              ✓ Valores calculados estritamente sobre a Nota Fiscal do Produtor e dedução oficial do FUNRURAL (1,63%).
+              ✓ Repasse integral da NF ao Produtor Rural (FUNRURAL informativo de 1,63% a cargo do produtor).
             </div>
           </td>
         </tr>
@@ -426,24 +426,24 @@ export function buildProducerExcelReportHtml(producers = [], customTotal = null,
       <table style="margin-bottom: 20px; border: 1px solid #cbd5e1;">
         <tr style="height: 28px;">
           <td class="badge-kpi" style="border-right: 1px solid #cbd5e1;">
-            <div style="font-size: 8pt; color: #64748b; text-transform: uppercase;">Total Faturado NF</div>
+            <div style="font-size: 8pt; color: #64748b; text-transform: uppercase;">Total Operação (NF)</div>
             <div style="font-size: 12pt; color: #0f172a; font-weight: bold;">${formatMoeda(totalGeral.valorTotalNF)}</div>
-          </td>
-          <td class="badge-kpi" style="border-right: 1px solid #cbd5e1;">
-            <div style="font-size: 8pt; color: #b91c1c; text-transform: uppercase;">(-) FUNRURAL (1,63%)</div>
-            <div style="font-size: 12pt; color: #b91c1c; font-weight: bold;">-${formatMoeda(totalGeral.funrural)}</div>
-          </td>
-          <td class="badge-kpi" style="border-right: 1px solid #cbd5e1; background-color: #f0fdf4;">
-            <div style="font-size: 8pt; color: #14532d; text-transform: uppercase;">(=) Líquido a Receber</div>
-            <div style="font-size: 12pt; color: #14532d; font-weight: bold;">${formatMoeda(totalGeral.liquidoProdutor)}</div>
           </td>
           <td class="badge-kpi" style="border-right: 1px solid #cbd5e1; background-color: #ecfdf5;">
             <div style="font-size: 8pt; color: #065f46; text-transform: uppercase;">Total Já Repassado</div>
             <div style="font-size: 12pt; color: #065f46; font-weight: bold;">${formatMoeda(totalGeral.repassesPagos)}</div>
           </td>
-          <td class="badge-kpi" style="background-color: #fffbeb;">
-            <div style="font-size: 8pt; color: #92400e; text-transform: uppercase;">Saldo em Aberto</div>
+          <td class="badge-kpi" style="border-right: 1px solid #cbd5e1; background-color: #fffbeb;">
+            <div style="font-size: 8pt; color: #92400e; text-transform: uppercase;">Saldo a Repassar</div>
             <div style="font-size: 12pt; color: #92400e; font-weight: bold;">${formatMoeda(totalGeral.saldoAPagar)}</div>
+          </td>
+          <td class="badge-kpi" style="border-right: 1px solid #cbd5e1;">
+            <div style="font-size: 8pt; color: #b91c1c; text-transform: uppercase;">FUNRURAL (1,63% Info)</div>
+            <div style="font-size: 12pt; color: #b91c1c; font-weight: bold;">${formatMoeda(totalGeral.funrural)}</div>
+          </td>
+          <td class="badge-kpi" style="background-color: #f0fdf4;">
+            <div style="font-size: 8pt; color: #14532d; text-transform: uppercase;">Líquido Fiscal Est.</div>
+            <div style="font-size: 12pt; color: #14532d; font-weight: bold;">${formatMoeda(totalGeral.liquidoProdutor)}</div>
           </td>
         </tr>
       </table>
@@ -462,10 +462,10 @@ export function buildProducerExcelReportHtml(producers = [], customTotal = null,
             <th class="hdr-sub" style="width: 95px;">PESO NF (KG)</th>
             <th class="hdr-sub" style="width: 90px;">CXS ENTREGUES</th>
             <th class="hdr-sub" style="width: 120px;">TOTAL FATURADO NF</th>
-            <th class="hdr-sub" style="width: 110px;">(-) FUNRURAL (1,63%)</th>
-            <th class="hdr-sub" style="width: 120px; background-color: #14532d;">(=) LÍQUIDO PRODUTOR</th>
+            <th class="hdr-sub" style="width: 110px;">FUNRURAL (1,63% INFO)</th>
+            <th class="hdr-sub" style="width: 120px; background-color: #14532d;">LÍQUIDO FISCAL EST.</th>
             <th class="hdr-sub" style="width: 110px; background-color: #166534;">JÁ REPASSADO</th>
-            <th class="hdr-sub" style="width: 110px; background-color: #b45309;">SALDO A PAGAR</th>
+            <th class="hdr-sub" style="width: 110px; background-color: #b45309;">SALDO A REPASSAR</th>
             <th class="hdr-sub" style="width: 80px;">STATUS</th>
           </tr>
         </thead>
@@ -527,9 +527,9 @@ export function buildProducerExcelReportHtml(producers = [], customTotal = null,
                 <th class="hdr-sub" style="width: 80px;">VOLUMES</th>
                 <th class="hdr-sub" style="width: 75px;">PREÇO/KG</th>
                 <th class="hdr-sub" style="width: 110px;">TOTAL DA NF</th>
-                <th class="hdr-sub" style="width: 95px;">FUNRURAL (1,63%)</th>
-                <th class="hdr-sub" style="width: 115px; background-color: #14532d;">LÍQUIDO PRODUTOR</th>
-                <th class="hdr-sub" style="width: 110px; background-color: #b45309;">SALDO A PAGAR</th>
+                <th class="hdr-sub" style="width: 95px;">FUNRURAL (1,63% INFO)</th>
+                <th class="hdr-sub" style="width: 115px; background-color: #14532d;">LÍQUIDO FISCAL EST.</th>
+                <th class="hdr-sub" style="width: 110px; background-color: #b45309;">SALDO A REPASSAR</th>
               </tr>
             </thead>
             <tbody>
@@ -570,6 +570,10 @@ export function buildProducerExcelReportHtml(producers = [], customTotal = null,
           </table>
         `;
       }).join('')}
+
+      <div style="margin-top: 20px; padding: 10px 14px; background-color: #f0fdf4; border: 1px solid #86efac; font-size: 8.5pt; color: #166534; font-family: Arial, sans-serif;">
+        <b>Nota Contábil:</b> A AgroVenda repassa 100% do valor faturado das notas fiscais ao Produtor Rural. O FUNRURAL (1,63%) é discriminado neste extrato com finalidade exclusivamente informativa para fins de escrituração fiscal e retenção direta pelo produtor.
+      </div>
 
     </body>
     </html>

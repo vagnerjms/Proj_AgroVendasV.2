@@ -217,7 +217,7 @@ export default function Reports({ setCurrentPage }) {
         valorLiquidado: Number(it.valorLiquidado ?? it.liquido ?? 0) * ratio,
         valorALiquidar: Number(it.valorALiquidar ?? 0) * ratio,
         repassado: Number(it.repassado ?? it.valorLiquidado ?? 0) * ratio,
-        saldo: Math.max(0, itemLiquidoProdutor - (Number(it.repassado ?? it.valorLiquidado ?? 0) * ratio))
+        saldo: Math.max(0, itemValorNF - (Number(it.repassado ?? it.valorLiquidado ?? 0) * ratio))
       };
     }
 
@@ -313,7 +313,7 @@ export default function Reports({ setCurrentPage }) {
         liquidoProdutor,
         repassesPagos,
         saldoAPagar,
-        status: saldoAPagar <= 0.01 && liquidoProdutor > 0 ? 'Quitado' : (repassesPagos > 0 ? 'Parcial' : 'A Pagar'),
+        status: saldoAPagar <= 0.01 && valorTotalNF > 0 ? 'Quitado' : (repassesPagos > 0 ? 'Parcial' : 'A Pagar'),
         itens: matchingItens
       };
     })

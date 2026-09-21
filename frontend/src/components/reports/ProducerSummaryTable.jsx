@@ -13,10 +13,10 @@ export default function ProducerSummaryTable({
       {/* 5 Cards de Resumo Exclusivo do Produtor (Base 100% Nota Fiscal) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
         
-        {/* Card 1: Total Faturado NF */}
+        {/* Card 1: Total da Operação (NF a Repassar) */}
         <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span className="truncate">Total Faturado NF</span>
+            <span className="truncate">Total Operação (NF)</span>
             <FileText className="w-4 h-4 text-blue-700 shrink-0 ml-1" />
           </div>
           <div className="text-lg sm:text-xl xl:text-2xl font-black text-gray-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalGeral.valorTotalNF)}>
@@ -27,59 +27,59 @@ export default function ProducerSummaryTable({
           </span>
         </div>
 
-        {/* Card 2: (-) FUNRURAL Retido */}
-        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
-          <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span className="truncate">(-) FUNRURAL (1,63%)</span>
-            <ShieldCheck className="w-4 h-4 text-red-600 shrink-0 ml-1" />
-          </div>
-          <div className="text-lg sm:text-xl xl:text-2xl font-black text-red-600 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={`- ${formatCurrency(totalGeral.funrural)}`}>
-            - {formatCurrency(totalGeral.funrural)}
-          </div>
-          <span className="text-[11px] text-gray-400 block truncate">
-            Dedução previdenciária oficial
-          </span>
-        </div>
-
-        {/* Card 3: (=) Líquido a Receber */}
-        <div className="bg-white p-4 sm:p-4.5 rounded-xl border-2 border-emerald-500 bg-emerald-50/30 shadow-sm space-y-1.5 min-w-0">
+        {/* Card 2: Total Já Repassado */}
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border-2 border-emerald-500 bg-emerald-50/20 shadow-sm space-y-1.5 min-w-0">
           <div className="flex items-center justify-between text-xs font-black text-emerald-900 uppercase">
-            <span className="truncate">(=) Líquido a Receber</span>
-            <DollarSign className="w-4 h-4 text-emerald-700 shrink-0 ml-1" />
-          </div>
-          <div className="text-lg sm:text-xl xl:text-2xl font-black text-emerald-950 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalGeral.liquidoProdutor)}>
-            {formatCurrency(totalGeral.liquidoProdutor)}
-          </div>
-          <span className="text-[11px] text-emerald-800 font-semibold block truncate">
-            Total NF - FUNRURAL
-          </span>
-        </div>
-
-        {/* Card 4: Total Já Repassado */}
-        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
-          <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
             <span className="truncate">Total Já Repassado</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 ml-1" />
           </div>
           <div className="text-lg sm:text-xl xl:text-2xl font-black text-emerald-700 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalGeral.repassesPagos)}>
             {formatCurrency(totalGeral.repassesPagos)}
           </div>
-          <span className="text-[11px] text-gray-400 block truncate">
+          <span className="text-[11px] text-emerald-800 font-semibold block truncate">
             Pagamentos PIX/TED realizados
           </span>
         </div>
 
-        {/* Card 5: Saldo em Aberto */}
-        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
-          <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-            <span className="truncate">Saldo em Aberto</span>
+        {/* Card 3: Saldo a Repassar */}
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border-2 border-amber-400 bg-amber-50/30 shadow-sm space-y-1.5 min-w-0">
+          <div className="flex items-center justify-between text-xs font-black text-amber-900 uppercase">
+            <span className="truncate">Saldo a Repassar</span>
             <Clock className="w-4 h-4 text-amber-600 shrink-0 ml-1" />
           </div>
-          <div className="text-lg sm:text-xl xl:text-2xl font-black text-amber-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalGeral.saldoAPagar)}>
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-amber-950 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalGeral.saldoAPagar)}>
             {formatCurrency(totalGeral.saldoAPagar)}
           </div>
-          <span className="text-[11px] text-gray-400 block truncate">
+          <span className="text-[11px] text-amber-800 font-semibold block truncate">
             Pendente de transferência
+          </span>
+        </div>
+
+        {/* Card 4: FUNRURAL (1,63% Informativo) */}
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
+          <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
+            <span className="truncate">FUNRURAL (1,63% Info)</span>
+            <ShieldCheck className="w-4 h-4 text-red-600 shrink-0 ml-1" />
+          </div>
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-red-600 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalGeral.funrural)}>
+            {formatCurrency(totalGeral.funrural)}
+          </div>
+          <span className="text-[11px] text-gray-400 block truncate">
+            Tributo a recolher pelo produtor
+          </span>
+        </div>
+
+        {/* Card 5: Líquido Fiscal Estimado */}
+        <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
+          <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
+            <span className="truncate">Líquido Fiscal Est.</span>
+            <DollarSign className="w-4 h-4 text-emerald-700 shrink-0 ml-1" />
+          </div>
+          <div className="text-lg sm:text-xl xl:text-2xl font-black text-emerald-950 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalGeral.liquidoProdutor)}>
+            {formatCurrency(totalGeral.liquidoProdutor)}
+          </div>
+          <span className="text-[11px] text-gray-400 block truncate">
+            Total NF - FUNRURAL
           </span>
         </div>
       </div>
@@ -94,7 +94,7 @@ export default function ProducerSummaryTable({
             </span>
           </div>
           <span className="text-[11px] font-semibold text-emerald-100 bg-emerald-900/40 px-2.5 py-0.5 rounded">
-            Dedução Oficial de FUNRURAL (1,63%)
+            Repasse Integral da NF (FUNRURAL Informativo 1,63%)
           </span>
         </div>
 
@@ -108,8 +108,8 @@ export default function ProducerSummaryTable({
                 <th className="py-2.5 px-3 text-right">Peso NF (kg)</th>
                 <th className="py-2.5 px-3 text-right">CXS Entregues</th>
                 <th className="py-2.5 px-3 text-right">Total Faturado NF</th>
-                <th className="py-2.5 px-3 text-right">(-) FUNRURAL (1,63%)</th>
-                <th className="py-2.5 px-3 text-right bg-[#14532d]">(=) Líquido Produtor</th>
+                <th className="py-2.5 px-3 text-right text-red-200">FUNRURAL (1,63% Info)</th>
+                <th className="py-2.5 px-3 text-right bg-[#14532d]">Líquido Fiscal Est.</th>
                 <th className="py-2.5 px-3 text-right bg-[#166534]">Já Repassado (R$)</th>
                 <th className="py-2.5 px-3 text-right bg-[#92400e]">Saldo a Pagar (R$)</th>
                 <th className="py-2.5 px-2 text-center">Status</th>
@@ -183,6 +183,10 @@ export default function ProducerSummaryTable({
               </tr>
             </tfoot>
           </table>
+        </div>
+
+        <div className="px-4 py-2.5 bg-emerald-50/70 border-t border-emerald-100 flex items-center justify-between text-[11px] text-emerald-950 font-medium">
+          <span>🌾 <strong>Nota Contábil:</strong> A AgroVenda repassa 100% do valor faturado das notas ao Produtor Rural. O FUNRURAL (1,63%) é discriminado como indicativo fiscal para escrituração e retenção direta pelo produtor.</span>
         </div>
       </div>
     </div>

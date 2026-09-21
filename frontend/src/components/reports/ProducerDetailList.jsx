@@ -74,10 +74,10 @@ export default function ProducerDetailList({
                       <th className="py-2.5 px-3 text-right">Volumes (cx)</th>
                       <th className="py-2.5 px-3 text-right">Preço/kg NF</th>
                       <th className="py-2.5 px-3 text-right">Total da NF</th>
-                      <th className="py-2.5 px-3 text-right text-red-600">(-) FUNRURAL (1,63%)</th>
-                      <th className="py-2.5 px-3 text-right bg-emerald-50 text-emerald-950 font-bold">(=) Líquido Produtor</th>
+                      <th className="py-2.5 px-3 text-right text-red-600">FUNRURAL (1,63% Info)</th>
+                      <th className="py-2.5 px-3 text-right bg-emerald-50 text-emerald-950 font-bold">Líquido Fiscal Est.</th>
                       <th className="py-2.5 px-3 text-right bg-emerald-50/70 text-emerald-900 font-bold">Já Repassado</th>
-                      <th className="py-2.5 px-3 text-right bg-amber-50 text-amber-950 font-bold">Saldo a Pagar</th>
+                      <th className="py-2.5 px-3 text-right bg-amber-50 text-amber-950 font-bold">Saldo a Repassar</th>
                       <th className="py-2.5 px-3 text-center">Status</th>
                       <th className="py-2.5 px-3 text-center print:hidden">Comprovante</th>
                     </tr>

@@ -411,10 +411,14 @@ async function settleProducerPayment(id, payload = {}) {
 
     sale.producerPaymentStatus = 'Pago';
 
-    // Todo o valor é repassado ao produtor: sincroniza quitação da venda
-    sale.paidAmount = totalNF;
-    sale.paymentStatus = 'Recebido';
-    sale.status = 'Concluído';
+    // Conclui o status geral da venda se o recebimento do cliente também já estiver quitado
+    if (sale.paymentStatus === 'Recebido' || (Number(sale.paidAmount) || 0) >= totalNF - 0.05) {
+      sale.status = 'Concluído';
+    } else if (payload.syncClientPayment) {
+      sale.paidAmount = totalNF;
+      sale.paymentStatus = 'Recebido';
+      sale.status = 'Concluído';
+    }
   }
 
   sale.producerPaymentMethod = paymentMethod || 'PIX';

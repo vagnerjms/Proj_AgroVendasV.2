@@ -66,7 +66,7 @@ async function sendSaleWebhook(event, sale) {
             try {
               const filePath = path.join(uploadDir, diskMatch);
               const stat = await fs.promises.stat(filePath);
-              if (stat.isFile() && stat.size > 0 && stat.size <= 25 * 1024 * 1024) {
+              if (stat.isFile() && stat.size > 0 && stat.size <= 5 * 1024 * 1024) {
                 const dataBuffer = await fs.promises.readFile(filePath);
                 let cleanFileName = diskMatch.replace(/^\d+-\d+-/, '');
                 let driveFileName = cleanFileName;
@@ -123,34 +123,36 @@ async function sendSaleWebhook(event, sale) {
       }
     };
 
-    // Try sending to n8n webhook sequentially until one succeeds
-    const targetUrls = [
-      N8N_WEBHOOK_URL,
-      'http://n8n_application:5678/webhook/agrovenda-sale',
-      'http://127.0.0.1:5678/webhook/agrovenda-sale',
-      'http://localhost:5678/webhook/agrovenda-sale'
-    ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+    // Execução assíncrona não-bloqueante (fire-and-forget) via setImmediate
+    setImmediate(async () => {
+      // Try sending to n8n webhook sequentially until one succeeds
+      const targetUrls = [
+        N8N_WEBHOOK_URL,
+        'http://n8n_application:5678/webhook/agrovenda-sale',
+        'http://127.0.0.1:5678/webhook/agrovenda-sale'
+      ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
 
-    let sent = false;
-    for (const url of targetUrls) {
-      if (sent) break;
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        if (res.ok) {
-          sent = true;
+      let sent = false;
+      for (const url of targetUrls) {
+        if (sent) break;
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000);
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            sent = true;
+          }
+        } catch (e) {
+          // Fallback to next candidate
         }
-      } catch (e) {
-        // Fallback to next url candidate
       }
-    }
+    });
   } catch (err) {
     console.warn('[Webhook] Erro ao disparar webhook para n8n:', err.message);
   }

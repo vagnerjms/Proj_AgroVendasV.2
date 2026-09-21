@@ -94,7 +94,8 @@ async function getFinancialSummary(queryParams = {}) {
       comissao = calculateCommission(valorVP, fee).comissao;
     }
     totalComissao = roundMoney(totalComissao + comissao);
-    totalLiquidoProdutor = roundMoney(totalLiquidoProdutor + (valorVP - comissao));
+    // Repasse integral da NF ao produtor rural (sem retenção de corretagem na base do produtor)
+    totalLiquidoProdutor = roundMoney(totalLiquidoProdutor + (valorNF > 0 ? valorNF : valorVP));
   }
 
   // Contas a pagar (Compras de insumos / produtores)

@@ -7,6 +7,9 @@ const { escapeRegex } = require('../utils/security');
 const { requireAuth } = require('../middlewares/auth');
 const saleService = require('../services/sale.service');
 
+// Protect all sales endpoints with JWT authentication
+router.use(requireAuth);
+
 // GET /api/sales/agenda-events (Recebíveis formatados por Data de Vencimento para n8n & Google Calendar via sale.service.js)
 router.get('/agenda-events', async (req, res, next) => {
   try {
@@ -16,9 +19,6 @@ router.get('/agenda-events', async (req, res, next) => {
     next(err);
   }
 });
-
-// Protect internal sales endpoints with JWT authentication
-router.use(requireAuth);
 
 // GET /api/sales (Lista de vendas com paginação, filtros e busca)
 router.get('/', async (req, res, next) => {

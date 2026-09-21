@@ -38,6 +38,9 @@ export default function Login({ onLogin }) {
       const data = await api.post('/api/auth/login', { email, password });
       if (data.token) {
         localStorage.setItem('agrovenda_token', data.token);
+        try {
+          document.cookie = `agrovenda_token=${encodeURIComponent(data.token)}; path=/; SameSite=Lax; max-age=604800`;
+        } catch (e) {}
       }
       if (data.user) {
         onLogin(data.user, rememberMe);

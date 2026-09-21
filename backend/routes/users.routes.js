@@ -95,13 +95,28 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const updateData = { ...req.body };
+
+    // Proteção contra escalação de privilégios: apenas Administrador Geral pode alterar role ou permissões
+    if (req.user.role !== 'Administrador Geral') {
+      delete updateData.role;
+      delete updateData.permissions;
+    }
+
     if (!updateData.password) {
       delete updateData.password;
     } else {
       updateData.password = await hashPassword(updateData.password);
     }
+
     if (updateData.email) {
       updateData.email = updateData.email.trim().toLowerCase();
+      const existingEmail = await User.findOne({ 
+        email: updateData.email, 
+        id: { $ne: req.params.id } 
+      });
+      if (existingEmail) {
+        return res.status(409).json({ error: `O e-mail ${updateData.email} já está em uso por outro colaborador.` });
+      }
     }
 
     const updated = await User.findOneAndUpdate(

@@ -24,7 +24,7 @@ import {
 import { formatCurrency } from '../utils/formatters';
 import { api } from '../services/api';
 import { buildExcelReportHtml, buildProducerExcelReportHtml } from '../utils/reportExcelBuilder';
-import { calculateLiquidation, cleanProductName, getValorTotalVP } from '../utils/calculations';
+import { calculateLiquidation, cleanProductName, getValorTotalVP, roundMoney } from '../utils/calculations';
 
 // Subcomponentes modulares
 import StoreSummaryTable from '../components/reports/StoreSummaryTable';
@@ -192,12 +192,16 @@ export default function Reports({ setCurrentPage }) {
 
       const subVP = getValorTotalVP({ items: matchingSubs });
 
-      const itemValorNF = Number(it.valorNF) * ratio;
-      const itemFunrural = Number(it.funrural) * ratio;
-      const itemLiquidoProdutor = Number(it.liquidoProdutor) * ratio;
-      const itemComissao = Number(it.comissao) * ratio;
-      const itemSpread = Math.max(0, subVP - itemValorNF);
-      const itemLucro = itemComissao + itemSpread;
+      const itemValorNF = roundMoney(Number(it.valorNF) * ratio);
+      const itemFunrural = roundMoney(Number(it.funrural) * ratio);
+      const itemLiquidoProdutor = roundMoney(Number(it.liquidoProdutor) * ratio);
+      const itemComissao = roundMoney(Number(it.comissao) * ratio);
+      const itemSpread = roundMoney(Math.max(0, subVP - itemValorNF));
+      const itemLucro = roundMoney(itemComissao + itemSpread);
+      const itemValorLiquidado = roundMoney(Number(it.valorLiquidado ?? it.liquido ?? 0) * ratio);
+      const itemValorALiquidar = roundMoney(Number(it.valorALiquidar ?? 0) * ratio);
+      const itemRepassado = roundMoney(Number(it.repassado ?? it.valorLiquidado ?? 0) * ratio);
+      const itemSaldo = roundMoney(Math.max(0, itemValorNF - itemRepassado));
 
       return {
         ...it,
@@ -208,16 +212,16 @@ export default function Reports({ setCurrentPage }) {
         cxs: subCxs || Number((subKg / 29).toFixed(2)),
         valorNF: itemValorNF,
         funrural: itemFunrural,
-        valorVP: subVP > 0 ? subVP : (Number(it.valorVP) * ratio),
-        liquidoNF: itemValorNF - itemFunrural,
+        valorVP: subVP > 0 ? subVP : roundMoney(Number(it.valorVP) * ratio),
+        liquidoNF: roundMoney(itemValorNF - itemFunrural),
         comissao: itemComissao,
         liquidoProdutor: itemLiquidoProdutor,
         spreadComercial: itemSpread,
         lucroCorretor: itemLucro,
-        valorLiquidado: Number(it.valorLiquidado ?? it.liquido ?? 0) * ratio,
-        valorALiquidar: Number(it.valorALiquidar ?? 0) * ratio,
-        repassado: Number(it.repassado ?? it.valorLiquidado ?? 0) * ratio,
-        saldo: Math.max(0, itemValorNF - (Number(it.repassado ?? it.valorLiquidado ?? 0) * ratio))
+        valorLiquidado: itemValorLiquidado,
+        valorALiquidar: itemValorALiquidar,
+        repassado: itemRepassado,
+        saldo: itemSaldo
       };
     }
 

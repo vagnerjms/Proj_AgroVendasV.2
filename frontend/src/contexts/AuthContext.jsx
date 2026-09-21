@@ -65,6 +65,15 @@ function getStoredUser() {
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => getStoredUser());
 
+  useEffect(() => {
+    try {
+      const token = localStorage.getItem('agrovenda_token');
+      if (token) {
+        setCookie('agrovenda_token', token, 7);
+      }
+    } catch (e) {}
+  }, []);
+
   const login = (user, rememberMe = true) => {
     setCurrentUser(user);
     try {
@@ -99,10 +108,12 @@ export function AuthProvider({ children }) {
     try {
       localStorage.removeItem(SESSION_KEY);
       localStorage.removeItem('agrovenda_user');
+      localStorage.removeItem('agrovenda_token');
       localStorage.removeItem('token');
       sessionStorage.removeItem(SESSION_KEY);
       sessionStorage.removeItem('agrovenda_user');
       eraseCookie('agrovenda_session');
+      eraseCookie('agrovenda_token');
     } catch (err) {
       console.warn('Erro ao limpar sessão:', err);
     }

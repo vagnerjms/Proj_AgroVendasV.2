@@ -48,15 +48,33 @@ async function cleanupOrphanUploads() {
 
     const diskFiles = await fs.promises.readdir(uploadDir);
     const now = Date.now();
-    const THIRTY_MINUTES_MS = 30 * 60 * 1000;
+    const SIXTY_MINUTES_MS = 60 * 60 * 1000;
     let deletedCount = 0;
 
+    const isDiskFileActive = (diskFilename) => {
+      if (activeFiles.has(diskFilename)) return true;
+      if (diskFilename.startsWith('.') || diskFilename === '.gitkeep') return true;
+
+      const cleanDisk = diskFilename.replace(/^\d+(?:-\d+)?-/, '').toLowerCase();
+
+      for (const active of activeFiles) {
+        if (!active || typeof active !== 'string') continue;
+        const cleanActive = active.replace(/^\d+(?:-\d+)?-/, '').toLowerCase();
+
+        if (diskFilename === active) return true;
+        if (diskFilename.endsWith(active) || active.endsWith(diskFilename)) return true;
+        if (cleanDisk === cleanActive) return true;
+        if (cleanActive.length > 5 && (cleanDisk.includes(cleanActive) || cleanActive.includes(cleanDisk))) return true;
+      }
+      return false;
+    };
+
     for (const filename of diskFiles) {
-      if (!activeFiles.has(filename)) {
+      if (!isDiskFileActive(filename)) {
         const filePath = path.join(uploadDir, filename);
         try {
           const stat = await fs.promises.stat(filePath);
-          if (now - stat.mtimeMs > THIRTY_MINUTES_MS) {
+          if (now - stat.mtimeMs > SIXTY_MINUTES_MS) {
             await fs.promises.unlink(filePath);
             deletedCount++;
             console.log(`[Cleanup] Arquivo temporário órfão removido com segurança: ${filename}`);

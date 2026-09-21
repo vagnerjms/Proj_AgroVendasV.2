@@ -5,17 +5,23 @@ const fs = require('fs');
 const mongoose = require('mongoose');
 const { connectDB } = require('./db');
 const { uploadDir } = require('./middlewares/upload');
+const { requireAuth } = require('./middlewares/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Global Middlewares
+// Global Security & Middlewares
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  next();
+});
 app.use(cors());
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
-// Static Uploads Serving
-app.use('/uploads', express.static(uploadDir));
+// Protected Static Uploads Serving (Exige JWT válido via Header, Cookie ou Query)
+app.use('/uploads', requireAuth, express.static(uploadDir));
 
 // Modular API Routes
 app.use('/api/auth', require('./routes/auth.routes'));

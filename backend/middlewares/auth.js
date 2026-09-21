@@ -49,9 +49,14 @@ async function comparePassword(plainPassword, storedPassword) {
  */
 function requireAuth(req, res, next) {
   const authHeader = req.headers['authorization'];
-  const token = (authHeader && authHeader.startsWith('Bearer ')) 
+  let token = (authHeader && authHeader.startsWith('Bearer ')) 
     ? authHeader.split(' ')[1] 
     : req.query.token;
+
+  if (!token && req.headers.cookie) {
+    const match = req.headers.cookie.match(/(?:^|;\s*)agrovenda_token=([^;]+)/);
+    if (match) token = match[1];
+  }
 
   if (!token) {
     return res.status(401).json({ error: 'Acesso não autorizado. Faça login para continuar.' });

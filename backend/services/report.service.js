@@ -194,7 +194,7 @@ async function getStoresSummary({ startDate, endDate, producer }) {
         liquido: itemLiquidado,
         valorLiquidado: itemLiquidado,
         valorALiquidar: itemALiquidar,
-        paidAmount: paid,
+        paidAmount: pagoEfetivo,
         paymentMethod: s.paymentMethod || (s.paymentHistory && s.paymentHistory.length > 0 ? s.paymentHistory[s.paymentHistory.length - 1].paymentMethod : 'PIX'),
         paymentHistory: s.paymentHistory || [],
         liquidoNF: roundMoney(itemValorNF - itemFunrural),

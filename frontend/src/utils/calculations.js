@@ -127,21 +127,21 @@ export function calculateLiquidation(sale = {}) {
 
   // Total Líquido Oficial da Venda (Total Comercial - FUNRURAL)
   const totalLiquido = roundMoney(Math.max(0, valorVP - funrural));
-  const paidAmount = roundMoney(Number(sale.paidAmount) || 0);
+  const paidAmount = roundMoney(Math.max(Number(sale.producerPaidAmount) || 0, Number(sale.paidAmount) || 0));
 
-  // Status de Liquidação
-  const isSettled = sale.paymentStatus === 'Recebido' || sale.status === 'Concluído' || (paidAmount > 0 && paidAmount >= totalLiquido - 0.01);
-  const isPartial = !isSettled && (sale.paymentStatus === 'Parcial' || (paidAmount > 0 && paidAmount < totalLiquido));
+  // Status de Liquidação (Unificado: Todo o valor é repassado ao produtor)
+  const isSettled = sale.producerPaymentStatus === 'Pago' || sale.paymentStatus === 'Recebido' || sale.status === 'Concluído' || (paidAmount > 0 && paidAmount >= itemValorNF - 0.05);
+  const isPartial = !isSettled && (sale.producerPaymentStatus === 'Parcial' || sale.paymentStatus === 'Parcial' || paidAmount > 0);
 
   const valorLiquidado = isSettled 
-    ? totalLiquido 
-    : (isPartial ? Math.min(paidAmount, totalLiquido) : 0);
+    ? (paidAmount > 0 ? paidAmount : itemValorNF) 
+    : (isPartial ? paidAmount : 0);
+
+  const liquidoNF = roundMoney(Math.max(0, itemValorNF - funrural));
 
   const valorALiquidar = isSettled 
     ? 0 
-    : (isPartial ? roundMoney(Math.max(0, totalLiquido - paidAmount)) : totalLiquido);
-
-  const liquidoNF = roundMoney(Math.max(0, itemValorNF - funrural));
+    : (isPartial ? roundMoney(Math.max(0, liquidoNF - paidAmount)) : liquidoNF);
 
   let statusLabel = 'A Receber';
   if (isSettled) statusLabel = 'Recebido';

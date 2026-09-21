@@ -122,22 +122,27 @@ async function getStoresSummary({ startDate, endDate, producer }) {
       }
       valorVP = roundMoney(valorVP);
 
-      // Regra de Liquidação: Total, Parcial ou A Receber
-      const totalLiquidoItem = roundMoney(Math.max(0, valorVP - itemFunrural));
-      const paid = roundMoney(Number(s.paidAmount) || 0);
-      
-      let itemLiquidado = 0;
-      let itemALiquidar = totalLiquidoItem;
+      // Regra de Liquidação Unificada da AgroVenda (Todo o valor é repassado ao produtor)
+      const itemLiquido = roundMoney(Math.max(0, itemValorNF - itemFunrural));
+      const pagoProdutor = roundMoney(Number(s.producerPaidAmount) || 0);
+      const pagoCliente = roundMoney(Number(s.paidAmount) || 0);
+      const pagoEfetivo = Math.max(pagoProdutor, pagoCliente);
 
-      if (s.paymentStatus === 'Recebido' || s.status === 'Concluído' || s.status === 'Recebido') {
-        itemLiquidado = totalLiquidoItem;
+      const isQuitado = s.producerPaymentStatus === 'Pago' || s.paymentStatus === 'Recebido' || s.status === 'Concluído' || (pagoEfetivo > 0 && pagoEfetivo >= itemValorNF - 0.05);
+      const isParcial = !isQuitado && (s.producerPaymentStatus === 'Parcial' || s.paymentStatus === 'Parcial' || pagoEfetivo > 0);
+
+      let itemLiquidado = 0;
+      let itemALiquidar = 0;
+
+      if (isQuitado) {
+        itemLiquidado = pagoEfetivo > 0 ? pagoEfetivo : itemValorNF;
         itemALiquidar = 0;
-      } else if (s.paymentStatus === 'Parcial' || (paid > 0 && paid < totalLiquidoItem)) {
-        itemLiquidado = Math.min(paid, totalLiquidoItem);
-        itemALiquidar = Math.max(0, totalLiquidoItem - paid);
+      } else if (isParcial) {
+        itemLiquidado = pagoEfetivo;
+        itemALiquidar = roundMoney(Math.max(0, itemLiquido - pagoEfetivo));
       } else {
         itemLiquidado = 0;
-        itemALiquidar = totalLiquidoItem;
+        itemALiquidar = itemLiquido;
       }
 
       totalVendaAReceber = roundMoney(totalVendaAReceber + valorVP);
@@ -440,7 +445,9 @@ async function getProducersSummary({ startDate, endDate, producer }) {
       const unitKg = isBatata ? 25 : (s.items?.[0]?.boxWeightKg || 29);
       const itemCaixas = Number(s.totalVolumes) > 0 ? Number(s.totalVolumes) : (itemPeso > 0 ? Number((itemPeso / unitKg).toFixed(2)) : 0);
 
-      const pago = roundMoney(Number(s.producerPaidAmount) || 0);
+      const pagoProdutor = roundMoney(Number(s.producerPaidAmount) || 0);
+      const pagoCliente = roundMoney(Number(s.paidAmount) || 0);
+      const pago = Math.max(pagoProdutor, pagoCliente);
       const saldo = roundMoney(Math.max(0, itemLiquido - pago));
       
       pesoNF += itemPeso;

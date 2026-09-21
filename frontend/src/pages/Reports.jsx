@@ -216,8 +216,8 @@ export default function Reports({ setCurrentPage }) {
         lucroCorretor: itemLucro,
         valorLiquidado: Number(it.valorLiquidado ?? it.liquido ?? 0) * ratio,
         valorALiquidar: Number(it.valorALiquidar ?? 0) * ratio,
-        repassado: Number(it.repassado ?? 0) * ratio,
-        saldo: Math.max(0, itemLiquidoProdutor - (Number(it.repassado ?? 0) * ratio))
+        repassado: Number(it.repassado ?? it.valorLiquidado ?? 0) * ratio,
+        saldo: Math.max(0, itemLiquidoProdutor - (Number(it.repassado ?? it.valorLiquidado ?? 0) * ratio))
       };
     }
 

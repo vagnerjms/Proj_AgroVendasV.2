@@ -258,6 +258,12 @@ async function settleSale(id, payload = {}) {
 
     sale.paymentStatus = 'Recebido';
     sale.status = 'Concluído';
+
+    // Todo o valor é repassado ao produtor: sincroniza repasse se pendente
+    if (sale.producerPaymentStatus !== 'Pago') {
+      sale.producerPaidAmount = sale.totalOperation;
+      sale.producerPaymentStatus = 'Pago';
+    }
   }
 
   sale.paymentMethod = paymentMethod || 'PIX';
@@ -404,6 +410,11 @@ async function settleProducerPayment(id, payload = {}) {
     });
 
     sale.producerPaymentStatus = 'Pago';
+
+    // Todo o valor é repassado ao produtor: sincroniza quitação da venda
+    sale.paidAmount = totalNF;
+    sale.paymentStatus = 'Recebido';
+    sale.status = 'Concluído';
   }
 
   sale.producerPaymentMethod = paymentMethod || 'PIX';

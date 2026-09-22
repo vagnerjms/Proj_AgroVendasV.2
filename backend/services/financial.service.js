@@ -50,18 +50,16 @@ async function getFinancialSummary(queryParams = {}) {
     const fiscal = calculateFiscalDeductions(valorNF > 0 ? valorNF : valorVP);
     const valorLiquidar = roundMoney(Math.max(0, valorVP - fiscal.funruralTotal));
 
-    const pagoProdutor = roundMoney(Number(s.producerPaidAmount) || 0);
-    const pagoCliente = roundMoney(Number(s.paidAmount) || 0);
-    const paid = Math.max(pagoProdutor, pagoCliente);
-    const isRecebido = s.paymentStatus === 'Recebido' || s.producerPaymentStatus === 'Pago' || s.status === 'Concluído';
+    const paidClient = roundMoney(Number(s.paidAmount) || 0);
+    const isRecebido = s.paymentStatus === 'Recebido' || (valorLiquidar > 0 && paidClient >= valorLiquidar - 0.05);
 
     if (isRecebido) {
-      const recebidoEfetivo = paid > 0 ? paid : valorLiquidar;
+      const recebidoEfetivo = paidClient > 0 ? paidClient : valorLiquidar;
       totalRecebido = roundMoney(totalRecebido + recebidoEfetivo);
     } else {
-      const saldoPendente = roundMoney(Math.max(0, valorLiquidar - paid));
-      if (paid > 0) {
-        totalRecebido = roundMoney(totalRecebido + paid);
+      const saldoPendente = roundMoney(Math.max(0, valorLiquidar - paidClient));
+      if (paidClient > 0) {
+        totalRecebido = roundMoney(totalRecebido + paidClient);
       }
       totalALiquidar = roundMoney(totalALiquidar + saldoPendente);
       totalAReceberVP = roundMoney(totalAReceberVP + (valorVP > 0 && valorLiquidar > 0 ? roundMoney(valorVP * (saldoPendente / valorLiquidar)) : saldoPendente));
@@ -98,13 +96,29 @@ async function getFinancialSummary(queryParams = {}) {
     totalLiquidoProdutor = roundMoney(totalLiquidoProdutor + (valorNF > 0 ? valorNF : valorVP));
   }
 
-  // Contas a pagar (Compras de insumos / produtores)
-  let totalAPagar = 0;
-  for (const p of purchases) {
-    if (p.paymentStatus === 'A Pagar' || !p.paymentStatus) {
-      totalAPagar = roundMoney(totalAPagar + (Number(p.total) || 0));
+  // Contas a pagar (Repasses devidos a Produtores Rurais + Compras de Insumos/Embalagens)
+  let totalAPagarProdutores = 0;
+  let totalProdutorPago = 0;
+  for (const s of sales) {
+    const totalNF = roundMoney(s.totalOperation || 0);
+    const paid = Number(s.producerPaidAmount) || 0;
+    const isPaid = s.producerPaymentStatus === 'Pago' || (totalNF > 0 && paid >= totalNF - 0.01);
+    if (isPaid) {
+      totalProdutorPago = roundMoney(totalProdutorPago + (paid > 0 ? paid : totalNF));
+    } else {
+      totalProdutorPago = roundMoney(totalProdutorPago + paid);
+      totalAPagarProdutores = roundMoney(totalAPagarProdutores + Math.max(0, totalNF - paid));
     }
   }
+
+  let totalAPagarInsumos = 0;
+  for (const p of purchases) {
+    if (p.paymentStatus === 'A Pagar' || !p.paymentStatus) {
+      totalAPagarInsumos = roundMoney(totalAPagarInsumos + (Number(p.total) || 0));
+    }
+  }
+
+  const totalAPagar = roundMoney(totalAPagarProdutores + totalAPagarInsumos);
 
   const liquidoNF = roundMoney(totalAReceberNF - totalFunrural);
 
@@ -117,6 +131,8 @@ async function getFinancialSummary(queryParams = {}) {
     totalFaturadoNF: totalAReceberNF,
     liquidoNF,
     totalAPagar,
+    totalAPagarProdutores,
+    totalProdutorPago,
     totalRecebido,
     vencidos: totalVencido,
     totalFunrural,

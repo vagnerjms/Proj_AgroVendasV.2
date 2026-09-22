@@ -260,12 +260,18 @@ async function settleSale(id, payload = {}) {
     });
 
     sale.paymentStatus = 'Recebido';
-    sale.status = 'Concluído';
 
-    // Todo o valor é repassado ao produtor: sincroniza repasse se pendente
-    if (sale.producerPaymentStatus !== 'Pago') {
-      sale.producerPaidAmount = sale.totalOperation;
+    // Conclui o status geral da venda somente se o repasse do produtor também já estiver quitado
+    const totalNF = roundMoney(sale.totalOperation);
+    const isProducerSettled = sale.producerPaymentStatus === 'Pago' || (Number(sale.producerPaidAmount) || 0) >= totalNF - 0.05;
+    if (isProducerSettled) {
+      sale.status = 'Concluído';
+    } else if (payload.syncProducerPayment) {
+      sale.producerPaidAmount = totalNF;
       sale.producerPaymentStatus = 'Pago';
+      sale.status = 'Concluído';
+    } else {
+      sale.status = sale.nfFile ? 'Faturado' : 'Pendente NF';
     }
   }
 

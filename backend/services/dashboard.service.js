@@ -60,9 +60,20 @@ async function getDashboardData(queryParams = {}) {
   const totalAReceber = roundMoney(allSales
     .reduce((acc, s) => acc + getSalePendingReceivable(s), 0));
 
-  const totalAPagar = roundMoney(allPurchases
+  // Total a Pagar Consolidado (Repasses a Produtores Rurais em aberto + Compras de Insumos/Embalagens)
+  const totalAPagarProdutores = roundMoney(allSales.reduce((acc, s) => {
+    const totalNF = roundMoney(s.totalOperation || 0);
+    const paid = Number(s.producerPaidAmount) || 0;
+    const isPaid = s.producerPaymentStatus === 'Pago' || (totalNF > 0 && paid >= totalNF - 0.01);
+    if (isPaid) return acc;
+    return acc + Math.max(0, totalNF - paid);
+  }, 0));
+
+  const totalAPagarInsumos = roundMoney(allPurchases
     .filter(p => p.paymentStatus !== 'Pago')
     .reduce((acc, p) => acc + (Number(p.total) || 0), 0));
+
+  const totalAPagar = roundMoney(totalAPagarProdutores + totalAPagarInsumos);
 
   const pendingNfs = allSales.filter(s => !s.nfFile || typeof s.nfFile !== 'string' || s.nfFile.trim() === '').length;
 

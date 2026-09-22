@@ -446,8 +446,8 @@ async function getProducersSummary({ startDate, endDate, producer }) {
       const itemCaixas = Number(s.totalVolumes) > 0 ? Number(s.totalVolumes) : (itemPeso > 0 ? Number((itemPeso / unitKg).toFixed(2)) : 0);
 
       const pagoProdutor = roundMoney(Number(s.producerPaidAmount) || 0);
-      const pagoCliente = roundMoney(Number(s.paidAmount) || 0);
-      const pago = Math.max(pagoProdutor, pagoCliente);
+      const isProducerPaid = s.producerPaymentStatus === 'Pago' || (itemValorNF > 0 && pagoProdutor >= itemValorNF - 0.01);
+      const pago = isProducerPaid && pagoProdutor === 0 ? itemValorNF : pagoProdutor;
       const saldo = roundMoney(Math.max(0, itemValorNF - pago));
       
       pesoNF += itemPeso;
@@ -487,7 +487,7 @@ async function getProducersSummary({ startDate, endDate, producer }) {
         liquidoProdutor: itemLiquido,
         repassado: pago,
         saldo: saldo,
-        statusRepasse: s.producerPaymentStatus || (pago >= itemLiquido && itemLiquido > 0 ? 'Pago' : (pago > 0 ? 'Parcial' : 'A Pagar')),
+        statusRepasse: s.producerPaymentStatus || (isProducerPaid ? 'Pago' : (pago > 0 ? 'Parcial' : 'A Pagar')),
         producerProofFile: cleanProof || null,
         rawProducerProofFile: s.producerPaymentProofFile || null,
         paymentMethod: s.producerPaymentMethod || (s.producerPaymentHistory && s.producerPaymentHistory.length > 0 ? s.producerPaymentHistory[s.producerPaymentHistory.length - 1].paymentMethod : 'PIX'),

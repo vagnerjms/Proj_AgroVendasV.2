@@ -59,7 +59,16 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
   const [loading, setLoading] = useState(true);
   const [selectedOperation, setSelectedOperation] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('agrovenda_filter_entity');
+      if (saved) {
+        sessionStorage.removeItem('agrovenda_filter_entity');
+        return saved;
+      }
+    } catch (e) {}
+    return '';
+  });
   const [viewSale, setViewSale] = useState(null);
   const [contractSale, setContractSale] = useState(null);
   const [settleSaleModal, setSettleSaleModal] = useState(null);

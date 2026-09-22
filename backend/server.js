@@ -36,6 +36,7 @@ app.use('/api/purchases', require('./routes/purchases.routes'));
 app.use('/api/reports', require('./routes/reports.routes'));
 app.use('/api/financial', require('./routes/financial.routes'));
 app.use('/api/backup', require('./routes/backup.routes'));
+app.use('/api/notifications', require('./routes/notifications.routes'));
 
 // Health Check & Database Status Endpoint
 app.get('/api/health', async (req, res) => {

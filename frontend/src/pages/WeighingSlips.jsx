@@ -12,7 +12,16 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
   const [slips, setSlips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('agrovenda_filter_entity');
+      if (saved) {
+        sessionStorage.removeItem('agrovenda_filter_entity');
+        return saved;
+      }
+    } catch (e) {}
+    return '';
+  });
   
   // Resolution modal state
   const [resolvingSlip, setResolvingSlip] = useState(null);

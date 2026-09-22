@@ -34,6 +34,16 @@ function MainApp() {
     setMobileMenuOpen(false); // Auto close mobile drawer on navigation
   };
 
+  const handleNavigateFromNotification = (targetPage, targetTab, entityId) => {
+    if (targetTab) {
+      sessionStorage.setItem('agrovenda_agenda_tab', targetTab);
+    }
+    if (entityId) {
+      sessionStorage.setItem('agrovenda_filter_entity', entityId);
+    }
+    handleNavigate(targetPage || 'dashboard');
+  };
+
   // If user is not authenticated, render Login Screen
   if (!currentUser) {
     return <Login onLogin={(user, rememberMe) => { login(user, rememberMe); setCurrentPage('dashboard'); }} />;
@@ -100,6 +110,7 @@ function MainApp() {
           onLogout={logout}
           mobileOpen={mobileMenuOpen}
           onToggleMobileMenu={() => setMobileMenuOpen(prev => !prev)}
+          onNavigate={handleNavigateFromNotification}
         />
         <main className="flex-1 overflow-y-auto">
           {renderContent()}

@@ -189,7 +189,13 @@ export default function Dashboard({ setCurrentPage }) {
       {/* Row 2: Status / Alert Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Vencidos */}
-        <div className="bg-white rounded-xl border border-[#d4984f]/60 p-4 flex items-center justify-between shadow-xs">
+        <div 
+          onClick={() => {
+            sessionStorage.setItem('agrovenda_agenda_tab', 'lojas');
+            setCurrentPage('alerts');
+          }}
+          className="bg-white rounded-xl border border-[#d4984f]/60 p-4 flex items-center justify-between shadow-xs hover:border-[#d4984f] transition-all cursor-pointer group"
+        >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-[#fbf3e6] text-[#c87a1e] flex items-center justify-center border border-[#d4984f]/30">
               <Clock className="w-5 h-5" />
@@ -203,6 +209,9 @@ export default function Dashboard({ setCurrentPage }) {
               </span>
             </div>
           </div>
+          <span className="text-xs text-[#c87a1e] font-semibold group-hover:underline flex items-center gap-0.5">
+            Cobrar <ArrowRight className="w-3 h-3" />
+          </span>
         </div>
 
         {/* Notas Pendentes */}

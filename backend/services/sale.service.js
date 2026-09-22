@@ -6,6 +6,7 @@ const { roundMoney, calculateFiscalDeductions, calculateCommission } = require('
 const { normalizeProducerOrigin } = require('./producer.service');
 const { sendSaleWebhook } = require('./webhook.service');
 const { ensureProductsRegistered } = require('./product.service');
+const { invalidateAuditCache } = require('./audit.service');
 
 /**
  * Criação atômica de Venda (VP) com cálculo tributário, geração de romaneio e webhook
@@ -117,6 +118,7 @@ async function createSale(body) {
 
   // Disparar Webhook para o n8n
   sendSaleWebhook('sale.created', newSale);
+  invalidateAuditCache();
 
   return newSale;
 }
@@ -170,6 +172,7 @@ async function updateSale(id, body) {
   }
 
   sendSaleWebhook('sale.updated', updated);
+  invalidateAuditCache();
 
   return updated;
 }
@@ -274,6 +277,7 @@ async function settleSale(id, payload = {}) {
 
   await sale.save();
   sendSaleWebhook('sale.settled', sale);
+  invalidateAuditCache();
 
   return sale;
 }
@@ -322,6 +326,7 @@ async function unsettleSale(id, payload = {}) {
   await sale.save();
 
   sendSaleWebhook('sale.updated', sale);
+  invalidateAuditCache();
 
   return sale;
 }
@@ -429,6 +434,7 @@ async function settleProducerPayment(id, payload = {}) {
 
   await sale.save();
   sendSaleWebhook('sale.producer_settled', sale);
+  invalidateAuditCache();
 
   return sale;
 }
@@ -472,6 +478,7 @@ async function unsettleProducerPayment(id, payload = {}) {
 
   await sale.save();
   sendSaleWebhook('sale.updated', sale);
+  invalidateAuditCache();
 
   return sale;
 }
@@ -512,6 +519,7 @@ async function deleteSale(id) {
     }
   }
 
+  invalidateAuditCache();
   return deleted;
 }
 

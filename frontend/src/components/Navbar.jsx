@@ -1,7 +1,8 @@
 import React from 'react';
 import { LogOut, User, Shield, Menu, X, Sprout } from 'lucide-react';
+import NotificationBell from './notifications/NotificationBell';
 
-export default function Navbar({ title, currentUser, onLogout, mobileOpen, onToggleMobileMenu }) {
+export default function Navbar({ title, currentUser, onLogout, mobileOpen, onToggleMobileMenu, onNavigate }) {
   const userName = currentUser?.name || 'Administrador AgroVenda';
   const userRole = currentUser?.role || 'Administrador Geral';
   
@@ -38,6 +39,9 @@ export default function Navbar({ title, currentUser, onLogout, mobileOpen, onTog
       </div>
 
       <div className="flex items-center gap-3 sm:gap-4">
+        {/* Central de Notificações e Auditoria */}
+        <NotificationBell onNavigate={onNavigate} />
+
         {/* User Profile Pill */}
         <div className="flex items-center gap-2.5 sm:gap-3">
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#091b2e] text-white flex items-center justify-center font-bold text-xs sm:text-sm shadow-sm shrink-0 border border-[#162e4a]">

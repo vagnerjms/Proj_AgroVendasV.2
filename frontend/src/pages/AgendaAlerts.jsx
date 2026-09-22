@@ -26,18 +26,44 @@ export default function AgendaAlerts({ setCurrentPage }) {
   const [notification, setNotification] = useState('');
   
   // Controle de Abas: 'lojas' (Contas a Receber) vs 'produtores' (Contas a Pagar)
-  const [activeTab, setActiveTab] = useState('lojas');
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const savedTab = sessionStorage.getItem('agrovenda_agenda_tab');
+      if (savedTab) {
+        sessionStorage.removeItem('agrovenda_agenda_tab');
+        return savedTab;
+      }
+    } catch (e) {}
+    return 'lojas';
+  });
 
   // Filtros - Aba Lojas
   const [selectedLoja, setSelectedLoja] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => {
+    try {
+      const savedEntity = sessionStorage.getItem('agrovenda_filter_entity');
+      if (savedEntity) {
+        sessionStorage.removeItem('agrovenda_filter_entity');
+        return savedEntity;
+      }
+    } catch (e) {}
+    return '';
+  });
 
   // Filtros - Aba Produtores
   const [selectedProducer, setSelectedProducer] = useState('ALL');
   const [selectedProducerLoja, setSelectedProducerLoja] = useState('ALL');
   const [producerStatusFilter, setProducerStatusFilter] = useState('ALL');
-  const [searchProducer, setSearchProducer] = useState('');
+  const [searchProducer, setSearchProducer] = useState(() => {
+    try {
+      const savedEntity = sessionStorage.getItem('agrovenda_filter_entity');
+      if (savedEntity) {
+        return savedEntity;
+      }
+    } catch (e) {}
+    return '';
+  });
 
   // Estados de Upload / Modal / Visualização
   const [uploadingSaleId, setUploadingSaleId] = useState(null);

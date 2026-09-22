@@ -76,11 +76,12 @@ async function generateNotifications(forceRefresh = false) {
     const dueDate = parseSafeDate(s.dueDate);
     const totalOp = roundMoney(s.totalOperation || 0);
     const valorVP = roundMoney(Number(s.valorTotalVP) > 0 ? s.valorTotalVP : totalOp);
-    const funrural = roundMoney(s.funruralTotal || 0);
-    const liquidoProdutor = roundMoney(Math.max(0, valorVP - funrural));
+    const repasseTotalProdutor = roundMoney(totalOp > 0 ? totalOp : valorVP);
+    const paidProducer = roundMoney(s.producerPaidAmount || 0);
+    const saldoRepasseProdutor = roundMoney(Math.max(0, repasseTotalProdutor - paidProducer));
     const paidClient = roundMoney(s.paidAmount || 0);
     const isClientPaid = s.paymentStatus === 'Recebido' || (totalOp > 0 && paidClient >= totalOp);
-    const isProducerPaid = s.producerPaymentStatus === 'Pago';
+    const isProducerPaid = s.producerPaymentStatus === 'Pago' || (repasseTotalProdutor > 0 && paidProducer >= repasseTotalProdutor);
 
     // -------------------------------------------------------------
     // 1. REPASSE AO PRODUTOR PENDENTE COM LOJA JÁ QUITADA (CRÍTICO)
@@ -92,11 +93,11 @@ async function generateNotifications(forceRefresh = false) {
         type: 'PRODUCER_PAYOUT_PENDING',
         severity: 'critical',
         title: `Repasse Pendente: ${saleId}`,
-        description: `A loja ${clientName} já quitou esta venda, mas o repasse líquido de ${formatMoeda(liquidoProdutor)} ao produtor (${produtorName}) continua como 'A Pagar'.`,
+        description: `A loja ${clientName} já quitou esta venda, mas o repasse de ${formatMoeda(saldoRepasseProdutor)} (100% da NF) ao produtor (${produtorName}) continua como 'A Pagar'.`,
         entityType: 'sale',
         entityId: saleId,
         date: s.saleDate,
-        amount: liquidoProdutor,
+        amount: saldoRepasseProdutor,
         targetTab: 'produtores',
         targetPage: 'alerts',
         actionLabel: 'Realizar Repasse'

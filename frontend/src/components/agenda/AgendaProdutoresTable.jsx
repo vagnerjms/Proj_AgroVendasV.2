@@ -99,14 +99,13 @@ export default function AgendaProdutoresTable({
             <thead className="bg-gray-50 text-gray-700 font-bold uppercase text-[10px] tracking-wider border-b border-gray-200">
               <tr>
                 <th className="py-3 px-4">Data Vencimento</th>
-                <th className="py-3 px-4">Produtor Rural (Origem)</th>
-                <th className="py-3 px-3">Loja Destino</th>
+                <th className="py-3 px-4 min-w-[180px]">Produtor Rural (Origem)</th>
+                <th className="py-3 px-3 min-w-[150px]">Loja Destino</th>
                 <th className="py-3 px-3 text-center">Nº NF</th>
                 <th className="py-3 px-3 text-center">Nº VP</th>
                 <th className="py-3 px-3 text-right">Caixas</th>
-                <th className="py-3 px-3 text-right font-black text-gray-900 bg-gray-100/60">TOTAL NF</th>
-                <th className="py-3 px-3 text-right font-semibold text-red-600">(-) FUNRURAL (1,63%)</th>
-                <th className="py-3 px-3 text-right font-black text-blue-950 bg-blue-50/40">(=) Líquido Produtor</th>
+                <th className="py-3 px-3 text-right font-black text-gray-900 bg-gray-100/70">Total NF (100% Repasse)</th>
+                <th className="py-3 px-3 text-right font-bold text-blue-900 bg-blue-50/20">FUNRURAL (1,63% Indicativo)</th>
                 <th className="py-3 px-3 text-right font-black text-emerald-800 bg-emerald-50/40">Já Repassado</th>
                 <th className="py-3 px-3 text-right font-black text-amber-900 bg-amber-50/40">Saldo a Pagar</th>
                 <th className="py-3 px-3 text-center">Status Repasse</th>
@@ -116,7 +115,7 @@ export default function AgendaProdutoresTable({
             <tbody className="divide-y divide-gray-100">
               {filteredScheduleProdutores.length === 0 ? (
                 <tr>
-                  <td colSpan="13" className="py-8 text-center text-gray-400">
+                  <td colSpan="12" className="py-8 text-center text-gray-400">
                     Nenhum repasse a produtor encontrado para os filtros selecionados.
                   </td>
                 </tr>
@@ -124,6 +123,12 @@ export default function AgendaProdutoresTable({
                 filteredScheduleProdutores.map((item, idx) => {
                   const isProducerPaid = item.isProducerFullySettled;
                   const isProducerPart = item.isProducerPartial;
+                  
+                  // Separa o nome do produtor da localidade para evitar quebra de linha feia
+                  const originMatch = (item.producerOrigin || '').match(/^(.*?)(?:\s*\((.*?)\))?$/);
+                  const prodName = originMatch?.[1] || item.producerOrigin || 'Produtor Rural';
+                  const prodLocation = originMatch?.[2] || '';
+
                   return (
                     <tr key={idx} className={`hover:bg-gray-50/80 transition-colors ${isProducerPaid ? 'bg-gray-50/40 opacity-80' : ''}`}>
                       
@@ -135,17 +140,35 @@ export default function AgendaProdutoresTable({
 
                       {/* Produtor Rural (Origem) */}
                       <td className="py-3 px-4 font-bold text-gray-900">
-                        <div className="flex items-center gap-1.5">
-                          <Tractor className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                          <span>{item.producerOrigin}</span>
+                        <div className="flex items-start gap-1.5">
+                          <Tractor className="w-3.5 h-3.5 text-emerald-700 shrink-0 mt-0.5" />
+                          <div className="flex flex-col">
+                            <span className="leading-tight text-gray-900">{prodName}</span>
+                            {prodLocation && (
+                              <span className="text-[10px] text-gray-400 font-medium leading-tight mt-0.5">
+                                {prodLocation}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </td>
 
-                      {/* Loja Destino */}
-                      <td className="py-3 px-3 font-medium text-gray-700">
-                        <div className="flex items-center gap-1">
-                          <Building2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          <span className="truncate max-w-[120px]" title={item.client}>{item.client}</span>
+                      {/* Loja Destino com Status do Recebimento */}
+                      <td className="py-3 px-3">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1 font-bold text-gray-900">
+                            <Building2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="truncate max-w-[130px]" title={item.client}>{item.client}</span>
+                          </div>
+                          <div>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5 ${
+                              item.isFullySettled 
+                                ? 'bg-emerald-100 text-emerald-800' 
+                                : (item.isPartial ? 'bg-blue-100 text-blue-900' : 'bg-amber-100 text-amber-900')
+                            }`}>
+                              {item.isFullySettled ? '✓ Loja Pagou' : (item.isPartial ? 'Loja: Parcial' : '⏳ Loja: A Receber')}
+                            </span>
+                          </div>
                         </div>
                       </td>
 
@@ -164,19 +187,15 @@ export default function AgendaProdutoresTable({
                         {formatNumber(item.caixas, 2)} cx
                       </td>
 
-                      {/* TOTAL NF */}
+                      {/* TOTAL NF (100% Repasse) */}
                       <td className="py-3 px-3 text-right font-black text-gray-950 bg-gray-100/70 whitespace-nowrap">
                         {formatCurrency(item.totalNF)}
                       </td>
 
-                      {/* (-) FUNRURAL 1,63% */}
-                      <td className="py-3 px-3 text-right font-semibold text-red-600 whitespace-nowrap">
-                        -{formatCurrency(item.funrural)}
-                      </td>
-
-                      {/* (=) Líquido Produtor */}
-                      <td className="py-3 px-3 text-right font-black text-blue-950 bg-blue-50/50 whitespace-nowrap">
-                        {formatCurrency(item.liquidoProdutor)}
+                      {/* FUNRURAL (1,63% Indicativo) */}
+                      <td className="py-3 px-3 text-right bg-blue-50/20 whitespace-nowrap">
+                        <span className="font-bold text-blue-950">{formatCurrency(item.funrural)}</span>
+                        <span className="block text-[9px] text-gray-400 font-medium">retém produtor</span>
                       </td>
 
                       {/* Já Repassado */}

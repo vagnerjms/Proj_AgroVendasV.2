@@ -358,7 +358,7 @@ export default function AgendaAlerts({ setCurrentPage }) {
             Agenda & Alertas Financeiros
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Gestão segregada entre <strong>Recebimento de Lojas (VP Comercial)</strong> e <strong>Repasse a Produtores (Valor NF com FUNRURAL)</strong>.
+            Gestão segregada entre <strong>Recebimentos de Lojas (Faturamento NF)</strong> e <strong>Repasses a Produtores (100% da NF com FUNRURAL informativo)</strong>.
           </p>
         </div>
 

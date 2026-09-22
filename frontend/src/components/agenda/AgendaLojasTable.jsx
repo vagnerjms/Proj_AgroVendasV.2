@@ -86,7 +86,8 @@ export default function AgendaLojasTable({
                 <th className="py-3 px-3 text-center">Nº VP</th>
                 <th className="py-3 px-3 text-center">Nº NF</th>
                 <th className="py-3 px-3 text-right">Caixas</th>
-                <th className="py-3 px-3 text-right font-black text-blue-900 bg-blue-50/20">Total VP (Comercial)</th>
+                <th className="py-3 px-3 text-right font-black text-gray-900 bg-gray-100/70">Total NF (Faturado)</th>
+                <th className="py-3 px-3 text-right font-bold text-blue-900 bg-blue-50/20">Total VP (Cotação)</th>
                 <th className="py-3 px-3 text-right font-black text-emerald-800 bg-emerald-50/40">Valor Recebido</th>
                 <th className="py-3 px-3 text-right font-black text-amber-900 bg-amber-50/40">Saldo a Receber</th>
                 <th className="py-3 px-3 text-center">Status Pagamento</th>
@@ -96,7 +97,7 @@ export default function AgendaLojasTable({
             <tbody className="divide-y divide-gray-100">
               {filteredScheduleLojas.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="py-8 text-center text-gray-400">
+                  <td colSpan="11" className="py-8 text-center text-gray-400">
                     Nenhum recebimento de loja encontrado para os filtros selecionados.
                   </td>
                 </tr>
@@ -136,8 +137,13 @@ export default function AgendaLojasTable({
                         {formatNumber(item.caixas, 2)} cx
                       </td>
 
+                      {/* Total NF Faturado */}
+                      <td className="py-3 px-3 text-right font-black text-gray-950 bg-gray-100/70 whitespace-nowrap">
+                        {formatCurrency(item.totalOperation)}
+                      </td>
+
                       {/* Total VP Comercial */}
-                      <td className="py-3 px-3 text-right font-black text-blue-950 bg-blue-50/30 whitespace-nowrap">
+                      <td className="py-3 px-3 text-right font-bold text-blue-950 bg-blue-50/30 whitespace-nowrap">
                         {formatCurrency(item.valorVP)}
                       </td>
 

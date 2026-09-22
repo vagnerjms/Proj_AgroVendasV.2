@@ -88,7 +88,7 @@ export default function AgendaKpiCards({
         <div className="text-lg sm:text-xl xl:text-2xl font-black text-amber-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalProdutorAPagar)}>
           {formatCurrency(totalProdutorAPagar)}
         </div>
-        <span className="text-[11px] text-gray-400 block truncate">Saldo líquido a repassar aos produtores</span>
+        <span className="text-[11px] text-gray-400 block truncate">Saldo a repassar (Produtor recebe 100% da NF)</span>
       </div>
 
       <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
@@ -99,18 +99,18 @@ export default function AgendaKpiCards({
         <div className="text-lg sm:text-xl xl:text-2xl font-black text-gray-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalNFProgramado)}>
           {formatCurrency(totalNFProgramado)}
         </div>
-        <span className="text-[11px] text-gray-400 block truncate">Base bruta de faturamento das notas</span>
+        <span className="text-[11px] text-gray-400 block truncate">Base de faturamento integral (100% ao produtor)</span>
       </div>
 
       <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">
         <div className="flex items-center justify-between text-xs font-bold text-gray-500 uppercase">
-          <span className="truncate">(-) FUNRURAL Retido (1,63%)</span>
-          <ShieldCheck className="w-4 h-4 text-red-600 shrink-0 ml-1" />
+          <span className="truncate">FUNRURAL Destacado (1,63%)</span>
+          <ShieldCheck className="w-4 h-4 text-blue-700 shrink-0 ml-1" />
         </div>
-        <div className="text-lg sm:text-xl xl:text-2xl font-black text-red-600 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={`- ${formatCurrency(totalFunruralRetido)}`}>
-          - {formatCurrency(totalFunruralRetido)}
+        <div className="text-lg sm:text-xl xl:text-2xl font-black text-blue-900 tracking-tight whitespace-nowrap overflow-hidden text-ellipsis" title={formatCurrency(totalFunruralRetido)}>
+          {formatCurrency(totalFunruralRetido)}
         </div>
-        <span className="text-[11px] text-gray-400 block truncate">Tributos retidos sobre o valor da NF</span>
+        <span className="text-[11px] text-gray-400 block truncate">Informativo fiscal — Recolhido pelo produtor</span>
       </div>
 
       <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-gray-200 shadow-sm space-y-1.5 min-w-0">

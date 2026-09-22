@@ -9,7 +9,10 @@ import {
   Paperclip,
   X,
   ExternalLink,
-  Tractor
+  Tractor,
+  BarChart3,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { formatCurrency, formatNumber, getCleanFileName } from '../utils/formatters';
 import { api } from '../services/api';
@@ -36,6 +39,9 @@ export default function AgendaAlerts({ setCurrentPage }) {
     } catch (e) {}
     return 'lojas';
   });
+
+  // Controle de visualização dos Cards de KPI (recolher para ganhar espaço)
+  const [showKpis, setShowKpis] = useState(true);
 
   // Filtros - Aba Lojas
   const [selectedLoja, setSelectedLoja] = useState('ALL');
@@ -391,62 +397,78 @@ export default function AgendaAlerts({ setCurrentPage }) {
         </div>
       )}
 
-      {/* Seletor de Abas Dedicadas (Lojas vs Produtores) */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 border-b border-gray-200 pb-2">
-        <button
-          type="button"
-          onClick={() => setActiveTab('lojas')}
-          className={`flex items-center justify-between sm:justify-start gap-3 px-5 py-3 rounded-xl font-bold text-sm transition-all cursor-pointer ${
-            activeTab === 'lojas'
-              ? 'bg-[#091b2e] text-white shadow-md'
-              : 'bg-white text-gray-600 hover:text-gray-900 border border-gray-200 hover:bg-gray-50'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <Building2 className={`w-4 h-4 ${activeTab === 'lojas' ? 'text-[#df7b1b]' : 'text-gray-400'}`} />
-            <span>📥 Recebimentos de Lojas (Contas a Receber)</span>
-          </div>
-          <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
-            activeTab === 'lojas' ? 'bg-[#df7b1b] text-white' : 'bg-gray-100 text-gray-700'
-          }`}>
-            {totalPedidosAbertos} abertos
-          </span>
-        </button>
+      {/* Seletor de Abas Dedicadas (Lojas vs Produtores) + Botão de Recolher Resumo */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-gray-200 pb-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setActiveTab('lojas')}
+            className={`flex items-center justify-between sm:justify-start gap-3 px-5 py-3 rounded-xl font-bold text-sm transition-all cursor-pointer ${
+              activeTab === 'lojas'
+                ? 'bg-[#091b2e] text-white shadow-md'
+                : 'bg-white text-gray-600 hover:text-gray-900 border border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Building2 className={`w-4 h-4 ${activeTab === 'lojas' ? 'text-[#df7b1b]' : 'text-gray-400'}`} />
+              <span>📥 Recebimentos de Lojas (Contas a Receber)</span>
+            </div>
+            <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
+              activeTab === 'lojas' ? 'bg-[#df7b1b] text-white' : 'bg-gray-100 text-gray-700'
+            }`}>
+              {totalPedidosAbertos} abertos
+            </span>
+          </button>
 
+          <button
+            type="button"
+            onClick={() => setActiveTab('produtores')}
+            className={`flex items-center justify-between sm:justify-start gap-3 px-5 py-3 rounded-xl font-bold text-sm transition-all cursor-pointer ${
+              activeTab === 'produtores'
+                ? 'bg-emerald-800 text-white shadow-md'
+                : 'bg-white text-gray-600 hover:text-gray-900 border border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Tractor className={`w-4 h-4 ${activeTab === 'produtores' ? 'text-amber-300' : 'text-gray-400'}`} />
+              <span>📤 Repasses a Produtores (Contas a Pagar)</span>
+            </div>
+            <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
+              activeTab === 'produtores' ? 'bg-amber-400 text-emerald-950' : 'bg-gray-100 text-gray-700'
+            }`}>
+              {totalProdutoresPendentes} a pagar
+            </span>
+          </button>
+        </div>
+
+        {/* Toggle para Recolher/Expandir Cards de Resumo */}
         <button
           type="button"
-          onClick={() => setActiveTab('produtores')}
-          className={`flex items-center justify-between sm:justify-start gap-3 px-5 py-3 rounded-xl font-bold text-sm transition-all cursor-pointer ${
-            activeTab === 'produtores'
-              ? 'bg-emerald-800 text-white shadow-md'
-              : 'bg-white text-gray-600 hover:text-gray-900 border border-gray-200 hover:bg-gray-50'
-          }`}
+          onClick={() => setShowKpis(!showKpis)}
+          className="text-xs font-semibold text-gray-600 hover:text-gray-900 bg-white hover:bg-gray-50 px-3 py-2 rounded-lg border border-gray-200 transition-all flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer self-end sm:self-auto"
+          title={showKpis ? 'Ocultar cards de resumo para focar 100% na tabela' : 'Exibir cards de resumo de faturamento'}
         >
-          <div className="flex items-center gap-2">
-            <Tractor className={`w-4 h-4 ${activeTab === 'produtores' ? 'text-amber-300' : 'text-gray-400'}`} />
-            <span>📤 Repasses a Produtores (Contas a Pagar)</span>
-          </div>
-          <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
-            activeTab === 'produtores' ? 'bg-amber-400 text-emerald-950' : 'bg-gray-100 text-gray-700'
-          }`}>
-            {totalProdutoresPendentes} a pagar
-          </span>
+          <BarChart3 className="w-3.5 h-3.5 text-gray-500" />
+          <span>{showKpis ? 'Ocultar Resumo' : 'Ver Resumo'}</span>
+          {showKpis ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
       </div>
 
       {/* Cards de Resumo (KPIs) Modular */}
-      <AgendaKpiCards
-        activeTab={activeTab}
-        totalALiquidarProgramado={totalALiquidarProgramado}
-        totalVPProgramado={totalVPProgramado}
-        totalPedidosAbertos={totalPedidosAbertos}
-        totalRecebido={totalRecebido}
-        scheduleListCount={scheduleList.length}
-        totalProdutorAPagar={totalProdutorAPagar}
-        totalNFProgramado={totalNFProgramado}
-        totalFunruralRetido={totalFunruralRetido}
-        totalProdutorPago={totalProdutorPago}
-      />
+      {showKpis && (
+        <AgendaKpiCards
+          activeTab={activeTab}
+          totalALiquidarProgramado={totalALiquidarProgramado}
+          totalVPProgramado={totalVPProgramado}
+          totalPedidosAbertos={totalPedidosAbertos}
+          totalRecebido={totalRecebido}
+          scheduleListCount={scheduleList.length}
+          totalProdutorAPagar={totalProdutorAPagar}
+          totalNFProgramado={totalNFProgramado}
+          totalFunruralRetido={totalFunruralRetido}
+          totalProdutorPago={totalProdutorPago}
+        />
+      )}
 
       {/* Tabela de Recebimentos de Lojas (Modular) */}
       {activeTab === 'lojas' && (

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { 
   Search, 
   Calendar, 
@@ -6,7 +6,9 @@ import {
   CheckCircle2, 
   RotateCcw, 
   Paperclip, 
-  X 
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 
@@ -31,8 +33,17 @@ export default function AgendaLojasTable({
   onRemoveEvidence,
   onUploadEvidence
 }) {
+  const tableRef = useRef(null);
+
+  const scrollTable = (direction) => {
+    if (tableRef.current) {
+      const offset = direction === 'right' ? 380 : -380;
+      tableRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Filtros - Lojas */}
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
@@ -70,28 +81,56 @@ export default function AgendaLojasTable({
           </select>
         </div>
 
-        <span className="text-xs font-semibold text-gray-500">
-          Exibindo <strong>{filteredScheduleLojas.length}</strong> de {scheduleListCount} recebimentos
-        </span>
+        <div className="flex items-center gap-2.5">
+          {/* Botões de Rolagem Lateral Rápida */}
+          <div className="flex items-center gap-1 bg-gray-100 p-0.5 rounded-lg border border-gray-200 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => scrollTable('left')}
+              className="px-2 py-1 text-gray-600 hover:text-gray-900 hover:bg-white rounded transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+              title="Deslizar tabela para o início (esquerda)"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Início</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTable('right')}
+              className="px-2 py-1 text-gray-600 hover:text-gray-900 hover:bg-white rounded transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold"
+              title="Deslizar tabela para a direita (Ações)"
+            >
+              <span className="hidden sm:inline">Ações</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <span className="text-xs font-semibold text-gray-500 whitespace-nowrap">
+            Exibindo <strong>{filteredScheduleLojas.length}</strong> de {scheduleListCount}
+          </span>
+        </div>
       </div>
 
-      {/* Tabela de Recebimentos de Lojas */}
+      {/* Tabela de Recebimentos de Lojas com Rolagem Interna e Cabeçalho Sticky */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div 
+          ref={tableRef}
+          className="overflow-x-auto overflow-y-auto max-h-[620px] 2xl:max-h-[720px] relative scroll-smooth focus:outline-none"
+          tabIndex={0}
+        >
           <table className="w-full text-left text-xs border-collapse">
-            <thead className="bg-gray-50 text-gray-700 font-bold uppercase text-[10px] tracking-wider border-b border-gray-200">
+            <thead className="bg-gray-50 text-gray-700 font-bold uppercase text-[10px] tracking-wider border-b border-gray-200 sticky top-0 z-20 shadow-xs">
               <tr>
-                <th className="py-3 px-4">Data Vencimento</th>
-                <th className="py-3 px-4">Loja / Comprador</th>
-                <th className="py-3 px-3 text-center">Nº VP</th>
-                <th className="py-3 px-3 text-center">Nº NF</th>
-                <th className="py-3 px-3 text-right">Caixas</th>
-                <th className="py-3 px-3 text-right font-black text-gray-900 bg-gray-100/70">Total NF (Faturado)</th>
-                <th className="py-3 px-3 text-right font-bold text-blue-900 bg-blue-50/20">Total VP (Cotação)</th>
-                <th className="py-3 px-3 text-right font-black text-emerald-800 bg-emerald-50/40">Valor Recebido</th>
-                <th className="py-3 px-3 text-right font-black text-amber-900 bg-amber-50/40">Saldo a Receber</th>
-                <th className="py-3 px-3 text-center">Status Pagamento</th>
-                <th className="py-3 px-4 text-center">Ações</th>
+                <th className="py-2.5 px-3">Data Vencimento</th>
+                <th className="py-2.5 px-3 min-w-[150px]">Loja / Comprador</th>
+                <th className="py-2.5 px-2 text-center">Nº VP</th>
+                <th className="py-2.5 px-2 text-center">Nº NF</th>
+                <th className="py-2.5 px-2 text-right">Caixas</th>
+                <th className="py-2.5 px-2.5 text-right font-black text-gray-900 bg-gray-100/70">Total NF (Faturado)</th>
+                <th className="py-2.5 px-2.5 text-right font-bold text-blue-900 bg-blue-50/20">Total VP (Cotação)</th>
+                <th className="py-2.5 px-2.5 text-right font-black text-emerald-800 bg-emerald-50/40">Valor Recebido</th>
+                <th className="py-2.5 px-2.5 text-right font-black text-amber-900 bg-amber-50/40">Saldo a Receber</th>
+                <th className="py-2.5 px-2 text-center">Status Pagamento</th>
+                <th className="py-2.5 px-3 text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -109,13 +148,13 @@ export default function AgendaLojasTable({
                     <tr key={idx} className={`hover:bg-gray-50/80 transition-colors ${isPaid ? 'bg-gray-50/40 opacity-80' : ''}`}>
                       
                       {/* Data Vencimento */}
-                      <td className="py-3 px-4 font-black text-gray-900 flex items-center gap-2 whitespace-nowrap">
+                      <td className="py-2.5 px-3 font-black text-gray-900 flex items-center gap-2 whitespace-nowrap">
                         <Calendar className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
                         <span>{item.dueDateFormatted}</span>
                       </td>
 
                       {/* Loja / Comprador */}
-                      <td className="py-3 px-4 font-bold text-gray-900">
+                      <td className="py-2.5 px-3 font-bold text-gray-900">
                         <div className="flex items-center gap-1.5">
                           <Building2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                           <span>{item.client}</span>
@@ -123,42 +162,42 @@ export default function AgendaLojasTable({
                       </td>
 
                       {/* Nº VP */}
-                      <td className="py-3 px-3 text-center font-bold text-[#173e27]">
+                      <td className="py-2.5 px-2 text-center font-bold text-[#173e27]">
                         {item.id}
                       </td>
 
                       {/* Nº NF */}
-                      <td className="py-3 px-3 text-center text-gray-700 font-semibold">
+                      <td className="py-2.5 px-2 text-center text-gray-700 font-semibold">
                         {item.nfNumber}
                       </td>
 
                       {/* Caixas */}
-                      <td className="py-3 px-3 text-right font-semibold text-gray-800 whitespace-nowrap">
+                      <td className="py-2.5 px-2 text-right font-semibold text-gray-800 whitespace-nowrap">
                         {formatNumber(item.caixas, 2)} cx
                       </td>
 
                       {/* Total NF Faturado */}
-                      <td className="py-3 px-3 text-right font-black text-gray-950 bg-gray-100/70 whitespace-nowrap">
+                      <td className="py-2.5 px-2.5 text-right font-black text-gray-950 bg-gray-100/70 whitespace-nowrap">
                         {formatCurrency(item.totalOperation)}
                       </td>
 
                       {/* Total VP Comercial */}
-                      <td className="py-3 px-3 text-right font-bold text-blue-950 bg-blue-50/30 whitespace-nowrap">
+                      <td className="py-2.5 px-2.5 text-right font-bold text-blue-950 bg-blue-50/30 whitespace-nowrap">
                         {formatCurrency(item.valorVP)}
                       </td>
 
                       {/* Valor Recebido */}
-                      <td className="py-3 px-3 text-right font-black text-emerald-800 bg-emerald-50/40 whitespace-nowrap">
+                      <td className="py-2.5 px-2.5 text-right font-black text-emerald-800 bg-emerald-50/40 whitespace-nowrap">
                         {item.valorLiquidado > 0 ? formatCurrency(item.valorLiquidado) : <span className="text-gray-400 font-normal">-</span>}
                       </td>
 
                       {/* Saldo a Receber */}
-                      <td className="py-3 px-3 text-right font-black text-amber-900 bg-amber-50/40 whitespace-nowrap">
+                      <td className="py-2.5 px-2.5 text-right font-black text-amber-900 bg-amber-50/40 whitespace-nowrap">
                         {item.valorALiquidar > 0 ? formatCurrency(item.valorALiquidar) : <span className="text-gray-400 font-normal">-</span>}
                       </td>
 
                       {/* Status */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <td className="py-2.5 px-2 text-center whitespace-nowrap">
                         <div className="flex flex-col items-center gap-1">
                           <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${
                             isPaid 
@@ -178,7 +217,7 @@ export default function AgendaLojasTable({
                       </td>
 
                       {/* Ações */}
-                      <td className="py-3 px-4 text-center whitespace-nowrap">
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5">
                           
                           {/* Botão Liquidar / Quitar Loja */}

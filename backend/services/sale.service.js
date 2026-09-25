@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const { Sale, WeighingSlip, getNextSequence } = require('../db');
 const { uploadDir } = require('../middlewares/upload');
-const { roundMoney, calculateFiscalDeductions, calculateCommission } = require('../utils/money');
+const { roundMoney, calculateFiscalDeductions, calculateCommission, getSaleCommercialValue } = require('../utils/money');
 const { normalizeProducerOrigin } = require('./producer.service');
 const { sendSaleWebhook } = require('./webhook.service');
 const { ensureProductsRegistered } = require('./product.service');
@@ -188,9 +188,10 @@ async function settleSale(id, payload = {}) {
     throw err;
   }
 
-  const fiscal = calculateFiscalDeductions(sale.totalOperation);
-  const valorVP = Number(sale.valorTotalVP) > 0 ? Number(sale.valorTotalVP) : Number(sale.totalOperation);
-  const totalLiquido = roundMoney(Math.max(0, valorVP - fiscal.funruralTotal));
+  // O valor comercial a receber da loja baseia-se no valor de negociação (VP) ou no total faturado da NF
+  const valorComercial = getSaleCommercialValue(sale);
+  const totalNF = roundMoney(sale.totalOperation || 0);
+  const targetReceivable = Math.max(valorComercial, totalNF);
 
   const { 
     paidAmount: inputAmount, 
@@ -204,7 +205,7 @@ async function settleSale(id, payload = {}) {
     checkDueDate = ''
   } = payload;
   const currentPaid = Number(sale.paidAmount) || 0;
-  const remainingBalance = roundMoney(Math.max(0, totalLiquido - currentPaid));
+  const remainingBalance = roundMoney(Math.max(0, targetReceivable - currentPaid));
 
   if (isPartial) {
     const paymentValue = roundMoney(Number(inputAmount) || 0);
@@ -220,7 +221,7 @@ async function settleSale(id, payload = {}) {
       throw err;
     }
 
-    const newAccumulated = roundMoney(Math.min(totalLiquido, currentPaid + paymentValue));
+    const newAccumulated = roundMoney(Math.min(targetReceivable, currentPaid + paymentValue));
     sale.paidAmount = newAccumulated;
 
     if (!Array.isArray(sale.paymentHistory)) sale.paymentHistory = [];
@@ -235,21 +236,23 @@ async function settleSale(id, payload = {}) {
       notes: notes || 'Pagamento parcial registrado'
     });
 
-    if (newAccumulated >= totalLiquido - 0.01) {
-      sale.paidAmount = totalLiquido;
+    if (newAccumulated >= targetReceivable - 0.05) {
+      sale.paidAmount = targetReceivable;
       sale.paymentStatus = 'Recebido';
-      sale.status = 'Concluído';
+      
+      const isProducerSettled = sale.producerPaymentStatus === 'Pago' || (Number(sale.producerPaidAmount) || 0) >= totalNF - 0.05;
+      sale.status = isProducerSettled ? 'Concluído' : (sale.nfFile ? 'Faturado' : 'Pendente NF');
     } else {
       sale.paymentStatus = 'Parcial';
     }
   } else {
     // Quitação Total
-    const remainingToSettle = roundMoney(Math.max(0, totalLiquido - currentPaid));
-    sale.paidAmount = totalLiquido;
+    const remainingToSettle = roundMoney(Math.max(0, targetReceivable - currentPaid));
+    sale.paidAmount = targetReceivable;
 
     if (!Array.isArray(sale.paymentHistory)) sale.paymentHistory = [];
     sale.paymentHistory.push({
-      amount: remainingToSettle > 0 ? remainingToSettle : totalLiquido,
+      amount: remainingToSettle > 0 ? remainingToSettle : targetReceivable,
       date: paymentDate || new Date().toISOString().split('T')[0],
       paymentMethod: paymentMethod || 'PIX',
       checkNumber: checkNumber || '',
@@ -262,7 +265,6 @@ async function settleSale(id, payload = {}) {
     sale.paymentStatus = 'Recebido';
 
     // Conclui o status geral da venda somente se o repasse do produtor também já estiver quitado
-    const totalNF = roundMoney(sale.totalOperation);
     const isProducerSettled = sale.producerPaymentStatus === 'Pago' || (Number(sale.producerPaidAmount) || 0) >= totalNF - 0.05;
     if (isProducerSettled) {
       sale.status = 'Concluído';
@@ -304,22 +306,22 @@ async function unsettleSale(id, payload = {}) {
     const remainingPaid = sale.paymentHistory.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
     sale.paidAmount = roundMoney(Math.max(0, remainingPaid));
 
-    const fiscal = calculateFiscalDeductions(sale.totalOperation);
-    const valorVP = Number(sale.valorTotalVP) > 0 ? Number(sale.valorTotalVP) : Number(sale.totalOperation);
-    const totalLiquido = roundMoney(Math.max(0, valorVP - fiscal.funruralTotal));
+    const valorComercial = getSaleCommercialValue(sale);
+    const targetReceivable = Math.max(valorComercial, roundMoney(sale.totalOperation || 0));
 
     if (sale.paidAmount <= 0) {
       sale.paymentStatus = 'A Receber';
       sale.status = sale.nfFile ? 'Faturado' : 'Pendente NF';
       sale.paymentProofFile = null;
-    } else if (sale.paidAmount < totalLiquido - 0.01) {
+    } else if (sale.paidAmount < targetReceivable - 0.05) {
       sale.paymentStatus = 'Parcial';
       sale.status = sale.nfFile ? 'Faturado' : 'Pendente NF';
       const lastWithProof = [...sale.paymentHistory].reverse().find(p => p.paymentProofFile);
       sale.paymentProofFile = lastWithProof ? lastWithProof.paymentProofFile : null;
     } else {
       sale.paymentStatus = 'Recebido';
-      sale.status = 'Concluído';
+      const isProducerSettled = sale.producerPaymentStatus === 'Pago' || (Number(sale.producerPaidAmount) || 0) >= roundMoney(sale.totalOperation || 0) - 0.05;
+      sale.status = isProducerSettled ? 'Concluído' : (sale.nfFile ? 'Faturado' : 'Pendente NF');
     }
   } else {
     sale.paymentStatus = 'A Receber';

@@ -46,9 +46,16 @@ const request = async (endpoint, options = {}) => {
   }
 
   if (!response.ok) {
-    const errorMsg = (data && typeof data === 'object' && (data.error || data.message))
-      ? (data.error || data.message)
-      : `Erro na requisição (${response.status}): ${response.statusText}`;
+    let errorMsg = `Erro na requisição (${response.status}): ${response.statusText}`;
+    if (data && typeof data === 'object') {
+      if (typeof data.message === 'string' && data.message.trim() && data.message !== 'true') {
+        errorMsg = data.message.trim();
+      } else if (typeof data.error === 'string' && data.error.trim() && data.error !== 'true') {
+        errorMsg = data.error.trim();
+      } else if (typeof data.err === 'string' && data.err.trim() && data.err !== 'true') {
+        errorMsg = data.err.trim();
+      }
+    }
     throw new ApiError(errorMsg, response.status, data);
   }
 

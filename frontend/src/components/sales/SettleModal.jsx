@@ -34,8 +34,8 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
   const funrural = Number(sale.funruralTotal) || (totalNF * 0.0163);
   const liquidoProdutor = Math.max(0, totalNF - funrural);
 
-  // O Valor da quitação total para o produtor deve ser o valor total da nota
-  const netTargetTotal = isProducer ? totalNF : summary.totalLiquido;
+  // O Valor da quitação total para o produtor é 100% da NF; para a loja é o valor comercial (VP)
+  const netTargetTotal = isProducer ? totalNF : Math.max(summary.valorVP || 0, totalNF);
   const alreadyPaid = isProducer ? (Number(sale.producerPaidAmount) || 0) : (Number(sale.paidAmount) || 0);
   const remainingBalance = Math.max(0, netTargetTotal - alreadyPaid);
   const historyList = isProducer ? (sale.producerPaymentHistory || []) : (sale.paymentHistory || []);
@@ -118,7 +118,10 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
       );
     } catch (err) {
       console.error('Erro ao registrar:', err);
-      setError(err.message || 'Erro ao processar.');
+      const msg = typeof err?.message === 'string' && err.message.trim() && err.message !== 'true'
+        ? err.message
+        : (typeof err === 'string' && err !== 'true' ? err : 'Erro ao processar recebimento.');
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -138,7 +141,10 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
       handleCallback(`Última parcela da venda ${sale.id} estornada com sucesso!`);
     } catch (err) {
       console.error('Erro ao estornar parcela:', err);
-      setError(err.message || 'Erro ao estornar parcela.');
+      const msg = typeof err?.message === 'string' && err.message.trim() && err.message !== 'true'
+        ? err.message
+        : (typeof err === 'string' && err !== 'true' ? err : 'Erro ao estornar parcela.');
+      setError(msg);
     } finally {
       setReverting(false);
     }
@@ -158,7 +164,10 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
       handleCallback(`Reversão da venda ${sale.id} executada com sucesso!`);
     } catch (err) {
       console.error('Erro ao reverter:', err);
-      setError(err.message || 'Erro ao reverter.');
+      const msg = typeof err?.message === 'string' && err.message.trim() && err.message !== 'true'
+        ? err.message
+        : (typeof err === 'string' && err !== 'true' ? err : 'Erro ao reverter.');
+      setError(msg);
     } finally {
       setReverting(false);
     }

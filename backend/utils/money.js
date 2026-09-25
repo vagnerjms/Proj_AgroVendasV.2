@@ -115,10 +115,70 @@ function calculateLiquidationValue(valorComercialVP, totalOperationNF) {
   };
 }
 
+/**
+ * Apuração canônica do Valor Comercial (VP) da Venda no Backend
+ * Harmonizado rigorosamente com frontend/src/utils/calculations.js
+ * @param {object} sale
+ * @returns {number}
+ */
+function getSaleCommercialValue(sale) {
+  if (!sale) return 0.0;
+
+  // 1. Soma dos itens múltiplos da venda (se existirem itens com cotação/valor)
+  if (sale.items && Array.isArray(sale.items) && sale.items.length > 0) {
+    const itemsSum = sale.items.reduce((acc, it) => {
+      const itKg = Number(it.kg) || 0;
+      const isBatata = (it.product && it.product.toLowerCase().includes('batata')) || (sale.notes && sale.notes.toLowerCase().includes('batata'));
+      const bw = Number(it.boxWeightKg) || (isBatata ? 25 : 29);
+      const itVol = Number(it.quantity) || (itKg > 0 && bw > 0 ? (itKg / bw) : 0);
+      const q = Number(it.dailyQuote) || 0;
+      if (q > 0) {
+        const isQKg = (q > 0 && q <= 10.0) || (it.unit && it.unit.includes('Granel')) || bw === 1;
+        return acc + (isQKg ? (itKg * q) : (itVol * q));
+      }
+      if (Number(it.valorTotalVP) > 0) return acc + Number(it.valorTotalVP);
+      if (Number(it.total) > 0) return acc + Number(it.total);
+      return acc;
+    }, 0);
+
+    if (itemsSum > 0) return roundMoney(itemsSum);
+  }
+
+  // 2. Campo explícito gravado no documento
+  if (Number(sale.valorTotalVP) > 0) {
+    return roundMoney(sale.valorTotalVP);
+  }
+  if (Number(sale.valorVP) > 0) {
+    return roundMoney(sale.valorVP);
+  }
+
+  // 3. Cotação informada ou identificada em notas
+  let cotacao = Number(sale.dailyQuote) || 0;
+  if (!cotacao && sale.notes) {
+    const matchCot = sale.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
+    if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
+  }
+
+  const kg = Number(sale.totalKg) || 0;
+  const isBatata = (sale.items && sale.items.some(it => it.product?.toLowerCase().includes('batata'))) || (sale.notes && sale.notes.toLowerCase().includes('batata'));
+  const bw = isBatata ? 25 : 29;
+  const caixas = Number(sale.totalVolumes) || (kg > 0 && bw > 0 ? (kg / bw) : 0);
+
+  if (cotacao > 0 && cotacao <= 10.0 && kg > 0) {
+    return roundMoney(kg * cotacao);
+  }
+  if (cotacao > 10.0 && caixas > 0) {
+    return roundMoney(caixas * cotacao);
+  }
+
+  return roundMoney(Number(sale.totalOperation) || 0);
+}
+
 module.exports = {
   roundMoney,
   TAX_RATES,
   calculateFiscalDeductions,
   calculateCommission,
-  calculateLiquidationValue
+  calculateLiquidationValue,
+  getSaleCommercialValue
 };

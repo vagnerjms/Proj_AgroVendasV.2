@@ -285,7 +285,7 @@ export default function Purchases({ mode = 'new', setCurrentPage }) {
                 </button>
                 <button
                   type="submit"
-                  className="bg-[#df7b1b] hover:bg-[#c86e18] text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer"
+                  className="bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer"
                 >
                   Salvar Alterações
                 </button>

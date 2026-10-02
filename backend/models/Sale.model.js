@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 
 const SaleSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
+  /** Canhoto/planilha (09733) — não confundir com id VP nem PSG- */
+  romaneioNumber: { type: String, default: '' },
   operationType: { type: String, required: true },
   saleDate: { type: String, required: true },
   client: { type: String, required: true },
@@ -29,6 +31,8 @@ const SaleSchema = new mongoose.Schema({
   items: [
     {
       product: { type: String, default: '' },
+      productId: { type: String, default: '' },
+      parentProductId: { type: String, default: '' },
       quantity: { type: Number, default: 0 },
       unit: { type: String, default: 'Caixas (29kg)' },
       boxWeightKg: { type: Number, default: 29 },
@@ -53,8 +57,8 @@ const SaleSchema = new mongoose.Schema({
   senar: { type: Number, default: 0 },
   status: { type: String, default: 'Faturado' },
   paymentStatus: { type: String, default: 'A Receber' },
-  paymentTerms: { type: String, default: '30 dias' },
-  paymentTermDays: { type: Number, default: 30 },
+  paymentTerms: { type: String, default: '60 dias' },
+  paymentTermDays: { type: Number, default: 60 },
   dueDate: { type: String, default: '' },
   paidAmount: { type: Number, default: 0 },
   paymentMethod: { type: String, default: 'PIX' },
@@ -96,6 +100,7 @@ const SaleSchema = new mongoose.Schema({
 // Database Performance Indexes (B-Tree)
 SaleSchema.index({ client: 1, saleDate: -1 });
 SaleSchema.index({ nfeKey: 1 });
+SaleSchema.index({ romaneioNumber: 1 });
 SaleSchema.index({ origin: 1, saleDate: -1 });
 SaleSchema.index({ saleDate: -1, status: 1 });
 SaleSchema.index({ status: 1 });

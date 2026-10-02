@@ -99,20 +99,21 @@ export function getValorTotalVP(sale = {}) {
     return roundMoney(kg * cotacao);
   }
 
-  if (cotacao > 10.0) {
+  if (cotacao > 10.0 && caixas > 0) {
     return roundMoney(caixas * cotacao);
   }
 
-  return roundMoney(Number(sale.totalOperation) || (caixas * (cotacao || 45.0)));
+  // Sem cotação/VP explícito: usa NF se houver; NÃO inventa caixas×45
+  return roundMoney(Number(sale.totalOperation) || 0);
 }
 
 /**
- * Calcula a conciliação financeira completa de uma venda com suporte a liquidação parcial
+ * Calcula a conciliação financeira completa de uma venda com suporte a liquidação parcial.
+ * Ledger loja (receber) = VP comercial | Ledger produtor (Thais) = NF.
  */
 export function calculateLiquidation(sale = {}) {
   const itemValorNF = roundMoney(Number(sale.valorTotalNF) || Number(sale.totalOperation) || Number(sale.valorNF) || 0);
-  
-  // Extração ou cálculo do FUNRURAL
+
   let funrural = 0;
   if (sale.funrural !== undefined && sale.funrural !== null) {
     funrural = roundMoney(sale.funrural);
@@ -122,45 +123,69 @@ export function calculateLiquidation(sale = {}) {
     funrural = calculateFunrural(itemValorNF).funruralTotal;
   }
 
-  // Extração do Valor Comercial (VP) via função centralizada
-  const valorVP = getValorTotalVP(sale) || itemValorNF;
+  const valorVPRaw = getValorTotalVP(sale);
+  const valorVP = roundMoney(valorVPRaw > 0 ? valorVPRaw : itemValorNF);
 
-  // Total Líquido Oficial da Venda (Total Comercial - FUNRURAL)
-  const totalLiquido = roundMoney(Math.max(0, valorVP - funrural));
-  const paidAmount = roundMoney(Math.max(Number(sale.producerPaidAmount) || 0, Number(sale.paidAmount) || 0));
+  const paidClient = roundMoney(Number(sale.paidAmount) || 0);
+  const paidProducer = roundMoney(Number(sale.producerPaidAmount) || 0);
 
-  // Status de Liquidação (Unificado: Todo o valor é repassado ao produtor)
-  const isSettled = sale.producerPaymentStatus === 'Pago' || sale.paymentStatus === 'Recebido' || sale.status === 'Concluído' || (paidAmount > 0 && paidAmount >= itemValorNF - 0.05);
-  const isPartial = !isSettled && (sale.producerPaymentStatus === 'Parcial' || sale.paymentStatus === 'Parcial' || paidAmount > 0);
+  // Recebimento da loja: base VP
+  const isClientSettled =
+    sale.paymentStatus === 'Recebido' ||
+    sale.status === 'Concluído' ||
+    (valorVP > 0 && paidClient >= valorVP - 0.05);
+  const isClientPartial =
+    !isClientSettled && (sale.paymentStatus === 'Parcial' || paidClient > 0);
 
-  const valorLiquidado = isSettled 
-    ? (paidAmount > 0 ? paidAmount : itemValorNF) 
-    : (isPartial ? paidAmount : 0);
+  const valorLiquidado = isClientSettled
+    ? (paidClient > 0 ? paidClient : valorVP)
+    : (isClientPartial ? paidClient : 0);
+
+  const valorALiquidar = isClientSettled
+    ? 0
+    : (isClientPartial
+      ? roundMoney(Math.max(0, valorVP - paidClient))
+      : valorVP);
+
+  // Repasse ao produtor: base NF (SEM NF = 0 a pagar)
+  const producerTarget = itemValorNF;
+  const isProducerSettled =
+    sale.producerPaymentStatus === 'Pago' ||
+    (producerTarget > 0 && paidProducer >= producerTarget - 0.05);
+  const isProducerPartial =
+    !isProducerSettled && (sale.producerPaymentStatus === 'Parcial' || paidProducer > 0);
+  const producerAPagar = isProducerSettled
+    ? 0
+    : roundMoney(Math.max(0, producerTarget - paidProducer));
 
   const liquidoNF = roundMoney(Math.max(0, itemValorNF - funrural));
-
-  const valorALiquidar = isSettled 
-    ? 0 
-    : (isPartial ? roundMoney(Math.max(0, itemValorNF - paidAmount)) : itemValorNF);
+  const totalLiquido = roundMoney(Math.max(0, valorVP - funrural));
 
   let statusLabel = 'A Receber';
-  if (isSettled) statusLabel = 'Recebido';
-  else if (isPartial) statusLabel = 'Parcial';
+  if (isClientSettled) statusLabel = 'Recebido';
+  else if (isClientPartial) statusLabel = 'Parcial';
 
-  const percentPaid = totalLiquido > 0 ? Math.min(100, (valorLiquidado / totalLiquido) * 100) : (isSettled ? 100 : 0);
+  const percentPaid = valorVP > 0
+    ? Math.min(100, (valorLiquidado / valorVP) * 100)
+    : (isClientSettled ? 100 : 0);
 
   return {
     valorVP,
     valorTotalNF: itemValorNF,
     funrural,
     totalLiquido,
-    paidAmount,
+    paidAmount: paidClient,
+    producerPaidAmount: paidProducer,
     valorLiquidado,
     valorALiquidar,
     liquidoNF,
-    isSettled,
-    isFullySettled: isSettled,
-    isPartial,
+    producerTarget,
+    producerAPagar,
+    isProducerSettled,
+    isProducerPartial,
+    isSettled: isClientSettled,
+    isFullySettled: isClientSettled,
+    isPartial: isClientPartial,
     statusLabel,
     paymentStatus: statusLabel,
     percentPaid

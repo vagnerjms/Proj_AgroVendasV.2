@@ -3,6 +3,12 @@ const path = require('path');
 const fs = require('fs');
 const { uploadDir } = require('../middlewares/upload');
 const { roundMoney } = require('../utils/money');
+const {
+  formatNfNumber,
+  resolveRomaneioNumber,
+  buildDriveAttachmentName,
+  classifySaleAttachment
+} = require('../utils/dataHelpers');
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || '';
 const APP_BASE_URL = (process.env.APP_BASE_URL || 'http://localhost:3001').replace(/\/+$/, '');
@@ -31,10 +37,21 @@ function parseDueDate(sale) {
   return sale.saleDate || new Date().toISOString().split('T')[0];
 }
 
+function volumeUnitLabel(sale) {
+  const unit = sale.items?.[0]?.unit || sale.unit || '';
+  if (unit && String(unit).trim()) return String(unit).trim();
+  return 'volumes';
+}
+
 async function sendSaleWebhook(event, sale) {
   try {
     const dueDate = parseDueDate(sale);
     const clientName = sale.client || 'Cliente Geral';
+    const romaneioNumber = resolveRomaneioNumber(sale) || '';
+    const nfNumber = formatNfNumber(sale.nfFile) || formatNfNumber(sale.nfeKey) || '';
+    const nfLabel = nfNumber || 'Pendente';
+    const paymentStatus = sale.paymentStatus || (Number(sale.paidAmount) > 0 ? 'Parcial' : 'A Receber');
+    const status = sale.status || 'Pendente';
 
     // Prioriza o valor real acordado da VP; caso não haja, utiliza o valor total da NF
     let valorFinal = Number(sale.valorTotalVP) > 0 ? roundMoney(sale.valorTotalVP) : roundMoney(sale.totalOperation);
@@ -42,7 +59,11 @@ async function sendSaleWebhook(event, sale) {
       valorFinal = roundMoney(Number(sale.totalVolumes) * Number(sale.dailyQuote));
     }
 
-    const volumesInt = Math.round(Number(sale.totalVolumes) || (Number(sale.totalKg) > 0 ? Number(sale.totalKg) / 29 : 0));
+    const volumesNum = Number(sale.totalVolumes) || (Number(sale.totalKg) > 0 ? Number(sale.totalKg) / 29 : 0);
+    const volumesDisplay = Number.isFinite(volumesNum)
+      ? volumesNum.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+      : '0';
+    const volumeUnit = volumeUnitLabel(sale);
 
     // Formatação de diretórios dinâmicos do Google Drive
     const dateObj = new Date(sale.saleDate ? `${sale.saleDate}T12:00:00Z` : new Date());
@@ -57,9 +78,9 @@ async function sendSaleWebhook(event, sale) {
       if (fs.existsSync(uploadDir)) {
         const diskFiles = await fs.promises.readdir(uploadDir);
         for (const target of targets) {
-          const diskMatch = diskFiles.find(df => 
-            df === target || 
-            df.endsWith(target) || 
+          const diskMatch = diskFiles.find(df =>
+            df === target ||
+            df.endsWith(target) ||
             (target.includes('.') && df.includes(target))
           );
           if (diskMatch) {
@@ -69,22 +90,27 @@ async function sendSaleWebhook(event, sale) {
               if (stat.isFile() && stat.size > 0 && stat.size <= 5 * 1024 * 1024) {
                 const dataBuffer = await fs.promises.readFile(filePath);
                 let cleanFileName = diskMatch.replace(/^\d+-\d+-/, '');
-                let driveFileName = cleanFileName;
-                if (!driveFileName.toUpperCase().startsWith(sale.id.toUpperCase())) {
-                  driveFileName = `${sale.id} - ${cleanFileName}`;
-                }
-                const ext = path.extname(cleanFileName).toLowerCase();
-                const mimeType = ext === '.pdf' ? 'application/pdf' :
-                                 (ext === '.xml' ? 'application/xml' :
-                                 (ext === '.png' ? 'image/png' :
-                                 (ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'application/octet-stream')));
+                const kind = classifySaleAttachment(target, sale);
+                const ext = path.extname(cleanFileName).toLowerCase() || path.extname(target).toLowerCase() || '.bin';
+                const driveFileName = buildDriveAttachmentName(kind, {
+                  romaneioNumber,
+                  nfNumber: nfNumber || formatNfNumber(target) || formatNfNumber(cleanFileName),
+                  ext,
+                  originalName: cleanFileName,
+                  nfFile: sale.nfFile
+                });
+                const mimeType = ext === '.pdf' ? 'application/pdf'
+                  : (ext === '.xml' ? 'application/xml'
+                    : (ext === '.png' ? 'image/png'
+                      : (ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'application/octet-stream')));
                 files.push({
                   filename: driveFileName,
                   originalName: cleanFileName,
+                  kind,
                   mimeType,
                   sizeBytes: stat.size,
                   contentBase64: dataBuffer.toString('base64'),
-                  downloadUrl: `${APP_BASE_URL}/uploads/${diskMatch}`
+                  downloadUrl: `${APP_BASE_URL}/uploads/${encodeURIComponent(diskMatch).replace(/%2F/gi, '/')}`
                 });
               }
             } catch (eRead) {}
@@ -92,6 +118,10 @@ async function sendSaleWebhook(event, sale) {
         }
       }
     } catch (eDir) {}
+
+    const dueBr = dueDate.split('-').reverse().join('/');
+    const valorBr = valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const nfValBr = (Number(sale.totalOperation) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     const payload = {
       event, // 'sale.created', 'sale.updated', 'sale.settled', 'sale.manual_sync', 'sale.batch_sync'
@@ -101,14 +131,19 @@ async function sendSaleWebhook(event, sale) {
       dueDate: dueDate,
       totalOperation: Number(sale.totalOperation) || 0,
       valorVP: valorFinal,
-      totalVolumes: volumesInt,
+      totalVolumes: Math.round(volumesNum) || 0,
+      totalVolumesExact: volumesNum || 0,
       totalKg: sale.totalKg || 0,
-      status: sale.status || 'Pendente',
-      paymentStatus: sale.paymentStatus || 'A Receber',
+      volumeUnit,
+      status,
+      paymentStatus,
       origin: sale.origin || '',
-      nfNumber: sale.nfFile ? sale.nfFile.replace('NF-', '').replace('.pdf', '') : (sale.nfeKey ? sale.nfeKey.slice(-8) : 'Pendente'),
+      romaneioNumber: romaneioNumber || '',
+      nfNumber: nfLabel,
+      nfFile: sale.nfFile || '',
+      evidenceFile: sale.evidenceFile || '',
       hasFiles: files.length > 0,
-      files: files,
+      files,
       driveFolder: {
         monthFolder: folderMonth,
         clientFolder: clientName,
@@ -116,16 +151,29 @@ async function sendSaleWebhook(event, sale) {
         suggestedFolder: `${sale.id} - ${clientName} (${folderMonth})`
       },
       calendar: {
-        summary: `💰 ${clientName.split(' ')[0]} · R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${sale.id})`,
+        summary: `${clientName.split(' ')[0]} · R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${sale.id}) · ${paymentStatus}`,
         start: `${dueDate}T09:00:00-03:00`,
         end: `${dueDate}T10:00:00-03:00`,
-        description: `🏪 Comprador: ${clientName}\n📅 Vencimento: ${dueDate.split('-').reverse().join('/')}\n💰 Valor a Receber: R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n📦 Volumes: ${volumesInt} cx\n📄 Nota Fiscal: ${sale.nfFile || 'Pendente'}\n📌 Status: ${sale.status}\n🌱 Origem: ${sale.origin || 'AgroVenda'}`
+        description: [
+          `Comprador: ${clientName}`,
+          `VP: ${sale.id}`,
+          romaneioNumber ? `Romaneio: ${romaneioNumber}` : null,
+          `Vencimento: ${dueBr}`,
+          `Valor comercial (VP): R$ ${valorBr}`,
+          `Valor NF: R$ ${nfValBr}`,
+          `Quantidade: ${volumesDisplay} ${volumeUnit}`,
+          `Nº NF: ${nfLabel}`,
+          sale.nfFile ? `Arquivo NF: ${sale.nfFile}` : null,
+          sale.evidenceFile ? `Pedido/Canhoto: ${sale.evidenceFile}` : null,
+          `Status: ${status}`,
+          `Pagamento: ${paymentStatus}`,
+          `Origem: ${sale.origin || 'AgroVenda'}`
+        ].filter(Boolean).join('\n')
       }
     };
 
     // Execução assíncrona não-bloqueante (fire-and-forget) via setImmediate
     setImmediate(async () => {
-      // Try sending to n8n webhook sequentially until one succeeds
       const targetUrls = [
         N8N_WEBHOOK_URL,
         'http://n8n_application:5678/webhook/agrovenda-sale',
@@ -162,4 +210,3 @@ module.exports = {
   sendSaleWebhook,
   parseDueDate
 };
-

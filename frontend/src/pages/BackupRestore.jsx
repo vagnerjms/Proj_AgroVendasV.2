@@ -111,7 +111,7 @@ export default function BackupRestore({ setCurrentPage }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
         <div>
           <div className="text-xs font-bold text-[#091b2e] tracking-wider uppercase flex items-center gap-1.5">
-            <Database className="w-4 h-4 text-[#df7b1b]" />
+            <Database className="w-4 h-4 text-[#F97316]" />
             <span>AGROVENDA — SISTEMA & INFRAESTRUTURA</span>
           </div>
           <h1 className="text-2xl font-black text-gray-900 mt-1">

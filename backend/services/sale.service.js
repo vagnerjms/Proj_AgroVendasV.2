@@ -5,8 +5,13 @@ const { uploadDir } = require('../middlewares/upload');
 const { roundMoney, calculateFiscalDeductions, calculateCommission, getSaleCommercialValue } = require('../utils/money');
 const { normalizeProducerOrigin } = require('./producer.service');
 const { sendSaleWebhook } = require('./webhook.service');
-const { ensureProductsRegistered } = require('./product.service');
+const productService = require('./product.service');
 const { invalidateAuditCache } = require('./audit.service');
+const {
+  formatRomaneioNumber,
+  extractRomaneioFromNotes,
+  extractRomaneioFromFilename
+} = require('../utils/dataHelpers');
 
 /**
  * Criação atômica de Venda (VP) com cálculo tributário, geração de romaneio e webhook
@@ -30,9 +35,15 @@ async function createSale(body) {
   const valorVP = roundMoney(body.valorTotalVP > 0 ? body.valorTotalVP : totalOp);
   const commission = calculateCommission(valorVP, body.feeValue);
   const normalizedOrigin = await normalizeProducerOrigin(body.origin || '', body.notes || '');
+  const romaneioNumber = formatRomaneioNumber(
+    body.romaneioNumber ||
+    extractRomaneioFromNotes(body.notes) ||
+    extractRomaneioFromFilename(body.evidenceFile)
+  );
 
   const newSale = new Sale({
     id: newId,
+    romaneioNumber,
     operationType: body.operationType || "Intermediação (Corretagem / Comissão)",
     saleDate: body.saleDate || new Date().toISOString().split('T')[0],
     client: body.client || "Cliente Geral",
@@ -63,12 +74,13 @@ async function createSale(body) {
     previdenciaSocial: fiscal.previdencia,
     rat: fiscal.rat,
     senar: fiscal.senar,
-    liquidoAReceber: roundMoney(Math.max(0, valorVP - fiscal.funruralTotal)),
-    valorLiquidar: roundMoney(Math.max(0, valorVP - fiscal.funruralTotal)),
+    // A receber loja = VP comercial (FUNRURAL é informativo)
+    liquidoAReceber: valorVP,
+    valorLiquidar: valorVP,
     status: body.nfFile ? "Faturado" : "Pendente NF",
     paymentStatus: "A Receber",
-    paymentTerms: body.paymentTerms || (body.paymentTermDays !== undefined ? (Number(body.paymentTermDays) === 0 ? 'À Vista' : `${body.paymentTermDays} dias`) : '30 dias'),
-    paymentTermDays: body.paymentTermDays !== undefined ? Number(body.paymentTermDays) : 30,
+    paymentTerms: body.paymentTerms || (body.paymentTermDays !== undefined ? (Number(body.paymentTermDays) === 0 ? 'À Vista' : `${body.paymentTermDays} dias`) : '60 dias'),
+    paymentTermDays: body.paymentTermDays !== undefined ? Number(body.paymentTermDays) : 60,
     dueDate: body.dueDate || '',
     paidAmount: 0,
     paymentHistory: [],
@@ -80,10 +92,10 @@ async function createSale(body) {
 
   // Auto-cadastra os produtos da venda no catálogo se ainda não existirem
   if (newSale.items && Array.isArray(newSale.items) && newSale.items.length > 0) {
-    ensureProductsRegistered(newSale.items).catch(e => console.warn('Aviso ao auto-cadastrar produtos:', e.message));
+    productService.ensureProductsRegistered(newSale.items).catch(e => console.warn('Aviso ao auto-cadastrar produtos:', e.message));
   }
 
-  // Auto-cria Romaneio vinculado (ROM-VPXXX)
+  // Auto-cria pesagem vinculada (PSG-seq + saleId = VP)
   try {
     const existingSlip = await WeighingSlip.findOne({
       $or: [{ saleId: newSale.id }, { id: `ROM-${newSale.id}` }]
@@ -93,9 +105,11 @@ async function createSale(body) {
       const isBatata = (newSale.items && newSale.items.some(it => it.product?.toLowerCase().includes('batata'))) || (newSale.notes && newSale.notes.toLowerCase().includes('batata'));
       const unitKg = isBatata ? 25 : (newSale.items?.[0]?.boxWeightKg || 29);
       const computedBoxes = Number(newSale.totalVolumes) > 0 ? Number(newSale.totalVolumes) : (Number(newSale.totalKg) > 0 ? Number((Number(newSale.totalKg) / unitKg).toFixed(2)) : 0);
+      const nextSeq = await getNextSequence('weighing_slip_id', WeighingSlip, 'PSG-');
+      const slipId = `PSG-${String(nextSeq).padStart(3, '0')}`;
 
       const newSlip = new WeighingSlip({
-        id: `ROM-${newSale.id}`,
+        id: slipId,
         saleId: newSale.id,
         date: newSale.saleDate,
         client: newSale.client,
@@ -113,7 +127,7 @@ async function createSale(body) {
       await newSlip.save();
     }
   } catch (slipErr) {
-    console.warn('Aviso: erro ao criar romaneio automático vinculado à venda:', slipErr.message);
+    console.warn('Aviso: erro ao criar pesagem automática vinculada à venda:', slipErr.message);
   }
 
   // Disparar Webhook para o n8n
@@ -130,6 +144,14 @@ async function updateSale(id, body) {
   if (body.origin || body.notes) {
     body.origin = await normalizeProducerOrigin(body.origin || '', body.notes || '');
   }
+  if (body.romaneioNumber !== undefined) {
+    body.romaneioNumber = formatRomaneioNumber(body.romaneioNumber);
+  } else if (body.evidenceFile || body.notes) {
+    const inferred =
+      extractRomaneioFromNotes(body.notes) ||
+      extractRomaneioFromFilename(body.evidenceFile);
+    if (inferred) body.romaneioNumber = inferred;
+  }
 
   const updated = await Sale.findOneAndUpdate(
     { id },
@@ -144,7 +166,7 @@ async function updateSale(id, body) {
   }
 
   if (updated.items && Array.isArray(updated.items) && updated.items.length > 0) {
-    ensureProductsRegistered(updated.items).catch(e => console.warn('Aviso ao auto-cadastrar produtos:', e.message));
+    productService.ensureProductsRegistered(updated.items).catch(e => console.warn('Aviso ao auto-cadastrar produtos:', e.message));
   }
 
   // Sincronização com Romaneio vinculado
@@ -188,10 +210,10 @@ async function settleSale(id, payload = {}) {
     throw err;
   }
 
-  // O valor comercial a receber da loja baseia-se no valor de negociação (VP) ou no total faturado da NF
+  // Liquidação loja = VP comercial (não max(VP, NF))
   const valorComercial = getSaleCommercialValue(sale);
   const totalNF = roundMoney(sale.totalOperation || 0);
-  const targetReceivable = Math.max(valorComercial, totalNF);
+  const targetReceivable = valorComercial > 0 ? valorComercial : 0;
 
   const { 
     paidAmount: inputAmount, 
@@ -492,43 +514,31 @@ async function unsettleProducerPayment(id, payload = {}) {
 }
 
 /**
- * Exclusão de Venda com cascata de romaneios e arquivos
+ * Cancelamento soft: status Cancelada (mantém histórico; não reutiliza id VP).
+ * DELETE legado chama cancelSale para não apagar fisicamente.
  */
-async function deleteSale(id) {
-  const deleted = await Sale.findOneAndDelete({ id });
-  if (!deleted) {
+async function cancelSale(id) {
+  const sale = await Sale.findOne({ id });
+  if (!sale) {
     const err = new Error('Venda não encontrada');
     err.statusCode = 404;
     throw err;
   }
-
-  try {
-    await WeighingSlip.deleteMany({
-      $or: [{ saleId: deleted.id }, { id: `ROM-${deleted.id}` }]
-    });
-  } catch (slipErr) {
-    console.warn('Aviso: falha ao remover romaneio vinculado:', slipErr);
+  if (sale.status === 'Cancelada') {
+    return sale;
   }
-
-  // Limpeza de arquivos físicos
-  if (deleted.nfFile) {
-    const otherUsingNf = await Sale.findOne({ nfFile: deleted.nfFile });
-    if (!otherUsingNf) {
-      const nfPath = path.join(uploadDir, deleted.nfFile);
-      fs.unlink(nfPath).catch(() => {});
-    }
-  }
-
-  if (deleted.evidenceFile) {
-    const otherUsingEvidence = await Sale.findOne({ evidenceFile: deleted.evidenceFile });
-    if (!otherUsingEvidence) {
-      const evPath = path.join(uploadDir, deleted.evidenceFile);
-      fs.unlink(evPath).catch(() => {});
-    }
-  }
-
+  sale.status = 'Cancelada';
+  await sale.save();
+  sendSaleWebhook('sale.cancelled', sale);
   invalidateAuditCache();
-  return deleted;
+  return sale;
+}
+
+/**
+ * Exclusão hard (admin/legado). Preferir cancelSale na UI.
+ */
+async function deleteSale(id) {
+  return cancelSale(id);
 }
 
 /**
@@ -607,11 +617,12 @@ async function getAgendaEvents() {
 async function syncSaleWeightFromSlip(slip, chosenWeightKg, weightChoice) {
   if (!slip || !chosenWeightKg || chosenWeightKg <= 0) return null;
 
-  const rawSaleRef = slip.saleId || slip.id.replace('ROM-', '');
+  const rawSaleRef = slip.saleId || (String(slip.id || '').startsWith('ROM-') ? slip.id.replace(/^ROM-/, '') : null);
+  if (!rawSaleRef) return null;
   const digits = rawSaleRef.replace(/[^0-9]/g, '');
   const possibleIds = [
     rawSaleRef,
-    rawSaleRef.replace('ROM-', ''),
+    rawSaleRef.replace(/^ROM-/, ''),
     `VP${digits.padStart(3, '0')}`,
     `VP${digits}`
   ];
@@ -691,6 +702,7 @@ module.exports = {
   unsettleSale,
   settleProducerPayment,
   unsettleProducerPayment,
+  cancelSale,
   deleteSale,
   normalizeSaleNfStatus,
   getAgendaEvents,

@@ -1,6 +1,59 @@
 import React from 'react';
 import { Package, Trash2, Plus } from 'lucide-react';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { formatQuantity, resolveProductUnit } from '../../utils/dataHelpers';
+import { DATA_LABELS } from '../../constants/dataLabels';
+
+/** Options: root products + indented children when parentProductId hierarchy exists */
+function buildProductOptions(products = []) {
+  const list = Array.isArray(products) ? products : [];
+  const childrenByParent = {};
+  list.forEach(p => {
+    if (p.parentProductId) {
+      if (!childrenByParent[p.parentProductId]) childrenByParent[p.parentProductId] = [];
+      childrenByParent[p.parentProductId].push(p);
+    }
+  });
+  const roots = list.filter(p => !p.parentProductId);
+  const childIds = new Set(list.filter(p => p.parentProductId).map(p => p.id));
+  const options = [];
+
+  const pushProd = (p, indent = false) => {
+    options.push({
+      key: p.id || p.name,
+      name: p.name,
+      label: `${indent ? '↳ ' : ''}${p.name} — ${p.defaultUnit || `${p.unitKg}kg`}`,
+      indent
+    });
+  };
+
+  if (roots.length === 0) {
+    list.forEach(p => pushProd(p, false));
+    return options;
+  }
+
+  roots.forEach(root => {
+    const kids = childrenByParent[root.id] || [];
+    pushProd(root, false);
+    kids.forEach(c => pushProd(c, true));
+  });
+
+  // Orphans that are children of missing parents
+  list.forEach(p => {
+    if (p.parentProductId && !list.some(r => r.id === p.parentProductId) && !options.some(o => o.name === p.name)) {
+      pushProd(p, true);
+    }
+  });
+
+  // Any product not yet listed
+  list.forEach(p => {
+    if (!options.some(o => o.name === p.name) && !childIds.has(p.id)) {
+      pushProd(p, false);
+    }
+  });
+
+  return options;
+}
 
 export default function SaleItemsTable({
   saleItems,
@@ -15,10 +68,9 @@ export default function SaleItemsTable({
   totalWeightKg,
   totalVolumes,
   valorTotalVP,
-  funrural,
-  liquidoAReceber,
   effectiveTotalNF
 }) {
+  const productOptions = buildProductOptions(products);
   const parseNum = (val) => {
     if (val === '' || val === null || val === undefined) return 0;
     if (typeof val === 'number') return isNaN(val) ? 0 : val;
@@ -126,12 +178,12 @@ export default function SaleItemsTable({
                     className="w-full bg-white border border-gray-300 text-xs rounded-lg px-2.5 py-2 font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-[#1d5a37]"
                   >
                     <option value="">-- Escolha o Produto --</option>
-                    {!products.some(p => p.name === item.product) && item.product && (
+                    {!productOptions.some(p => p.name === item.product) && item.product && (
                       <option value={item.product}>{item.product} (Importado)</option>
                     )}
-                    {products.map(p => (
-                      <option key={p.id || p.name} value={p.name}>
-                        {p.name} — {p.defaultUnit || `${p.unitKg}kg`}
+                    {productOptions.map(p => (
+                      <option key={p.key} value={p.name}>
+                        {p.label}
                       </option>
                     ))}
                   </select>
@@ -190,13 +242,18 @@ export default function SaleItemsTable({
                   />
                 </div>
 
-                {/* Caixas Calculadas */}
+                {/* Quantidade */}
                 <div>
                   <label className="block text-[10px] font-bold text-gray-700 mb-0.5">
-                    2. Volumes ({unitShort})
+                    2. {DATA_LABELS.quantity}
                   </label>
-                  <div className="w-full bg-gray-50 border border-gray-200 text-xs rounded-lg px-2 py-1.5 font-extrabold text-gray-900 whitespace-nowrap overflow-x-auto">
-                    {formatNumber(itemVol, isItemGranel ? 0 : 2)} {unitShort}
+                  <div className="w-full bg-gray-50 border border-gray-200 text-xs rounded-lg px-2 py-1.5 font-extrabold text-gray-900 flex items-baseline gap-1.5 min-w-0">
+                    <span className="tabular-nums">
+                      {formatQuantity(itemVol, '', isItemGranel ? 0 : 2)}
+                    </span>
+                    <span className="text-[10px] font-semibold text-gray-500 truncate" title={item.unit || resolveProductUnit(item)}>
+                      {item.unit || resolveProductUnit(item)}
+                    </span>
                   </div>
                 </div>
 
@@ -269,30 +326,25 @@ export default function SaleItemsTable({
         </button>
       </div>
 
-      {/* BARRA DE TOTAIS CONSOLIDADOS DA VENDA */}
-      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-200 text-xs">
+      {/* BARRA COMPACTA DE TOTAIS */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-200 text-xs">
         <div className="min-w-0">
-          <span className="block text-[10px] font-bold text-emerald-800 uppercase truncate">Peso Total Carga</span>
+          <span className="block text-[10px] font-bold text-emerald-800 uppercase truncate">Peso Total</span>
           <span className="text-sm font-black text-gray-900 truncate block" title={`${formatNumber(totalWeightKg, 0)} kg`}>{formatNumber(totalWeightKg, 0)} kg</span>
         </div>
         <div className="min-w-0">
-          <span className="block text-[10px] font-bold text-emerald-800 uppercase truncate">Total Volumes</span>
-          <span className="text-sm font-black text-gray-900 truncate block" title={`${formatNumber(totalVolumes, 2)} vol`}>{formatNumber(totalVolumes, 2)} vol</span>
+          <span className="block text-[10px] font-bold text-emerald-800 uppercase truncate">{DATA_LABELS.quantity}</span>
+          <span className="text-sm font-black text-gray-900 truncate block" title={`${formatQuantity(totalVolumes, '')} ${resolveProductUnit(saleItems[0] || {})}`}>
+            {formatQuantity(totalVolumes, '')}
+            <span className="ml-1 text-[10px] font-semibold text-emerald-800/80">{resolveProductUnit(saleItems[0] || {})}</span>
+          </span>
         </div>
         <div className="bg-blue-50/90 p-2 rounded-lg border border-blue-200 min-w-0">
-          <span className="block text-[10px] font-bold text-blue-900 uppercase truncate">Total Comercial (VP)</span>
+          <span className="block text-[10px] font-bold text-blue-900 uppercase truncate">{DATA_LABELS.valorNegociadoVP}</span>
           <span className="text-sm font-black text-blue-950 truncate block" title={formatCurrency(valorTotalVP)}>{formatCurrency(valorTotalVP)}</span>
         </div>
         <div className="min-w-0">
-          <span className="block text-[10px] font-bold text-red-700 uppercase truncate">(-) FUNRURAL (s/ NF)</span>
-          <span className="text-sm font-black text-red-600 truncate block" title={formatCurrency(funrural?.funruralTotal || 0)}>-{formatCurrency(funrural?.funruralTotal || 0)}</span>
-        </div>
-        <div className="bg-emerald-100/90 p-2 rounded-lg border border-emerald-300 min-w-0">
-          <span className="block text-[10px] font-bold text-emerald-900 uppercase truncate">(=) Valor a Liquidar</span>
-          <span className="text-sm font-black text-emerald-950 truncate block" title={formatCurrency(liquidoAReceber)}>{formatCurrency(liquidoAReceber)}</span>
-        </div>
-        <div className="min-w-0">
-          <span className="block text-[10px] font-bold text-gray-600 uppercase truncate">Valor Total NF</span>
+          <span className="block text-[10px] font-bold text-gray-600 uppercase truncate">{DATA_LABELS.valorNF}</span>
           <span className="text-sm font-bold text-gray-800 truncate block" title={formatCurrency(effectiveTotalNF)}>{formatCurrency(effectiveTotalNF)}</span>
         </div>
       </div>

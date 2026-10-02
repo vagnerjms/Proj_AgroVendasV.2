@@ -121,7 +121,7 @@ export default function Dashboard({ setCurrentPage }) {
           className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer group min-w-0"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase group-hover:text-[#df7b1b] transition-colors truncate">
+            <span className="text-[11px] font-bold text-gray-500 tracking-wider uppercase group-hover:text-[#F97316] transition-colors truncate">
               VENDAS DO PERÍODO
             </span>
             <span className="w-4 h-4 bg-blue-600 rounded text-white flex items-center justify-center text-[10px] font-bold shadow-xs shrink-0 ml-1">
@@ -313,7 +313,7 @@ export default function Dashboard({ setCurrentPage }) {
             </h2>
             <button 
               onClick={() => setCurrentPage('sales-history')}
-              className="text-xs text-[#091b2e] font-semibold hover:text-[#df7b1b] transition-colors"
+              className="text-xs text-[#091b2e] font-semibold hover:text-[#F97316] transition-colors"
             >
               Ver todas
             </button>

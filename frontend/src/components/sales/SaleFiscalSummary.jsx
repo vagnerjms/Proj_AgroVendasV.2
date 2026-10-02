@@ -1,30 +1,24 @@
 import React from 'react';
 import { Calculator } from 'lucide-react';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { formatQuantity, resolveProductUnit } from '../../utils/dataHelpers';
+import { DATA_LABELS } from '../../constants/dataLabels';
 
 /**
- * Componente Modular de Resumo Financeiro & Fiscal da Venda
- * Apresenta o peso total da carga, volumes, total faturado na NF,
- * detalhamento exato das retenções fiscais de FUNRURAL (1,63%),
- * valor líquido a receber, destaque do Valor Total Comercial (VP)
- * e comissão de corretagem.
+ * Resumo comercial da venda.
+ * Destaque: Valor negociado (cotação). NF informativa. FUNRURAL só na Apuração.
  */
 export default function SaleFiscalSummary({
   saleItems = [],
   totalWeightKg = 0,
   totalVolumes = 0,
   effectiveTotalNF = 0,
-  funrural = { funruralTotal: 0, previdencia: 0, rat: 0, senar: 0 },
-  liquidoAReceber = 0,
   valorTotalVP = 0,
   feeValue = 3.0,
   totalCommission = 0,
   submitting = false
 }) {
-  const isSaca = saleItems.some(it => 
-    it.unit?.toLowerCase().includes('saca') || 
-    it.product?.toLowerCase().includes('batata')
-  );
+  const quantityUnit = resolveProductUnit(saleItems[0] || {});
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4 sticky top-6">
@@ -36,8 +30,8 @@ export default function SaleFiscalSummary({
       <div className="space-y-3 text-xs">
         <div className="flex justify-between text-gray-600">
           <span>Produtos ({saleItems.length}):</span>
-          <span 
-            className="font-bold text-gray-900 truncate max-w-[170px]" 
+          <span
+            className="font-bold text-gray-900 truncate max-w-[170px]"
             title={saleItems.map(it => it.product).filter(Boolean).join(', ')}
           >
             {saleItems.map(it => it.product).filter(Boolean).join(', ') || 'Nenhum'}
@@ -49,51 +43,28 @@ export default function SaleFiscalSummary({
           <span className="font-bold text-gray-900">{formatNumber(totalWeightKg, 0)} kg</span>
         </div>
 
-        <div className="flex justify-between text-gray-600">
-          <span>Total Volumes:</span>
-          <span className="font-bold text-gray-900">
-            {formatNumber(totalVolumes, 2)} {isSaca ? 'sc' : 'cx'}
+        <div className="flex justify-between text-gray-600 gap-2">
+          <span>{DATA_LABELS.quantity}:</span>
+          <span className="font-bold text-gray-900 text-right">
+            {formatQuantity(totalVolumes, '')}
+            {quantityUnit ? (
+              <span className="ml-1 text-[10px] font-semibold text-gray-500">{quantityUnit}</span>
+            ) : null}
           </span>
         </div>
 
-        <div className="flex justify-between text-gray-800 font-bold border-t border-gray-100 pt-2 text-sm">
-          <span>Valor Total da NF:</span>
-          <span className="text-[#173e27] font-black">{formatCurrency(effectiveTotalNF)}</span>
-        </div>
-
-        <div className="flex justify-between text-red-600 font-semibold">
-          <span>(-) FUNRURAL Retido (1,63%):</span>
-          <span>-{formatCurrency(funrural.funruralTotal)}</span>
-        </div>
-
-        <div className="pl-3 text-[11px] text-gray-400 space-y-0.5 border-l-2 border-red-200">
-          <div className="flex justify-between">
-            <span>↳ Previdência (1,20%):</span>
-            <span>{formatCurrency(funrural.previdencia)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>↳ RAT (0,10%):</span>
-            <span>{formatCurrency(funrural.rat)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>↳ SENAR (0,33%):</span>
-            <span>{formatCurrency(funrural.senar)}</span>
-          </div>
-        </div>
-
-        <div className="flex justify-between text-emerald-950 font-bold bg-emerald-50/50 p-2 rounded-lg border border-emerald-200">
-          <span>(=) Líquido a Receber:</span>
-          <span className="font-black text-sm">{formatCurrency(liquidoAReceber)}</span>
-        </div>
-
-        {/* VALOR TOTAL COMERCIAL (VP) EM EVIDÊNCIA */}
-        <div className="flex justify-between items-center text-blue-950 font-black text-sm border border-blue-200 bg-blue-50/70 p-2.5 rounded-xl shadow-xs">
+        <div className="flex justify-between items-center text-blue-950 font-black text-sm border-2 border-blue-300 bg-blue-50 p-3 rounded-xl shadow-sm">
           <span className="text-blue-900 font-bold">
-            Valor Total Comercial:
+            {DATA_LABELS.valorComercialVP}:
           </span>
           <span className="text-blue-950 font-black text-base">
             {formatCurrency(valorTotalVP)}
           </span>
+        </div>
+
+        <div className="flex justify-between text-gray-600 border-t border-gray-100 pt-2">
+          <span>{DATA_LABELS.valorNF}:</span>
+          <span className="font-semibold text-gray-800">{formatCurrency(effectiveTotalNF)}</span>
         </div>
 
         <div className="flex justify-between text-gray-800 font-bold border-t border-gray-100 pt-2">

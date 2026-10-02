@@ -43,7 +43,7 @@ export default function WeighingResolveModal({
         {/* Opção Considerar Peso Origem vs Destino */}
         <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
           <label className="block text-xs font-bold text-slate-800 uppercase tracking-wide">
-            ⚖️ Escolha qual peso fixar na Venda ({resolvingSlip.saleId || resolvingSlip.id.replace('ROM-', '')})
+            ⚖️ Escolha qual peso fixar na Venda ({resolvingSlip.saleId || '—'})
           </label>
           <div className="grid grid-cols-2 gap-2">
             <button

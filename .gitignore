@@ -1,0 +1,10 @@
+﻿e2e/.auth/
+test-results/
+playwright-report/
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+backend/coverage/
+.env
+*.log
+docs/

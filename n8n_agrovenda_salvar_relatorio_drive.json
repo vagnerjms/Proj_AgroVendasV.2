@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "AgroVenda V2 - Salvar Relatorio Filtrado no Google Drive",
   "nodes": [
     {
@@ -20,7 +20,7 @@
     {
       "parameters": {
         "resource": "folder",
-        "name": "={{ $json.body.folderName || 'Relatorios AgroVenda' }}",
+        "name": "={{ $json.body.folderName || $json.body.suggestedFolder || $json.body.driveFolder?.suggestedFolder || 'Relatorios AgroVenda' }}",
         "options": {
           "parentFolderId": {
             "__rl": true,
@@ -46,7 +46,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $('Webhook Relatorio AgroVenda').first().json.body || {};\nconst folderId = $('Criar ou Usar Pasta Relatorios no Drive').first().json.id;\nconst fileName = body.fileName || `Relatorio_AgroVenda_${new Date().toISOString().split('T')[0]}.xls`;\nconst contentBase64 = body.contentBase64 || (body.files && body.files[0] ? body.files[0].contentBase64 : '');\n\nif (!contentBase64) {\n  throw new Error('Conteudo do arquivo nao foi recebido no webhook.');\n}\n\nconst fileBuffer = Buffer.from(contentBase64, 'base64');\n\nreturn [{\n  json: {\n    fileName: fileName,\n    folderId: folderId,\n    fileSize: fileBuffer.length,\n    filters: body.filters\n  },\n  binary: {\n    data: await this.helpers.prepareBinaryData(\n      fileBuffer,\n      fileName,\n      'application/vnd.ms-excel'\n    )\n  }\n}];"
+        "jsCode": "const body = $('Webhook Relatorio AgroVenda').first().json.body || {};\nconst folderId = $('Criar ou Usar Pasta Relatorios no Drive').first().json.id;\n\nconst tab = body.reportTab || body.filters?.activeTab || 'lojas';\nconst fileFromArr = Array.isArray(body.files) && body.files[0] ? body.files[0] : null;\nconst defaultName = `Relatorio_AgroVenda_${tab}_${new Date().toISOString().split('T')[0]}.xls`;\nconst fileName = body.fileName || fileFromArr?.filename || defaultName;\nconst contentBase64 = body.contentBase64 || fileFromArr?.contentBase64 || '';\nconst mimeType = body.mimeType || fileFromArr?.mimeType || 'application/vnd.ms-excel';\n\nif (!contentBase64) {\n  throw new Error('Conteudo do arquivo nao foi recebido no webhook (contentBase64 / files[0]).');\n}\n\nconst fileBuffer = Buffer.from(contentBase64, 'base64');\n\nreturn [{\n  json: {\n    fileName,\n    folderId,\n    folderName: body.folderName || body.suggestedFolder || body.driveFolder?.suggestedFolder || '',\n    fileSize: fileBuffer.length,\n    reportTab: tab,\n    reportTabLabel: body.reportTabLabel || body.filters?.reportTabLabel || tab,\n    filters: body.filters || {}\n  },\n  binary: {\n    data: await this.helpers.prepareBinaryData(fileBuffer, fileName, mimeType)\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,

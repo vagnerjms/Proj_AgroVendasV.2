@@ -1,8 +1,20 @@
-const { Sale } = require('../db');
-const { roundMoney, calculateFiscalDeductions, calculateCommission } = require('../utils/money');
+const { Sale, WeighingSlip } = require('../db');
+const { roundMoney, calculateFiscalDeductions, calculateCommission, getSaleCommercialValue, calculateCommercialNet } = require('../utils/money');
 const { normalizeProducerOrigin } = require('./producer.service');
 const { escapeRegex } = require('../utils/security');
+const { resolveRomaneioNumber } = require('../utils/dataHelpers');
 
+function freightOf(sale) {
+  const perUnit = Number(sale.freightPricePerUnit) || 0;
+  const vols = Number(sale.totalVolumes) || 0;
+  if (perUnit > 0 && vols > 0) return roundMoney(perUnit * vols);
+  return roundMoney(Number(sale.freightCost) || 0);
+}
+
+function commissionDiscountOf(sale) {
+  // Planilha: coluna amarela manual. Só desconta se houver valor absoluto explícito.
+  return roundMoney(Number(sale.commissionDiscount) || 0);
+}
 /**
  * Agregação analítica de vendas por loja, produtor e período
  */
@@ -31,6 +43,16 @@ async function getStoresSummary({ startDate, endDate, producer }) {
   }
 
   const allSales = await Sale.find(query).sort({ saleDate: 1 }).lean();
+  const slips = await WeighingSlip.find({
+    saleId: { $in: allSales.map((s) => s.id) }
+  }).lean();
+  const slipBySale = {};
+  for (const slip of slips) {
+    if (slip.saleId && !slipBySale[slip.saleId]) {
+      slipBySale[slip.saleId] = slip;
+    }
+  }
+
   const rawProducers = await Sale.distinct('origin');
   const producerSet = new Set();
   for (const p of rawProducers) {
@@ -60,15 +82,26 @@ async function getStoresSummary({ startDate, endDate, producer }) {
     let valorTotalNF = 0;
     let funrural = 0;
     let totalVendaAReceber = 0;
+    let totalFrete = 0;
+    let totalComissaoDesc = 0;
+    let totalLiquidoPeloVP = 0;
+    let totalLiquidoPelaNF = 0;
 
     const itens = sales.map(s => {
       const isFaturado = s.status === 'Faturado';
-      
+
       let itemPesoNF = Number(s.totalKg) || 0;
       let itemValorNF = roundMoney(s.totalOperation);
-      const fiscal = calculateFiscalDeductions(itemValorNF);
-      let itemFunrural = fiscal.funruralTotal;
-      let itemPrecoKg = itemPesoNF > 0 ? roundMoney(itemValorNF / itemPesoNF) : 0;
+
+      let valorVP = getSaleCommercialValue(s);
+      if (valorVP <= 0 && itemValorNF > 0) valorVP = itemValorNF;
+      valorVP = roundMoney(valorVP);
+
+      const frete = freightOf(s);
+      const comissaoDesconto = commissionDiscountOf(s);
+      const commercial = calculateCommercialNet(valorVP, itemValorNF, frete, comissaoDesconto);
+      let itemFunrural = commercial.funrural;
+      let itemPrecoKg = itemPesoNF > 0 && itemValorNF > 0 ? roundMoney(itemValorNF / itemPesoNF) : 0;
 
       if (isFaturado || s.nfFile) {
         nfs++;
@@ -80,77 +113,50 @@ async function getStoresSummary({ startDate, endDate, producer }) {
       valorTotalNF = roundMoney(valorTotalNF + itemValorNF);
       funrural = roundMoney(funrural + itemFunrural);
       pesoColheita += itemPesoNF;
+      totalFrete = roundMoney(totalFrete + frete);
+      totalComissaoDesc = roundMoney(totalComissaoDesc + comissaoDesconto);
+      totalLiquidoPeloVP = roundMoney(totalLiquidoPeloVP + commercial.liquidoPeloVP);
+      if (commercial.liquidoPelaNF != null) {
+        totalLiquidoPelaNF = roundMoney(totalLiquidoPelaNF + commercial.liquidoPelaNF);
+      }
 
-      // Volumes
       const isBatata = (s.items && s.items.some(it => it.product?.toLowerCase().includes('batata'))) || (s.notes && s.notes.toLowerCase().includes('batata'));
       const unitKg = isBatata ? 25 : (s.items?.[0]?.boxWeightKg || 29);
       let itemCaixas = Number(s.totalVolumes) > 0 ? Number(s.totalVolumes) : (itemPesoNF > 0 ? Number((itemPesoNF / unitKg).toFixed(2)) : 0);
 
       cxsVendidas = Number((cxsVendidas + itemCaixas).toFixed(2));
 
-      // Valor Comercial (VP) consolidado multi-item
-      let valorVP = 0;
-      if (s.items && Array.isArray(s.items) && s.items.length > 0) {
-        valorVP = s.items.reduce((acc, it) => {
-          const itKg = Number(it.kg) || 0;
-          const bw = Number(it.boxWeightKg) || 25;
-          const itVol = Number(it.quantity) || (itKg > 0 && bw > 0 ? itKg / bw : 0);
-          const q = Number(it.dailyQuote) || 0;
-          if (q > 0) {
-            const isQKg = (q > 0 && q <= 10.0) || (it.unit && it.unit.includes('Granel')) || bw === 1;
-            return acc + (isQKg ? (itKg * q) : (itVol * q));
-          }
-          if (Number(it.valorTotalVP) > 0) return acc + Number(it.valorTotalVP);
-          if (Number(it.total) > 0) return acc + Number(it.total);
-          return acc;
-        }, 0);
-      } else if (Number(s.valorTotalVP) > 0) {
-        valorVP = Number(s.valorTotalVP);
-      } else {
-        let cotacao = Number(s.dailyQuote) || 0;
-        if (!cotacao && s.notes) {
-          const matchCot = s.notes.match(/Cotação:?\s*R\$\s*([\d,.]+)/i);
-          if (matchCot) cotacao = parseFloat(matchCot[1].replace(',', '.'));
-        }
-        if (cotacao > 0 && cotacao <= 10.0 && itemPesoNF > 0) {
-          valorVP = roundMoney(itemPesoNF * cotacao);
-        } else if (cotacao > 10.0) {
-          valorVP = roundMoney(itemCaixas * cotacao);
-        } else {
-          valorVP = itemValorNF;
-        }
-      }
-      valorVP = roundMoney(valorVP);
-
-      // Regra de Liquidação Unificada da AgroVenda (Todo o valor é repassado ao produtor)
-      const itemLiquido = roundMoney(Math.max(0, itemValorNF - itemFunrural));
-      const pagoProdutor = roundMoney(Number(s.producerPaidAmount) || 0);
+      // Ledger loja = VP | Ledger produtor (baixa Fiscal) = NF (não misturar pagos)
       const pagoCliente = roundMoney(Number(s.paidAmount) || 0);
-      const pagoEfetivo = Math.max(pagoProdutor, pagoCliente);
+      const pagoProdutor = roundMoney(Number(s.producerPaidAmount) || 0);
 
-      const isQuitado = s.producerPaymentStatus === 'Pago' || s.paymentStatus === 'Recebido' || s.status === 'Concluído' || (pagoEfetivo > 0 && pagoEfetivo >= itemValorNF - 0.05);
-      const isParcial = !isQuitado && (s.producerPaymentStatus === 'Parcial' || s.paymentStatus === 'Parcial' || pagoEfetivo > 0);
+      const isQuitadoLoja =
+        s.paymentStatus === 'Recebido' ||
+        s.status === 'Concluído' ||
+        (valorVP > 0 && pagoCliente >= valorVP - 0.05);
+      const isParcialLoja = !isQuitadoLoja && (s.paymentStatus === 'Parcial' || pagoCliente > 0);
 
       let itemLiquidado = 0;
       let itemALiquidar = 0;
 
-      if (isQuitado) {
-        itemLiquidado = pagoEfetivo > 0 ? pagoEfetivo : itemValorNF;
+      if (isQuitadoLoja) {
+        itemLiquidado = pagoCliente > 0 ? pagoCliente : valorVP;
         itemALiquidar = 0;
-      } else if (isParcial) {
-        itemLiquidado = pagoEfetivo;
-        itemALiquidar = roundMoney(Math.max(0, itemValorNF - pagoEfetivo));
+      } else if (isParcialLoja) {
+        itemLiquidado = pagoCliente;
+        itemALiquidar = roundMoney(Math.max(0, valorVP - pagoCliente));
       } else {
         itemLiquidado = 0;
-        itemALiquidar = itemValorNF;
+        itemALiquidar = valorVP;
       }
 
       totalVendaAReceber = roundMoney(totalVendaAReceber + valorVP);
 
-      const nfNumber = s.nfFile ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '').replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
+      const nfNumber = s.nfFile
+        ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '').replace('NF-', '').replace('.pdf', '')
+        : (s.nfeKey ? s.nfeKey.slice(-8) : (itemValorNF > 0 ? 'Pendente' : 'SEM NF'));
       const comm = calculateCommission(valorVP, itemValorNF, s.feeValue);
 
-      // Nome / discriminação dos produtos
       let productLabel = 'Cenoura';
       if (s.items && s.items.length > 1) {
         productLabel = s.items.map(it => {
@@ -170,9 +176,12 @@ async function getStoresSummary({ startDate, endDate, producer }) {
       const cleanEvidence = s.evidenceFile ? s.evidenceFile.replace(/^\d{10,15}(-\d+)?-/, '') : '';
       const cleanNfFile = s.nfFile ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '') : '';
       const produtorNome = s.origin || (s.notes?.match(/Produtor:\s*([^|]+)/i)?.[1]?.trim()) || 'Produtor Rural';
+      const slip = slipBySale[s.id];
 
       return {
         vp: s.id,
+        romaneioNumber: resolveRomaneioNumber(s) || '',
+        weighingSlipId: slip?.id || null,
         dataVP: s.saleDate ? s.saleDate.split('-').reverse().join('/') : '-',
         nf: nfNumber,
         dataNF: s.saleDate ? s.saleDate.split('-').reverse().join('/') : '-',
@@ -189,23 +198,31 @@ async function getStoresSummary({ startDate, endDate, producer }) {
         precoKg: itemPrecoKg,
         valorNF: itemValorNF,
         funrural: itemFunrural,
+        funruralEstimado: commercial.funruralEstimado,
+        frete,
+        comissaoDesconto,
         cotacao: s.items?.[0]?.dailyQuote ? Number(s.items[0].dailyQuote) : (Number(s.dailyQuote) || 0),
         valorVP: valorVP,
+        notes: s.notes || '',
+        planilhaVp: (String(s.notes || '').match(/Planilha\s*VP:\s*(\d+)/i) || [])[1] || null,
         liquido: itemLiquidado,
         valorLiquidado: itemLiquidado,
         valorALiquidar: itemALiquidar,
-        paidAmount: pagoEfetivo,
+        paidAmount: pagoCliente,
+        producerPaidAmount: pagoProdutor,
         paymentMethod: s.paymentMethod || (s.paymentHistory && s.paymentHistory.length > 0 ? s.paymentHistory[s.paymentHistory.length - 1].paymentMethod : 'PIX'),
         paymentHistory: s.paymentHistory || [],
-        liquidoNF: roundMoney(itemValorNF - itemFunrural),
+        liquidoNF: commercial.liquidoPelaNF != null ? commercial.liquidoPelaNF : 0,
+        liquidoPelaNF: commercial.liquidoPelaNF,
+        liquidoPeloVP: commercial.liquidoPeloVP,
         taxaComissao: comm.taxaPercentual,
         comissao: comm.comissao,
-        liquidoProdutor: comm.liquidoProdutor,
+        liquidoProdutor: commercial.liquidoPeloVP,
         spreadComercial: comm.spreadComercial,
         lucroCorretor: comm.lucroCorretor,
         venc: s.dueDate ? s.dueDate.split('-').reverse().join('/') : (s.notes?.match(/Vencimento:\s*([^\s|]+)/i)?.[1] || 'Em aberto'),
         status: s.status,
-        paymentStatus: s.paymentStatus || 'A Receber',
+        paymentStatus: isQuitadoLoja ? 'Recebido' : (isParcialLoja ? 'Parcial' : (s.paymentStatus || 'A Receber')),
         evidenceFile: cleanEvidence || '-',
         rawEvidenceFile: s.evidenceFile || null,
         paymentProofFile: s.paymentProofFile || null,
@@ -231,8 +248,12 @@ async function getStoresSummary({ startDate, endDate, producer }) {
       cxsVendidas,
       valorTotalNF: roundMoney(valorTotalNF),
       funrural: roundMoney(funrural),
+      frete: roundMoney(totalFrete),
+      comissaoDesconto: roundMoney(totalComissaoDesc),
       totalVendaAReceber: roundMoney(totalVendaAReceber),
-      liquidoNF: roundMoney(valorTotalNF - funrural),
+      liquidoNF: roundMoney(totalLiquidoPelaNF),
+      liquidoPeloVP: roundMoney(totalLiquidoPeloVP),
+      liquidoPelaNF: roundMoney(totalLiquidoPelaNF),
       totalComissao: totalComissaoLoja,
       totalLiquidoProdutor: totalLiquidoProdutorLoja,
       totalSpreadComercial: totalSpreadComercialLoja,
@@ -252,8 +273,12 @@ async function getStoresSummary({ startDate, endDate, producer }) {
     cxsVendidas: stores.reduce((a, b) => a + b.cxsVendidas, 0),
     valorTotalNF: roundMoney(stores.reduce((a, b) => a + b.valorTotalNF, 0)),
     funrural: roundMoney(stores.reduce((a, b) => a + b.funrural, 0)),
+    frete: roundMoney(stores.reduce((a, b) => a + (b.frete || 0), 0)),
+    comissaoDesconto: roundMoney(stores.reduce((a, b) => a + (b.comissaoDesconto || 0), 0)),
     totalVendaAReceber: roundMoney(stores.reduce((a, b) => a + b.totalVendaAReceber, 0)),
     liquidoNF: roundMoney(stores.reduce((a, b) => a + b.liquidoNF, 0)),
+    liquidoPeloVP: roundMoney(stores.reduce((a, b) => a + (b.liquidoPeloVP || 0), 0)),
+    liquidoPelaNF: roundMoney(stores.reduce((a, b) => a + (b.liquidoPelaNF || 0), 0)),
     totalComissao: roundMoney(stores.reduce((a, b) => a + b.totalComissao, 0)),
     totalLiquidoProdutor: roundMoney(stores.reduce((a, b) => a + b.totalLiquidoProdutor, 0)),
     totalSpreadComercial: roundMoney(stores.reduce((a, b) => a + (b.totalSpreadComercial || 0), 0)),
@@ -305,7 +330,7 @@ async function triggerN8nReport(user, body) {
   const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
   const startStr = startDate || 'Inicio';
   const endStr = endDate || todayStr;
-  const fileName = `Relatorio_AgroVenda_${safeLoja}_${startStr}_a_${endStr}.xls`;
+  const fileName = `Relatorio_AgroVenda_${activeTab || 'lojas'}_${safeLoja}_${startStr}_a_${endStr}.xls`;
   const folderName = `Relatórios AgroVenda (${todayStr.slice(0, 7)})`;
 
   let htmlContent = excelHtml || `<html><head><meta charset="utf-8"></head><body><h2>Relatório AgroVenda (${safeLoja})</h2></body></html>`;
@@ -313,10 +338,18 @@ async function triggerN8nReport(user, body) {
   const fileBuffer = Buffer.from(htmlContent, 'utf-8');
   const contentBase64 = fileBuffer.toString('base64');
 
+  const tabLabel = activeTab === 'produtor'
+    ? 'Por Produtor (Valor comercial)'
+    : activeTab === 'corretor'
+      ? 'Resultado AgroVenda'
+      : 'Por Loja (Valores por carga)';
+
   const payload = {
     event: 'report.generated',
     triggeredAt: new Date().toISOString(),
     user: user ? user.name : 'Administrador',
+    reportTab: activeTab || 'lojas',
+    reportTabLabel: tabLabel,
     fileName: fileName,
     folderName: folderName,
     suggestedFolder: folderName,
@@ -342,14 +375,14 @@ async function triggerN8nReport(user, body) {
       endDate: endDate || null,
       selectedLoja: selectedLoja || 'ALL',
       selectedProducer: selectedProducer || 'ALL',
-      activeTab: activeTab || 'geral'
+      activeTab: activeTab || 'lojas',
+      reportTabLabel: tabLabel
     },
     stores: filteredStores,
     totalGeral: currentTotal
   };
 
-  const fetchModule = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
-  const fetchFunc = typeof fetch === 'function' ? fetch : fetchModule;
+  const fetchFunc = typeof fetch === 'function' ? fetch : createNodeFetchBridge();
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -425,36 +458,55 @@ async function getProducersSummary({ startDate, endDate, producer }) {
     let pesoNF = 0;
     let cxs = 0;
     let valorTotalNF = 0;
+    let valorTotalVP = 0;
     let funrural = 0;
     let liquidoProdutor = 0;
+    let liquidoPeloVP = 0;
+    let liquidoPelaNF = 0;
+    let freteTotal = 0;
     let repassesPagos = 0;
     let saldoAPagar = 0;
 
     const itens = sales.map(s => {
-      const nfNumber = s.nfFile ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '').replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'Pendente');
+      const nfNumber = s.nfFile ? s.nfFile.replace(/^\d{10,15}(-\d+)?-/, '').replace('NF-', '').replace('.pdf', '') : (s.nfeKey ? s.nfeKey.slice(-8) : 'SEM NF');
       if (s.status === 'Faturado' || s.nfFile) nfs++;
 
       const itemPeso = Number(s.totalKg) || 0;
       const itemValorNF = roundMoney(s.totalOperation);
-      const fiscal = calculateFiscalDeductions(itemValorNF);
-      const itemFunrural = fiscal.funruralTotal;
-      const itemPrecoKg = itemPeso > 0 ? roundMoney(itemValorNF / itemPeso) : 0;
-      const itemLiquido = roundMoney(Math.max(0, itemValorNF - itemFunrural));
+      let valorVP = getSaleCommercialValue(s);
+      if (valorVP <= 0 && itemValorNF > 0) valorVP = itemValorNF;
+      valorVP = roundMoney(valorVP);
+
+      const frete = freightOf(s);
+      const comissaoDesconto = commissionDiscountOf(s);
+      const commercial = calculateCommercialNet(valorVP, itemValorNF, frete, comissaoDesconto);
+      const itemFunrural = commercial.funrural;
+      const itemLiquidoVP = commercial.liquidoPeloVP;
+      const itemLiquidoNF = commercial.liquidoPelaNF;
+      const fiscalBase = itemValorNF > 0 ? itemValorNF : valorVP;
+      const fiscalParts = calculateFiscalDeductions(fiscalBase);
+      const itemPrecoKg = itemPeso > 0 && itemValorNF > 0 ? roundMoney(itemValorNF / itemPeso) : 0;
 
       const isBatata = (s.items && s.items.some(it => it.product?.toLowerCase().includes('batata'))) || (s.notes && s.notes.toLowerCase().includes('batata'));
       const unitKg = isBatata ? 25 : (s.items?.[0]?.boxWeightKg || 29);
       const itemCaixas = Number(s.totalVolumes) > 0 ? Number(s.totalVolumes) : (itemPeso > 0 ? Number((itemPeso / unitKg).toFixed(2)) : 0);
 
       const pagoProdutor = roundMoney(Number(s.producerPaidAmount) || 0);
-      const isProducerPaid = s.producerPaymentStatus === 'Pago' || (itemValorNF > 0 && pagoProdutor >= itemValorNF - 0.01);
-      const pago = isProducerPaid && pagoProdutor === 0 ? itemValorNF : pagoProdutor;
-      const saldo = roundMoney(Math.max(0, itemValorNF - pago));
+      // Prestação de contas (relatório): base = líquido comercial VP
+      const producerTarget = itemLiquidoVP;
+      const isProducerPaid = s.producerPaymentStatus === 'Pago' || (producerTarget > 0 && pagoProdutor >= producerTarget - 0.01);
+      const pago = isProducerPaid && pagoProdutor === 0 ? producerTarget : pagoProdutor;
+      const saldo = roundMoney(Math.max(0, producerTarget - pago));
       
       pesoNF += itemPeso;
       cxs = Number((cxs + itemCaixas).toFixed(2));
       valorTotalNF = roundMoney(valorTotalNF + itemValorNF);
+      valorTotalVP = roundMoney(valorTotalVP + valorVP);
       funrural = roundMoney(funrural + itemFunrural);
-      liquidoProdutor = roundMoney(liquidoProdutor + itemLiquido);
+      liquidoPeloVP = roundMoney(liquidoPeloVP + itemLiquidoVP);
+      if (itemLiquidoNF != null) liquidoPelaNF = roundMoney(liquidoPelaNF + itemLiquidoNF);
+      liquidoProdutor = liquidoPeloVP;
+      freteTotal = roundMoney(freteTotal + frete);
       repassesPagos = roundMoney(repassesPagos + pago);
       saldoAPagar = roundMoney(saldoAPagar + saldo);
 
@@ -469,6 +521,7 @@ async function getProducersSummary({ startDate, endDate, producer }) {
 
       return {
         id: s.id,
+        vp: s.id,
         date: s.saleDate ? s.saleDate.split('-').reverse().join('/') : '-',
         nf: nfNumber,
         lojaDestino: s.client || 'Mercado Destino',
@@ -478,13 +531,20 @@ async function getProducersSummary({ startDate, endDate, producer }) {
         cxs: itemCaixas,
         precoKg: itemPrecoKg,
         valorNF: itemValorNF,
+        valorVP,
         funrural: itemFunrural,
+        funruralEstimado: commercial.funruralEstimado,
+        frete,
+        comissaoDesconto,
         funruralDetails: {
-          previdencia: fiscal.previdencia,
-          rat: fiscal.rat,
-          senar: fiscal.senar
+          previdencia: fiscalParts.previdencia,
+          rat: fiscalParts.rat,
+          senar: fiscalParts.senar
         },
-        liquidoProdutor: itemLiquido,
+        liquidoProdutor: itemLiquidoVP,
+        liquidoPeloVP: itemLiquidoVP,
+        liquidoPelaNF: itemLiquidoNF,
+        liquidoNF: itemLiquidoNF != null ? itemLiquidoNF : 0,
         repassado: pago,
         saldo: saldo,
         statusRepasse: s.producerPaymentStatus || (isProducerPaid ? 'Pago' : (pago > 0 ? 'Parcial' : 'A Pagar')),
@@ -506,8 +566,12 @@ async function getProducersSummary({ startDate, endDate, producer }) {
       pesoNF: roundMoney(pesoNF),
       cxsVendidas: Number(cxs.toFixed(2)),
       valorTotalNF: roundMoney(valorTotalNF),
+      valorTotalVP: roundMoney(valorTotalVP),
       funrural: roundMoney(funrural),
+      frete: roundMoney(freteTotal),
       liquidoProdutor: roundMoney(liquidoProdutor),
+      liquidoPeloVP: roundMoney(liquidoPeloVP),
+      liquidoPelaNF: roundMoney(liquidoPelaNF),
       repassesPagos: roundMoney(repassesPagos),
       saldoAPagar: roundMoney(saldoAPagar),
       status: isFullyPaid ? 'Quitado' : (isPartial ? 'Parcial' : 'A Pagar'),
@@ -522,8 +586,12 @@ async function getProducersSummary({ startDate, endDate, producer }) {
     pesoNF: roundMoney(producers.reduce((a, b) => a + b.pesoNF, 0)),
     cxsVendidas: roundMoney(producers.reduce((a, b) => a + b.cxsVendidas, 0)),
     valorTotalNF: roundMoney(producers.reduce((a, b) => a + b.valorTotalNF, 0)),
+    valorTotalVP: roundMoney(producers.reduce((a, b) => a + (b.valorTotalVP || 0), 0)),
     funrural: roundMoney(producers.reduce((a, b) => a + b.funrural, 0)),
+    frete: roundMoney(producers.reduce((a, b) => a + (b.frete || 0), 0)),
     liquidoProdutor: roundMoney(producers.reduce((a, b) => a + b.liquidoProdutor, 0)),
+    liquidoPeloVP: roundMoney(producers.reduce((a, b) => a + (b.liquidoPeloVP || 0), 0)),
+    liquidoPelaNF: roundMoney(producers.reduce((a, b) => a + (b.liquidoPelaNF || 0), 0)),
     repassesPagos: roundMoney(producers.reduce((a, b) => a + b.repassesPagos, 0)),
     saldoAPagar: roundMoney(producers.reduce((a, b) => a + b.saldoAPagar, 0))
   };
@@ -531,8 +599,14 @@ async function getProducersSummary({ startDate, endDate, producer }) {
   return { producers, totalGeral };
 }
 
+/** Bridge used when global fetch is missing (also exported for unit coverage). */
+function createNodeFetchBridge(importer = () => import('node-fetch')) {
+  return (...args) => importer().then(({ default: fetchFn }) => fetchFn(...args));
+}
+
 module.exports = {
   getStoresSummary,
   getProducersSummary,
-  triggerN8nReport
+  triggerN8nReport,
+  createNodeFetchBridge
 };

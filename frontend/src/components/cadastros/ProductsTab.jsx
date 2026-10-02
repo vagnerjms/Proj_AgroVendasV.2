@@ -15,6 +15,12 @@ export default function ProductsTab({
     );
   }
 
+  const parentName = (p) => {
+    if (!p.parentProductId) return null;
+    const parent = products.find(x => x.id === p.parentProductId);
+    return parent?.name || p.parentProductId;
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
       {products.map(p => (
@@ -25,7 +31,13 @@ export default function ProductsTab({
                 <span className="text-[10px] uppercase font-bold text-emerald-700 tracking-wider bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
                   {p.category}
                 </span>
-                <div className="font-bold text-sm text-gray-900 mt-1">{p.name}</div>
+                <div className="font-bold text-sm text-gray-900 mt-1">
+                  {p.parentProductId ? <span className="text-gray-400 mr-1">↳</span> : null}
+                  {p.name}
+                </div>
+                {parentName(p) && (
+                  <div className="text-[10px] text-gray-500 mt-0.5">Filho de: <strong>{parentName(p)}</strong></div>
+                )}
               </div>
               <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">
                 {p.defaultUnit}

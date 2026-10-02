@@ -15,7 +15,7 @@ export default function N8nWebhookModal({
       <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-gray-100">
         <div className="flex items-center justify-between border-b border-gray-100 pb-3">
           <div className="flex items-center gap-2 text-gray-900">
-            <Settings className="w-5 h-5 text-[#df7b1b]" />
+            <Settings className="w-5 h-5 text-[#F97316]" />
             <h3 className="text-base font-bold">Configurar Webhook do n8n</h3>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100">

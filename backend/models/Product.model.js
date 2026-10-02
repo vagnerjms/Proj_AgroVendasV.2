@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const ProductSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
+  /** null/vazio = produto raiz; preenchido = subproduto (ex. Especial de Batata) */
+  parentProductId: { type: String, default: null },
   category: { type: String, default: 'Hortifruti' },
   defaultUnit: { type: String, default: 'Caixas (29kg)' },
   unitKg: { type: Number, default: 29 },
@@ -11,6 +13,7 @@ const ProductSchema = new mongoose.Schema({
 });
 
 ProductSchema.index({ name: 1 });
+ProductSchema.index({ parentProductId: 1 });
 
 const Product = mongoose.models.Product || mongoose.model('Product', ProductSchema);
 

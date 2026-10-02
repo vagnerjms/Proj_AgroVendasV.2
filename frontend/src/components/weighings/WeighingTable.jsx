@@ -1,6 +1,7 @@
 import React from 'react';
-import { Truck, Camera, CheckCircle2, Edit, Trash2 } from 'lucide-react';
+import { Truck, Camera, CheckCircle2, Edit, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { formatNumber, formatDate } from '../../utils/formatters';
+import { DATA_LABELS } from '../../constants/dataLabels';
 
 export default function WeighingTable({
   slips = [],
@@ -10,7 +11,9 @@ export default function WeighingTable({
   onOpenResolve,
   onOpenEdit,
   onDeleteSlip,
-  onPreviewImage
+  onPreviewImage,
+  vpSortDir = 'asc',
+  onToggleVpSort
 }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -18,7 +21,18 @@ export default function WeighingTable({
         <table className="w-full text-left text-xs">
           <thead className="bg-gray-50 border-b border-gray-200 text-gray-500 font-bold uppercase text-[10px]">
             <tr>
-              <th className="py-3 px-4">Romaneio / Data</th>
+              <th
+                className="py-3 px-4 cursor-pointer select-none hover:bg-gray-100/80 group"
+                onClick={onToggleVpSort}
+                title={`Ordenar por ${DATA_LABELS.vpNumber}`}
+              >
+                <div className="flex items-center gap-1">
+                  <span>{DATA_LABELS.vpNumber} / {DATA_LABELS.weighingSlipId}</span>
+                  {vpSortDir === 'asc'
+                    ? <ArrowUp className="w-3 h-3 text-emerald-800" />
+                    : <ArrowDown className="w-3 h-3 text-emerald-800" />}
+                </div>
+              </th>
               <th className="py-3 px-4">Veículo / Motorista</th>
               <th className="py-3 px-4">Cliente / Produto</th>
               <th className="py-3 px-4 text-right">Peso Origem</th>
@@ -69,7 +83,10 @@ export default function WeighingTable({
               slips.map((s) => (
                 <tr key={s.id} className="hover:bg-gray-50/80 transition-colors">
                   <td className="py-3 px-4">
-                    <div className="font-bold text-gray-900">{s.id}</div>
+                    <div className="font-bold text-[#173e27] font-mono">{s.saleId || '—'}</div>
+                    <div className="text-gray-500 text-[10px] font-mono" title={DATA_LABELS.weighingSlipId}>
+                      <span className="text-gray-400">{DATA_LABELS.weighingSlipId}: </span>{s.id}
+                    </div>
                     <div className="text-gray-400 text-[11px]">{formatDate(s.date)}</div>
                   </td>
 

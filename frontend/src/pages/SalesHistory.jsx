@@ -12,44 +12,47 @@ import {
   ArrowUpDown, 
   ArrowUp, 
   ArrowDown, 
-  Settings, 
-  RotateCcw,
-  DollarSign 
+  Settings,
+  ExternalLink,
+  RotateCcw
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatKg, formatNumber, getCleanFileName } from '../utils/formatters';
 import ContractModal from '../components/ContractModal';
 import { api } from '../services/api';
 import { calculateLiquidation, getValorTotalVP } from '../utils/calculations';
-import SettleModal from '../components/sales/SettleModal';
+import { resolveRomaneioNumber, nfDisplayLabel, quantityOf, formatQuantity, resolveProductUnit } from '../utils/dataHelpers';
+import { DATA_LABELS } from '../constants/dataLabels';
 import SaleDetailModal from '../components/sales/SaleDetailModal';
 import SaleEditModal from '../components/sales/SaleEditModal';
+import MultiStoreSelect from '../components/reports/MultiStoreSelect';
+import MultiProductSelect from '../components/reports/MultiProductSelect';
 
 const DEFAULT_COLUMNS = {
   id: true,
+  romaneioNumber: true,
   saleDate: true,
   nfeDate: true,
   client: true,
   totalKg: true,
+  quantity: true,
   valorTotalVP: true,
   totalOperation: true,
-  funrural: true,
   net: true,
-  feeValue: true,
   status: true,
   actions: true
 };
 
 const COLUMN_DEFINITIONS = [
-  { id: 'id', label: 'Cód VP / NF' },
+  { id: 'id', label: DATA_LABELS.vpNumber },
+  { id: 'romaneioNumber', label: DATA_LABELS.romaneioNumber },
   { id: 'saleDate', label: 'Data da VP' },
   { id: 'nfeDate', label: 'Data da NF' },
   { id: 'client', label: 'Destinatário (Cliente)' },
-  { id: 'totalKg', label: 'Peso (kg) / Caixas' },
-  { id: 'valorTotalVP', label: 'Valor Total Comercial' },
-  { id: 'totalOperation', label: 'Valor Total da NF' },
-  { id: 'funrural', label: '(-) FUNRURAL (1,63%)' },
-  { id: 'net', label: '(=) Valor a Liquidar' },
-  { id: 'feeValue', label: 'Comissão (3%)' },
+  { id: 'totalKg', label: DATA_LABELS.weightKg },
+  { id: 'quantity', label: DATA_LABELS.quantity },
+  { id: 'valorTotalVP', label: DATA_LABELS.valorComercialVP },
+  { id: 'totalOperation', label: DATA_LABELS.valorNF },
+  { id: 'net', label: DATA_LABELS.saldoAReceber },
   { id: 'status', label: 'Status' },
   { id: 'actions', label: 'Ações' }
 ];
@@ -71,7 +74,11 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
   });
   const [viewSale, setViewSale] = useState(null);
   const [contractSale, setContractSale] = useState(null);
-  const [settleSaleModal, setSettleSaleModal] = useState(null);
+  const [selectedStores, setSelectedStores] = useState([]);
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  const [includeCancelled, setIncludeCancelled] = useState(false);
+  const storesInitRef = useRef(false);
+  const productsInitRef = useRef(false);
 
   // Persistent Sorting State
   const [sortField, setSortField] = useState(() => {
@@ -95,7 +102,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
     if (sortField === field) {
       nextDir = sortDirection === 'asc' ? 'desc' : 'asc';
     } else {
-      if (['saleDate', 'nfeDate', 'valorTotalVP', 'totalOperation', 'net', 'feeValue'].includes(field)) {
+      if (['saleDate', 'nfeDate', 'valorTotalVP', 'totalOperation', 'net'].includes(field)) {
         nextDir = 'desc';
       } else {
         nextDir = 'asc';
@@ -265,48 +272,21 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
   };
 
   const handleDeleteSale = async (sale) => {
-    if (!window.confirm(`Tem certeza que deseja cancelar e excluir a venda ${sale.id} de ${sale.client}?`)) return;
+    if (!window.confirm(`Tem certeza que deseja cancelar a venda ${sale.id} de ${sale.client}?`)) return;
     try {
-      await api.delete(`/api/sales/${sale.id}`);
-      showNotification(`Venda ${sale.id} excluída com sucesso.`);
+      await api.post(`/api/sales/${sale.id}/cancel`);
+      showNotification(`Venda ${sale.id} cancelada com sucesso.`);
       fetchSales();
     } catch (err) {
       console.error(err);
-      showErrorNotification(err.message || 'Erro de rede ao tentar excluir venda.');
+      showErrorNotification(err.message || 'Erro de rede ao tentar cancelar venda.');
     }
   };
 
-  const handleSettle = async (saleId) => {
-    if (!window.confirm(`Deseja registrar o recebimento e liquidação integral da venda ${saleId}?`)) return;
-    try {
-      await api.post(`/api/sales/${saleId}/settle`);
-      showNotification(`Venda ${saleId} liquidada com sucesso!`);
-      fetchSales();
-    } catch (err) {
-      console.error(err);
-      showErrorNotification(err.message || 'Erro de rede ao registrar liquidação.');
-    }
-  };
-
-  const handleUnsettle = async (saleId) => {
-    if (!window.confirm(`Deseja reverter a liquidação da venda ${saleId} (retornar para status 'A Receber')?`)) return;
-    try {
-      await api.post(`/api/sales/${saleId}/unsettle`);
-      showNotification(`Liquidação da venda ${saleId} revertida com sucesso!`);
-      fetchSales();
-    } catch (err) {
-      console.error(err);
-      showErrorNotification(err.message || 'Erro de rede ao reverter liquidação.');
-    }
-  };
-
-  // Helper calculation for Valor a Liquidar (Receber) = Total Comercial (VP) - Funrural (calculado sobre a NF)
+  // Saldo a receber = VP comercial − já liquidado (via calculateLiquidation)
   const getNetReceivable = (sale) => {
-    const vpTotal = getValorTotalVP(sale);
-    const nfTotal = Number(sale.totalOperation) || 0;
-    const baseComercial = vpTotal > 0 ? vpTotal : nfTotal;
-    const funrural = Number(sale.funruralTotal) || (nfTotal * 0.0163);
-    return Math.max(0, baseComercial - funrural);
+    const liq = calculateLiquidation(sale);
+    return liq.valorALiquidar;
   };
 
   // Sort logic with numerical, string and date support
@@ -359,12 +339,6 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
       return sortDirection === 'asc' ? netA - netB : netB - netA;
     }
 
-    if (sortField === 'feeValue') {
-      const comA = (Number(a.totalOperation) || 0) * ((Number(a.feeValue) || 3) / 100);
-      const comB = (Number(b.totalOperation) || 0) * ((Number(b.feeValue) || 3) / 100);
-      return sortDirection === 'asc' ? comA - comB : comB - comA;
-    }
-
     if (sortField === 'status') {
       const stA = (a.status || '').toLowerCase();
       const stB = (b.status || '').toLowerCase();
@@ -374,6 +348,56 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
     return 0;
   });
 
+  const extractProduct = (s) => {
+    if (s.items?.[0]?.product) return s.items[0].product;
+    const m = (s.notes || '').match(/(cenoura|cebola|batata|alho|tomate)/i);
+    return m ? m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase() : '';
+  };
+
+  const uniqueLojasForFilter = [...new Set(sales.map(s => s.client).filter(Boolean))].sort();
+  const uniqueProductsForFilter = [...new Set(sales.map(extractProduct).filter(Boolean))].sort();
+
+  useEffect(() => {
+    if (!storesInitRef.current && uniqueLojasForFilter.length > 0) {
+      setSelectedStores(uniqueLojasForFilter);
+      storesInitRef.current = true;
+    }
+  }, [uniqueLojasForFilter]);
+
+  useEffect(() => {
+    if (!productsInitRef.current && uniqueProductsForFilter.length > 0) {
+      setSelectedProducts(uniqueProductsForFilter);
+      productsInitRef.current = true;
+    }
+  }, [uniqueProductsForFilter]);
+
+  const displaySales = sortedSales.filter(s => {
+    if (!includeCancelled && (s.status === 'Cancelada' || s.cancelled === true)) return false;
+    if (storesInitRef.current) {
+      if (selectedStores.length === 0) return false;
+      if (!selectedStores.includes(s.client)) return false;
+    }
+    if (productsInitRef.current) {
+      if (selectedProducts.length === 0) return false;
+      if (!selectedProducts.includes(extractProduct(s))) return false;
+    }
+    if (search) {
+      const term = search.toLowerCase();
+      const nf = nfDisplayLabel(s).toLowerCase();
+      const rom = resolveRomaneioNumber(s).toLowerCase();
+      const match =
+        (s.id || '').toLowerCase().includes(term) ||
+        nf.includes(term) ||
+        rom.includes(term) ||
+        (s.client || '').toLowerCase().includes(term) ||
+        (s.origin || '').toLowerCase().includes(term) ||
+        extractProduct(s).toLowerCase().includes(term);
+      if (!match) return false;
+    }
+    return true;
+  });
+
+  const totalSalesCount = sales.filter(s => includeCancelled || (s.status !== 'Cancelada' && !s.cancelled)).length;
   const renderSortIndicator = (field) => {
     if (sortField !== field) {
       return <ArrowUpDown className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1" />;
@@ -397,7 +421,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
             Histórico & Rastreio de Vendas / VP
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            Discriminação de Valor de NF, Dedução do FUNRURAL (1,63%), Líquido a Receber, Cotação do Dia e Comissão (3%).
+            Discriminação de Valor Comercial (VP), NF, FUNRURAL e saldo a liquidar. Baixas no Fiscal.
           </p>
         </div>
 
@@ -458,8 +482,8 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
               onChange={(e) => handleSelectSort(e.target.value)}
               className="bg-transparent text-xs font-bold text-gray-800 outline-none cursor-pointer"
             >
-              <option value="id_asc">Código VP (Crescente: VP001 → VP034)</option>
-              <option value="id_desc">Código VP (Decrescente: VP034 → VP001)</option>
+              <option value="id_asc">Código VP (Crescente)</option>
+              <option value="id_desc">Código VP (Decrescente)</option>
               <option value="saleDate_desc">Data da VP (Mais Recente Primeiro)</option>
               <option value="saleDate_asc">Data da VP (Mais Antiga Primeiro)</option>
               <option value="nfeDate_desc">Data da NF (Mais Recente Primeiro)</option>
@@ -470,7 +494,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
               <option value="valorTotalVP_asc">Valor Total Comercial (Menor → Maior)</option>
               <option value="totalOperation_desc">Valor Total NF (Maior → Menor)</option>
               <option value="totalOperation_asc">Valor Total NF (Menor → Maior)</option>
-              <option value="net_desc">Líquido a Receber (Maior → Menor)</option>
+              <option value="net_desc">{DATA_LABELS.saldoAReceber} (Maior → Menor)</option>
               <option value="totalKg_desc">Peso Total (kg) (Maior → Menor)</option>
               <option value="status_asc">Status da Operação</option>
             </select>
@@ -497,7 +521,30 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
             <option value="Faturado">Faturado</option>
             <option value="Pendente NF">Pendente NF</option>
             <option value="Concluído">Concluído</option>
+            <option value="Cancelada">Cancelada</option>
           </select>
+
+          <label className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg px-3 py-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={includeCancelled}
+              onChange={(e) => setIncludeCancelled(e.target.checked)}
+              className="w-3.5 h-3.5 text-[#F97316] accent-[#F97316] rounded border-gray-300 cursor-pointer"
+            />
+            <span>{DATA_LABELS.includeCancelled}</span>
+          </label>
+
+          <MultiStoreSelect
+            stores={uniqueLojasForFilter}
+            selectedStores={selectedStores}
+            onChange={setSelectedStores}
+          />
+
+          <MultiProductSelect
+            products={uniqueProductsForFilter}
+            selectedProducts={selectedProducts}
+            onChange={setSelectedProducts}
+          />
 
           {/* Botão de Engrenagem / Seletor de Colunas Visíveis */}
           <div className="relative" ref={columnMenuRef}>
@@ -506,12 +553,12 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
               onClick={() => setShowColumnMenu(!showColumnMenu)}
               className={`px-3 py-2 border rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer ${
                 showColumnMenu 
-                  ? 'bg-amber-50 border-[#df7b1b] text-[#df7b1b] ring-2 ring-[#df7b1b]/20' 
+                  ? 'bg-amber-50 border-[#F97316] text-[#F97316] ring-2 ring-[#F97316]/20' 
                   : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
               title="Configurar colunas exibidas na tabela"
             >
-              <Settings className={`w-3.5 h-3.5 ${showColumnMenu ? 'text-[#df7b1b]' : 'text-gray-500'}`} />
+              <Settings className={`w-3.5 h-3.5 ${showColumnMenu ? 'text-[#F97316]' : 'text-gray-500'}`} />
               <span className="hidden sm:inline">Colunas</span>
             </button>
 
@@ -520,13 +567,13 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
               <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 p-3 text-xs animate-in fade-in zoom-in-95 duration-100">
                 <div className="flex items-center justify-between pb-2 border-b border-gray-100 mb-2">
                   <div className="flex items-center gap-1.5 font-bold text-gray-800">
-                    <Settings className="w-3.5 h-3.5 text-[#df7b1b]" />
+                    <Settings className="w-3.5 h-3.5 text-[#F97316]" />
                     <span>Exibir Colunas</span>
                   </div>
                   <button
                     type="button"
                     onClick={resetColumns}
-                    className="text-[10px] text-[#df7b1b] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                    className="text-[10px] text-[#F97316] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
                     title="Restaurar visualização original de todas as colunas"
                   >
                     <RotateCcw className="w-2.5 h-2.5" />
@@ -549,7 +596,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                           type="checkbox"
                           checked={isChecked}
                           onChange={() => toggleColumn(col.id)}
-                          className="w-4 h-4 text-[#df7b1b] accent-[#df7b1b] rounded border-gray-300 focus:ring-[#df7b1b] cursor-pointer"
+                          className="w-4 h-4 text-[#F97316] accent-[#F97316] rounded border-gray-300 focus:ring-[#F97316] cursor-pointer"
                         />
                       </label>
                     );
@@ -565,6 +612,9 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
         </div>
       </div>
 
+      <div className="text-xs text-gray-500 font-medium px-1">
+        Exibindo <strong className="text-gray-800">{displaySales.length}</strong> de <strong className="text-gray-800">{totalSalesCount}</strong> vendas
+      </div>
       {/* Sales Table with Clickable Sortable Headers */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
@@ -575,12 +625,18 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                   <th 
                     onClick={() => handleSortChange('id')}
                     className="py-3.5 px-4 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
-                    title="Clique para ordenar por Código VP"
+                    title="Clique para ordenar por Nº VP"
                   >
                     <div className="flex items-center">
-                      <span>Cód VP / NF</span>
+                      <span>{DATA_LABELS.vpNumber}</span>
                       {renderSortIndicator('id')}
                     </div>
+                  </th>
+                )}
+
+                {visibleColumns.romaneioNumber && (
+                  <th className="py-3.5 px-4">
+                    <span>{DATA_LABELS.romaneioNumber}</span>
                   </th>
                 )}
 
@@ -627,11 +683,22 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                   <th 
                     onClick={() => handleSortChange('totalKg')}
                     className="py-3.5 px-4 text-right cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
-                    title="Clique para ordenar por Peso"
+                    title={`Clique para ordenar por ${DATA_LABELS.weightKg}`}
                   >
                     <div className="flex items-center justify-end">
-                      <span>Peso (kg) / Caixas</span>
+                      <span>{DATA_LABELS.weightKg}</span>
                       {renderSortIndicator('totalKg')}
+                    </div>
+                  </th>
+                )}
+
+                {visibleColumns.quantity && (
+                  <th
+                    className="py-3.5 px-4 text-right"
+                    title={DATA_LABELS.quantity}
+                  >
+                    <div className="flex items-center justify-end">
+                      <span>{DATA_LABELS.quantity}</span>
                     </div>
                   </th>
                 )}
@@ -662,34 +729,15 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                   </th>
                 )}
 
-                {visibleColumns.funrural && (
-                  <th className="py-3.5 px-4 text-right text-red-600 bg-red-50/30">
-                    (-) FUNRURAL (1,63%)
-                  </th>
-                )}
-
                 {visibleColumns.net && (
                   <th 
                     onClick={() => handleSortChange('net')}
                     className="py-3.5 px-4 text-right font-bold text-gray-900 bg-emerald-50/30 cursor-pointer select-none hover:bg-emerald-100/50 group transition-colors"
-                    title="Clique para ordenar por Líquido a Receber"
+                    title={`Clique para ordenar por ${DATA_LABELS.saldoAReceber}`}
                   >
                     <div className="flex items-center justify-end">
-                      <span>(=) Líquido a Receber</span>
+                      <span>{DATA_LABELS.saldoAReceber}</span>
                       {renderSortIndicator('net')}
-                    </div>
-                  </th>
-                )}
-
-                {visibleColumns.feeValue && (
-                  <th 
-                    onClick={() => handleSortChange('feeValue')}
-                    className="py-3.5 px-4 text-right text-emerald-800 cursor-pointer select-none hover:bg-gray-100/80 group transition-colors"
-                    title="Clique para ordenar por Comissão"
-                  >
-                    <div className="flex items-center justify-end">
-                      <span>Comissão (3%)</span>
-                      {renderSortIndicator('feeValue')}
                     </div>
                   </th>
                 )}
@@ -719,23 +767,29 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                     Carregando negociações...
                   </td>
                 </tr>
-              ) : sortedSales.length === 0 ? (
+              ) : displaySales.length === 0 ? (
                 <tr>
                   <td colSpan={activeColumnCount} className="py-12 text-center text-gray-400">
                     Nenhuma venda encontrada para os critérios selecionados.
                   </td>
                 </tr>
               ) : (
-                sortedSales.map((sale) => {
+                displaySales.map((sale) => {
                   const net = getNetReceivable(sale);
                   return (
                     <tr key={sale.id} className="hover:bg-gray-50/80 transition-colors">
                       {visibleColumns.id && (
                         <td className="py-3 px-4">
                           <div className="font-bold text-gray-900 font-mono">{sale.id}</div>
-                          <div className="text-gray-400 text-[11px] truncate max-w-[160px]" title={getCleanFileName(sale.nfFile)}>
-                            {sale.nfFile ? getCleanFileName(sale.nfFile).replace('.pdf', '') : 'Pendente NF'}
+                          <div className="text-gray-400 text-[11px] truncate max-w-[160px]" title={nfDisplayLabel(sale)}>
+                            {nfDisplayLabel(sale)}
                           </div>
+                        </td>
+                      )}
+
+                      {visibleColumns.romaneioNumber && (
+                        <td className="py-3 px-4 font-mono text-gray-700">
+                          {resolveRomaneioNumber(sale) || '—'}
                         </td>
                       )}
 
@@ -782,21 +836,19 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                         </td>
                       )}
 
-                      {visibleColumns.totalKg && (() => {
-                        const isBatata = (sale.items && sale.items.some(it => it.product?.toLowerCase().includes('batata'))) || (sale.notes && sale.notes.toLowerCase().includes('batata'));
-                        const unitKg = isBatata ? 25 : (sale.items?.[0]?.boxWeightKg || 29);
-                        const unitLabel = isBatata ? 'sc (25kg)' : (unitKg === 20 ? 'cx (20kg)' : 'cx (29kg)');
-                        const calculatedVol = Number(sale.totalVolumes) > 0 ? Number(sale.totalVolumes) : (sale.totalKg > 0 ? (sale.totalKg / unitKg) : 0);
+                      {visibleColumns.totalKg && (
+                        <td className="py-3 px-4 text-right">
+                          <div className="font-bold text-gray-900">{formatNumber(sale.totalKg, 0)} kg</div>
+                        </td>
+                      )}
 
-                        return (
-                          <td className="py-3 px-4 text-right">
-                            <div className="font-bold text-gray-900">{formatNumber(sale.totalKg, 0)} kg</div>
-                            <div className="text-gray-500 text-[11px]">
-                              {formatNumber(calculatedVol, 2)} {unitLabel}
-                            </div>
-                          </td>
-                        );
-                      })()}
+                      {visibleColumns.quantity && (
+                        <td className="py-3 px-4 text-right">
+                          <div className="font-bold text-gray-900">
+                            {formatQuantity(quantityOf(sale), resolveProductUnit(sale))}
+                          </div>
+                        </td>
+                      )}
 
                       {/* Valor Total de VP */}
                       {visibleColumns.valorTotalVP && (
@@ -813,14 +865,7 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                         </td>
                       )}
 
-                      {/* FUNRURAL DEDUZIDO DA NOTA */}
-                      {visibleColumns.funrural && (
-                        <td className="py-3 px-4 text-right font-medium text-red-600 bg-red-50/20">
-                          -{formatCurrency(sale.funruralTotal)}
-                        </td>
-                      )}
-
-                      {/* LÍQUIDO A RECEBER / VALOR A LIQUIDAR */}
+                      {/* SALDO A RECEBER */}
                       {visibleColumns.net && (() => {
                         const liq = calculateLiquidation(sale);
                         return (
@@ -835,25 +880,16 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                         );
                       })()}
 
-                      {/* Comissão 3% */}
-                      {visibleColumns.feeValue && (() => {
-                        const vpVal = getValorTotalVP(sale);
-                        const feePct = Number(sale.feeValue) || 3.0;
-                        const commVal = Number(sale.totalCommission) > 100 
-                          ? Number(sale.totalCommission) 
-                          : (vpVal * (feePct / 100));
-
-                        return (
-                          <td className="py-3 px-4 text-right font-bold text-emerald-800">
-                            {formatCurrency(commVal)}
-                            <span className="block text-[10px] text-gray-400 font-normal">{formatNumber(feePct, 1)}%</span>
-                          </td>
-                        );
-                      })()}
-
                       {visibleColumns.status && (
                         <td className="py-3 px-4 text-center">
                           {(() => {
+                            if (sale.status === 'Cancelada' || sale.cancelled) {
+                              return (
+                                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-200 text-gray-700">
+                                  Cancelada
+                                </span>
+                              );
+                            }
                             const hasNf = !!(sale.nfFile && sale.nfFile.trim());
                             const liq = calculateLiquidation(sale);
 
@@ -910,33 +946,23 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
                               <Edit className="w-3.5 h-3.5" />
                             </button>
 
-                            {/* Liquidar (Total ou Parcial) */}
+                            {/* Baixar no Fiscal */}
                             {!calculateLiquidation(sale).isFullySettled && (
                               <button
-                                onClick={() => setSettleSaleModal(sale)}
-                                className={`${calculateLiquidation(sale).isPartial ? 'text-blue-700 hover:bg-blue-50' : 'text-amber-700 hover:bg-amber-50'} p-1.5 rounded transition-colors cursor-pointer`}
-                                title={calculateLiquidation(sale).isPartial ? "Registrar novo pagamento parcial ou quitação" : "Dar baixa / Registrar recebimento (Total ou Parcial)"}
+                                onClick={() => setCurrentPage?.('financial')}
+                                className="text-emerald-700 hover:bg-emerald-50 p-1.5 rounded transition-colors cursor-pointer"
+                                title="Baixas de recebimento são feitas no Fiscal"
                               >
-                                <DollarSign className="w-3.5 h-3.5" />
+                                <ExternalLink className="w-3.5 h-3.5" />
                               </button>
                             )}
 
-                            {/* Reverter liquidação (total ou parcial) */}
-                            {calculateLiquidation(sale).paidAmount > 0 && (
-                              <button
-                                onClick={() => handleUnsettle(sale.id)}
-                                className="text-emerald-700 hover:text-amber-700 hover:bg-amber-50 p-1.5 rounded transition-colors cursor-pointer"
-                                title="Reverter liquidação / Voltar para 'A Receber'"
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-
-                            {/* Excluir */}
+                            {/* Cancelar */}
                             <button
                               onClick={() => handleDeleteSale(sale)}
                               className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded transition-colors cursor-pointer"
-                              title="Cancelar e excluir venda"
+                              title="Cancelar venda"
+                              disabled={sale.status === 'Cancelada'}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -960,22 +986,11 @@ export default function SalesHistory({ setCurrentPage, onEditSale }) {
           setContractSale(sale);
           setViewSale(null);
         }}
-        onOpenSettle={(sale) => {
-          setSettleSaleModal(sale);
+        onOpenSettle={() => {
           setViewSale(null);
+          setCurrentPage?.('financial');
         }}
         getValorTotalVP={getValorTotalVP}
-      />
-
-      {/* SettleModal para quitação total e liquidação parcial */}
-      <SettleModal
-        isOpen={!!settleSaleModal}
-        sale={settleSaleModal}
-        onClose={() => setSettleSaleModal(null)}
-        onSettled={() => {
-          fetchSales();
-          showNotification('Pagamento / liquidação registrado com sucesso!');
-        }}
       />
 
       {/* Modal: Editar Venda (Modular) */}

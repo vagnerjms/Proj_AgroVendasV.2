@@ -50,7 +50,7 @@ async function recalibrateCounters() {
     { name: 'client_id', model: Client, prefix: 'CLI-' },
     { name: 'product_id', model: Product, prefix: 'PROD-' },
     { name: 'user_id', model: User, prefix: 'USR-' },
-    { name: 'weighing_slip_id', model: WeighingSlip, prefix: 'ROM-VP' }
+    { name: 'weighing_slip_id', model: WeighingSlip, prefix: 'PSG-' }
   ];
 
   for (const d of domains) {

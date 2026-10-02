@@ -57,7 +57,7 @@ export default function Login({ onLogin }) {
     <div className="min-h-screen bg-gradient-to-br from-[#051322] via-[#091b2e] to-[#0c2440] flex items-center justify-center p-4 relative overflow-hidden font-sans">
       
       {/* Background Decorative Gradient Orbs */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#df7b1b]/15 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#F97316]/15 rounded-full blur-3xl pointer-events-none"></div>
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#163a63]/40 rounded-full blur-3xl pointer-events-none"></div>
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-sky-900/10 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -65,8 +65,8 @@ export default function Login({ onLogin }) {
         
         {/* Header Branding */}
         <div className="bg-[#091b2e] text-white p-8 text-center relative border-b border-[#162e4a]">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#df7b1b]/15 text-[#df7b1b] mb-3 border border-[#df7b1b]/30 shadow-xs">
-            <Sprout className="w-8 h-8 text-[#df7b1b]" />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#F97316]/15 text-[#F97316] mb-3 border border-[#F97316]/30 shadow-xs">
+            <Sprout className="w-8 h-8 text-[#F97316]" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-white">
             AGROVENDA V2
@@ -121,7 +121,7 @@ export default function Login({ onLogin }) {
                 <button
                   type="button"
                   onClick={() => setForgotModalOpen(true)}
-                  className="text-[11px] text-gray-400 font-medium cursor-pointer hover:text-[#df7b1b] transition-colors"
+                  className="text-[11px] text-gray-400 font-medium cursor-pointer hover:text-[#F97316] transition-colors"
                 >
                   Esqueceu a senha?
                 </button>
@@ -192,7 +192,7 @@ export default function Login({ onLogin }) {
       {forgotModalOpen && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 space-y-4">
-            <div className="w-12 h-12 rounded-xl bg-amber-50 text-[#df7b1b] flex items-center justify-center border border-amber-200/60 mx-auto">
+            <div className="w-12 h-12 rounded-xl bg-amber-50 text-[#F97316] flex items-center justify-center border border-amber-200/60 mx-auto">
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div className="text-center space-y-1.5">

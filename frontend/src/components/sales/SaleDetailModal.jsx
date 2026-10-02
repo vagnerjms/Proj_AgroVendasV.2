@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDate, formatNumber, getCleanFileName } from '../../utils/formatters';
 import { calculateLiquidation } from '../../utils/calculations';
+import { authorizedUploadUrl, formatQuantity, resolveProductUnit, quantityOf } from '../../utils/dataHelpers';
 
 /**
  * Modal Detalhado de Rastreio da Venda / VP
@@ -67,7 +68,7 @@ export default function SaleDetailModal({
             <span className="text-gray-500 block">Documento Fiscal:</span>
             {viewSale.nfFile ? (
               <a 
-                href={`/uploads/${viewSale.nfFile}`} 
+                href={authorizedUploadUrl(viewSale.nfFile)} 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="font-semibold text-emerald-700 hover:underline font-mono flex items-center gap-1" 
@@ -84,7 +85,7 @@ export default function SaleDetailModal({
             <div>
               <span className="text-gray-500 block">Anexo da Venda (Imagem / Carga):</span>
               <a 
-                href={`/uploads/${viewSale.evidenceFile}`} 
+                href={authorizedUploadUrl(viewSale.evidenceFile)} 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="font-semibold text-blue-700 hover:underline font-mono flex items-center gap-1" 
@@ -99,7 +100,7 @@ export default function SaleDetailModal({
             <div>
               <span className="text-gray-500 block">Comprovante de Liquidação:</span>
               <a 
-                href={`/uploads/${viewSale.paymentProofFile}`} 
+                href={authorizedUploadUrl(viewSale.paymentProofFile)} 
                 target="_blank" 
                 rel="noopener noreferrer" 
                 className="font-semibold text-emerald-700 hover:underline font-mono flex items-center gap-1" 
@@ -117,7 +118,7 @@ export default function SaleDetailModal({
           <div className="font-bold text-gray-800 flex items-center justify-between border-b border-gray-100 pb-2">
             <span>Itens da Operação ({viewSale.items?.length || 1})</span>
             <span className="font-black text-gray-900">
-              {formatNumber(viewSale.totalKg, 0)} kg ({formatNumber(viewSale.totalVolumes || (viewSale.totalKg / 29), 2)} caixas eq.)
+              {formatNumber(viewSale.totalKg, 0)} kg ({formatQuantity(quantityOf(viewSale), resolveProductUnit(viewSale))})
             </span>
           </div>
           
@@ -131,7 +132,7 @@ export default function SaleDetailModal({
                   </div>
                   <div className="text-right">
                     <span className="font-extrabold text-gray-900">{formatNumber(it.kg, 0)} kg</span>
-                    <span className="text-gray-500 text-[11px] ml-2">({formatNumber(it.quantity, 0)} vol)</span>
+                    <span className="text-gray-500 text-[11px] ml-2">({formatQuantity(it.quantity, it.unit || resolveProductUnit(it), 0)})</span>
                     {it.total ? <span className="font-bold text-emerald-800 ml-2">· {formatCurrency(it.total)}</span> : null}
                   </div>
                 </div>
@@ -216,7 +217,7 @@ export default function SaleDetailModal({
                       <span className="font-black text-emerald-800">{formatCurrency(ph.amount)}</span>
                       {ph.paymentProofFile && (
                         <a
-                          href={`/uploads/${ph.paymentProofFile}`}
+                          href={authorizedUploadUrl(ph.paymentProofFile)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-800 text-[10px] font-bold underline"
@@ -264,7 +265,7 @@ export default function SaleDetailModal({
                       <span className="font-black text-amber-900">{formatCurrency(ph.amount)}</span>
                       {ph.paymentProofFile && (
                         <a
-                          href={`/uploads/${ph.paymentProofFile}`}
+                          href={authorizedUploadUrl(ph.paymentProofFile)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-800 text-[10px] font-bold underline"
@@ -296,7 +297,7 @@ export default function SaleDetailModal({
                 className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 cursor-pointer"
               >
                 <DollarSign className="w-3.5 h-3.5" />
-                Registrar Pagamento
+                Baixar no Fiscal
               </button>
             )}
           </div>

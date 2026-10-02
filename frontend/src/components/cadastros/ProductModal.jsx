@@ -8,7 +8,8 @@ export default function ProductModal({
   editingProduct,
   productForm,
   setProductForm,
-  submitting
+  submitting,
+  products = []
 }) {
   if (!isOpen) return null;
 
@@ -120,6 +121,23 @@ export default function ProductModal({
               className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
             />
           </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Produto Pai (hierarquia)</label>
+          <select
+            value={productForm.parentProductId || ''}
+            onChange={e => setProductForm({ ...productForm, parentProductId: e.target.value || null })}
+            className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e] font-semibold"
+          >
+            <option value="">— Nenhum (produto raiz) —</option>
+            {(products || [])
+              .filter(p => p.id !== editingProduct?.id && !p.parentProductId)
+              .map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+          </select>
+          <p className="text-[10px] text-gray-400 mt-1">Ex.: Batata (raiz) → Batata Ágata / Batata Asterix (filhos).</p>
         </div>
 
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">

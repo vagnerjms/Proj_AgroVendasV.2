@@ -46,26 +46,28 @@ async function getFinancialSummary(queryParams = {}) {
       valorVP = roundMoney(Number(s.totalVolumes) * Number(s.dailyQuote));
     }
 
-    // Apuração exata de FUNRURAL sobre o valor da Nota Fiscal (NF)
-    const fiscal = calculateFiscalDeductions(valorNF > 0 ? valorNF : valorVP);
-    const valorLiquidar = roundMoney(Math.max(0, valorVP - fiscal.funruralTotal));
+    // FUNRURAL só sobre NF; SEM NF = funrural 0
+    const fiscal = calculateFiscalDeductions(valorNF);
+    // A receber da loja = saldo do VP (não NF − funrural)
+    const targetLoja = valorVP > 0 ? valorVP : 0;
 
     const paidClient = roundMoney(Number(s.paidAmount) || 0);
-    const isRecebido = s.paymentStatus === 'Recebido' || (valorLiquidar > 0 && paidClient >= valorLiquidar - 0.05);
+    const isRecebido = s.paymentStatus === 'Recebido' || (targetLoja > 0 && paidClient >= targetLoja - 0.05);
 
     if (isRecebido) {
-      const recebidoEfetivo = paidClient > 0 ? paidClient : valorLiquidar;
+      const recebidoEfetivo = paidClient > 0 ? paidClient : targetLoja;
       totalRecebido = roundMoney(totalRecebido + recebidoEfetivo);
     } else {
-      const saldoPendente = roundMoney(Math.max(0, valorLiquidar - paidClient));
+      const saldoPendente = roundMoney(Math.max(0, targetLoja - paidClient));
       if (paidClient > 0) {
         totalRecebido = roundMoney(totalRecebido + paidClient);
       }
       totalALiquidar = roundMoney(totalALiquidar + saldoPendente);
-      totalAReceberVP = roundMoney(totalAReceberVP + (valorVP > 0 && valorLiquidar > 0 ? roundMoney(valorVP * (saldoPendente / valorLiquidar)) : saldoPendente));
-      totalAReceberNF = roundMoney(totalAReceberNF + (valorNF > 0 && valorLiquidar > 0 ? roundMoney(valorNF * (saldoPendente / valorLiquidar)) : saldoPendente));
-      
-      // Verificação de vencimento baseada no saldo real pendente
+      totalAReceberVP = roundMoney(totalAReceberVP + saldoPendente);
+      if (valorNF > 0 && targetLoja > 0) {
+        totalAReceberNF = roundMoney(totalAReceberNF + roundMoney(valorNF * (saldoPendente / targetLoja)));
+      }
+
       let due = s.dueDate;
       if (!due && s.saleDate) {
         const days = Number(s.paymentTermDays) || 30;
@@ -85,24 +87,26 @@ async function getFinancialSummary(queryParams = {}) {
     totalRat = roundMoney(totalRat + fiscal.rat);
     totalSenar = roundMoney(totalSenar + fiscal.senar);
 
-    // Comissões (prioriza valor persistido ou calcula sobre a base comercial)
     let comissao = Number(s.totalCommission);
     if (isNaN(comissao) || comissao <= 0) {
       const fee = Number(s.feeValue) || 3.0;
       comissao = calculateCommission(valorVP, fee).comissao;
     }
     totalComissao = roundMoney(totalComissao + comissao);
-    // Repasse integral da NF ao produtor rural (sem retenção de corretagem na base do produtor)
-    totalLiquidoProdutor = roundMoney(totalLiquidoProdutor + (valorNF > 0 ? valorNF : valorVP));
+    // Thais / produtor: somente valor da NF (SEM NF = 0)
+    totalLiquidoProdutor = roundMoney(totalLiquidoProdutor + valorNF);
   }
 
-  // Contas a pagar (Repasses devidos a Produtores Rurais + Compras de Insumos/Embalagens)
+  // Contas a pagar produtores = saldo NF (SEM NF não gera a pagar)
   let totalAPagarProdutores = 0;
   let totalProdutorPago = 0;
   for (const s of sales) {
     const totalNF = roundMoney(s.totalOperation || 0);
     const paid = Number(s.producerPaidAmount) || 0;
-    const isPaid = s.producerPaymentStatus === 'Pago' || (totalNF > 0 && paid >= totalNF - 0.01);
+    if (totalNF <= 0) {
+      continue;
+    }
+    const isPaid = s.producerPaymentStatus === 'Pago' || paid >= totalNF - 0.01;
     if (isPaid) {
       totalProdutorPago = roundMoney(totalProdutorPago + (paid > 0 ? paid : totalNF));
     } else {

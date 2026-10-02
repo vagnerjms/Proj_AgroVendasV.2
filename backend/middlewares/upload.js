@@ -39,11 +39,13 @@ const ALLOWED_MIMES = [
   'text/xml',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'text/csv'
+  'text/csv',
+  'application/json',
+  'text/plain'
 ];
 
 const fileFilter = (req, file, cb) => {
-  const extValid = file.originalname && file.originalname.match(/\.(jpe?g|png|webp|pdf|xml|xls|xlsx|csv)$/i);
+  const extValid = file.originalname && file.originalname.match(/\.(jpe?g|png|webp|pdf|xml|xls|xlsx|csv|json)$/i);
   if (ALLOWED_MIMES.includes(file.mimetype) || extValid) {
     cb(null, true);
   } else {

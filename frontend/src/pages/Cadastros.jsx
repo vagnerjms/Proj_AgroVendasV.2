@@ -49,7 +49,8 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
     defaultUnit: 'Sacas (60kg)',
     unitKg: 60,
     currentStock: 0,
-    averageCost: 0
+    averageCost: 0,
+    parentProductId: null
   });
 
   // Feedback notifications
@@ -173,7 +174,8 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
         defaultUnit: product.defaultUnit || 'Sacas (60kg)',
         unitKg: product.unitKg || 60,
         currentStock: product.currentStock || 0,
-        averageCost: product.averageCost || 0
+        averageCost: product.averageCost || 0,
+        parentProductId: product.parentProductId || null
       });
     } else {
       setEditingProduct(null);
@@ -183,7 +185,8 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
         defaultUnit: 'Sacas (60kg)',
         unitKg: 60,
         currentStock: 0,
-        averageCost: 0
+        averageCost: 0,
+        parentProductId: null
       });
     }
     setProductModalOpen(true);
@@ -288,7 +291,7 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
             setActiveTab('clients');
             if (setCurrentPage) setCurrentPage('cadastros-clients');
           }}
-          className={`pb-3 flex items-center gap-2 cursor-pointer transition-colors ${activeTab === 'clients' ? 'border-b-2 border-[#df7b1b] text-[#df7b1b]' : 'text-gray-400 hover:text-gray-600'}`}
+          className={`pb-3 flex items-center gap-2 cursor-pointer transition-colors ${activeTab === 'clients' ? 'border-b-2 border-[#F97316] text-[#F97316]' : 'text-gray-400 hover:text-gray-600'}`}
         >
           <Users className="w-4 h-4" />
           Clientes & Produtores ({clients.length})
@@ -298,7 +301,7 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
             setActiveTab('products');
             if (setCurrentPage) setCurrentPage('cadastros-products');
           }}
-          className={`pb-3 flex items-center gap-2 cursor-pointer transition-colors ${activeTab === 'products' ? 'border-b-2 border-[#df7b1b] text-[#df7b1b]' : 'text-gray-400 hover:text-gray-600'}`}
+          className={`pb-3 flex items-center gap-2 cursor-pointer transition-colors ${activeTab === 'products' ? 'border-b-2 border-[#F97316] text-[#F97316]' : 'text-gray-400 hover:text-gray-600'}`}
         >
           <Boxes className="w-4 h-4" />
           Produtos, Culturas & Estoque ({products.length})
@@ -369,6 +372,7 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
         productForm={productForm}
         setProductForm={setProductForm}
         submitting={submittingProduct}
+        products={products}
       />
     </div>
   );

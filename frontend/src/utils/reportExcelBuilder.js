@@ -5,6 +5,7 @@
  * 2. Detalhamento Individual das Vendas por Loja (VPs)
  * Exclui expressamente as colunas "Total Comercial" e "Valor Total VP".
  */
+import { abbreviateUnit } from './dataHelpers';
 
 export function buildExcelReportHtml(stores = [], customTotal = null, filters = {}) {
   const hojeFormatado = new Date().toLocaleDateString('pt-BR');
@@ -112,84 +113,69 @@ export function buildExcelReportHtml(stores = [], customTotal = null, filters = 
       <!-- CARDS DE RESUMO FINANCEIRO -->
       <table style="margin-bottom: 20px; border: 1px solid #cbd5e1;">
         <tr style="height: 28px;">
-          <td colspan="3" class="badge-kpi" style="border-right: 1px solid #cbd5e1;">
-            <div style="font-size: 8pt; color: #64748b; text-transform: uppercase;">Total Faturado NF</div>
-            <div style="font-size: 12pt; color: #0f172a; font-weight: bold;">${formatMoeda(totalGeral.valorTotalNF)}</div>
-          </td>
-          <td colspan="3" class="badge-kpi" style="border-right: 1px solid #cbd5e1;">
-            <div style="font-size: 8pt; color: #b91c1c; text-transform: uppercase;">(-) FUNRURAL (1,63%)</div>
-            <div style="font-size: 12pt; color: #b91c1c; font-weight: bold;">-${formatMoeda(totalGeral.funrural)}</div>
+          <td colspan="3" class="badge-kpi" style="border-right: 1px solid #cbd5e1; background-color: #eff6ff;">
+            <div style="font-size: 8pt; color: #1e3a8a; text-transform: uppercase;">Valor Negociado</div>
+            <div style="font-size: 12pt; color: #1e3a8a; font-weight: bold;">${formatMoeda(totalGeral.totalVendaAReceber)}</div>
           </td>
           <td colspan="3" class="badge-kpi" style="border-right: 1px solid #cbd5e1; background-color: #ecfdf5;">
             <div style="font-size: 8pt; color: #065f46; text-transform: uppercase;">Valor Total Liquidado</div>
             <div style="font-size: 12pt; color: #065f46; font-weight: bold;">${formatMoeda(totalGeral.valorTotalLiquidado)}</div>
           </td>
-          <td colspan="3" class="badge-kpi" style="background-color: #fffbeb;">
-            <div style="font-size: 8pt; color: #92400e; text-transform: uppercase;">Valor a Liquidar (Em Aberto)</div>
+          <td colspan="3" class="badge-kpi" style="border-right: 1px solid #cbd5e1; background-color: #fffbeb;">
+            <div style="font-size: 8pt; color: #92400e; text-transform: uppercase;">Saldo a Receber</div>
             <div style="font-size: 12pt; color: #92400e; font-weight: bold;">${formatMoeda(totalGeral.valorTotalALiquidar)}</div>
+          </td>
+          <td colspan="3" class="badge-kpi">
+            <div style="font-size: 8pt; color: #64748b; text-transform: uppercase;">Total Faturado NF</div>
+            <div style="font-size: 12pt; color: #0f172a; font-weight: bold;">${formatMoeda(totalGeral.valorTotalNF)}</div>
           </td>
         </tr>
       </table>
 
       <!-- ========================================================================= -->
-      <!-- TABELA 1: RESUMOLOJAS — RELATÓRIO GERAL - NFS E VPS POR LOJA             -->
+      <!-- TABELA 1: RESUMO POR LOJA                                                 -->
       <!-- ========================================================================= -->
       <table style="margin-bottom: 30px;">
         <thead>
           <tr>
-            <th colspan="12" class="hdr-main">
-              RESUMOLOJAS — RELATÓRIO GERAL - NFS E VPS POR LOJA
+            <th colspan="7" class="hdr-main">
+              RESUMO POR LOJA — VALOR NEGOCIADO E SALDO A RECEBER
             </th>
           </tr>
           <tr style="height: 25px;">
-            <th class="hdr-sub" style="text-align: left; width: 230px;">LOJA</th>
-            <th class="hdr-sub" style="width: 45px;">NFS</th>
-            <th class="hdr-sub" style="width: 65px;">PEDIDOS VENDA</th>
-            <th class="hdr-sub" style="width: 65px;">PEDIDOS SEM NF</th>
-            <th class="hdr-sub" style="width: 95px;">PESO NF (KG)</th>
-            <th class="hdr-sub" style="width: 110px;">PESO BASEADO NA COLHEITA (KG)</th>
-            <th class="hdr-sub" style="width: 90px;">CXS VENDIDAS</th>
-            <th class="hdr-sub" style="width: 115px;">VALOR TOTAL NF (R$)</th>
-            <th class="hdr-sub" style="width: 95px;">FUNRURAL (R$)</th>
-            <th class="hdr-sub" style="width: 115px; background-color: #166534;">VALOR LIQUIDADO (R$)</th>
-            <th class="hdr-sub" style="width: 115px; background-color: #b45309;">VALOR A LIQUIDAR (R$)</th>
-            <th class="hdr-sub" style="width: 115px; background-color: #143753;">LÍQUIDO NF (R$)</th>
+            <th class="hdr-sub" style="text-align: left; width: 230px;">LOJA / COMPRADOR</th>
+            <th class="hdr-sub" style="width: 55px;">CARGAS</th>
+            <th class="hdr-sub" style="width: 55px;">SEM NF</th>
+            <th class="hdr-sub" style="width: 95px;">PESO VP (KG)</th>
+            <th class="hdr-sub" style="width: 120px; background-color: #1e3a8a;">VALOR NEGOCIADO</th>
+            <th class="hdr-sub" style="width: 115px;">VALOR DA NF</th>
+            <th class="hdr-sub" style="width: 110px; background-color: #b45309;">SALDO A RECEBER</th>
           </tr>
         </thead>
         <tbody>
           ${stores.map(row => `
             <tr style="height: 22px;">
               <td class="cell-left" style="font-weight: bold; color: #0f172a;">${row.loja}</td>
-              <td class="cell-num-int">${row.nfs || 0}</td>
               <td class="cell-num-int" style="font-weight: bold;">${row.pedidosVenda || 0}</td>
               <td class="cell-num-int" style="color: ${row.pedidosSemNF > 0 ? '#b45309' : '#64748b'}; font-weight: ${row.pedidosSemNF > 0 ? 'bold' : 'normal'};">
                 ${row.pedidosSemNF || 0}
               </td>
-              <td class="cell-num">${formatNumero(row.pesoNF, 2)}</td>
-              <td class="cell-num" style="font-weight: bold;">${formatNumero(row.pesoColheita, 2)}</td>
-              <td class="cell-num" style="font-weight: bold;">${formatNumero(row.cxsVendidas, 2)}</td>
+              <td class="cell-num" style="font-weight: bold;">${formatNumero(row.pesoColheita, 0)}</td>
+              <td class="cell-money" style="background-color:#dbeafe; font-weight:bold;">${formatMoeda(row.totalVendaAReceber)}</td>
               <td class="cell-money-normal">${formatMoeda(row.valorTotalNF)}</td>
-              <td class="cell-funrural">-${formatMoeda(row.funrural)}</td>
-              <td class="cell-money bg-liquidado">${formatMoeda(row.valorLiquidado)}</td>
               <td class="cell-money bg-aliquidar">${formatMoeda(row.valorALiquidar)}</td>
-              <td class="cell-money bg-liquido-nf">${formatMoeda(row.liquidoNF)}</td>
             </tr>
           `).join('')}
         </tbody>
         <tfoot>
           <tr class="row-total-geral" style="height: 26px;">
             <td class="cell-left" style="font-weight: bold;">TOTAL GERAL</td>
-            <td class="cell-num-int" style="font-weight: bold;">${totalGeral.nfs}</td>
             <td class="cell-num-int" style="font-weight: bold;">${totalGeral.pedidosVenda}</td>
             <td class="cell-num-int" style="font-weight: bold;">${totalGeral.pedidosSemNF}</td>
-            <td class="cell-num" style="font-weight: bold;">${formatNumero(totalGeral.pesoNF, 2)}</td>
-            <td class="cell-num" style="font-weight: bold;">${formatNumero(totalGeral.pesoColheita, 2)}</td>
-            <td class="cell-num" style="font-weight: bold;">${formatNumero(totalGeral.cxsVendidas, 2)}</td>
+            <td class="cell-num" style="font-weight: bold;">${formatNumero(totalGeral.pesoColheita, 0)}</td>
+            <td class="cell-money" style="font-weight: bold; background-color:#93c5fd;">${formatMoeda(totalGeral.totalVendaAReceber)}</td>
             <td class="cell-money" style="font-weight: bold;">${formatMoeda(totalGeral.valorTotalNF)}</td>
-            <td class="cell-funrural" style="font-weight: bold; color: #7f1d1d;">-${formatMoeda(totalGeral.funrural)}</td>
-            <td class="cell-money" style="font-weight: bold; background-color: #a7f3d0; color: #064e3b;">${formatMoeda(totalGeral.valorTotalLiquidado)}</td>
-            <td class="cell-money" style="font-weight: bold; background-color: #fde68a; color: #78350f;">${formatMoeda(totalGeral.valorTotalALiquidar)}</td>
-            <td class="cell-money" style="font-weight: bold; background-color: #aedb8e; color: #064e3b;">${formatMoeda(totalGeral.liquidoNF)}</td>
+            <td class="cell-money" style="font-weight: bold;">${formatMoeda(totalGeral.valorTotalALiquidar)}</td>
           </tr>
         </tfoot>
       </table>
@@ -214,97 +200,76 @@ export function buildExcelReportHtml(stores = [], customTotal = null, filters = 
             <thead>
               <!-- Barra de Cabeçalho da Loja -->
               <tr>
-                <th colspan="15" class="hdr-loja">
+                <th colspan="11" class="hdr-loja">
                   <span style="font-size: 10pt; text-transform: uppercase;">${lojaGroup.loja}</span>
                   <span style="font-size: 8.5pt; font-weight: normal; color: #475569; margin-left: 10px;">(${items.length} VPs)</span>
                   <span style="float: right; font-size: 8.5pt; font-weight: normal; color: #334155;">
+                    VP: <b>${formatMoeda(lojaGroup.totalVendaAReceber)}</b> |
                     NF: <b>${formatMoeda(lojaGroup.valorTotalNF)}</b> | 
                     Liquidado: <b style="color: #065f46;">${formatMoeda(lojaGroup.valorLiquidado)}</b> | 
-                    A Liquidar: <b style="color: #92400e;">${formatMoeda(lojaGroup.valorALiquidar)}</b>
+                    Saldo: <b style="color: #92400e;">${formatMoeda(lojaGroup.valorALiquidar)}</b>
                   </span>
                 </th>
               </tr>
               <!-- Colunas de Detalhamento -->
               <tr style="height: 22px;">
                 <th class="hdr-sub" style="width: 60px;">Nº VP</th>
-                <th class="hdr-sub" style="width: 140px; text-align: left;">PRODUTO / PRODUTOR</th>
+                <th class="hdr-sub" style="width: 85px;">Nº ROMANEIO</th>
+                <th class="hdr-sub" style="width: 120px; text-align: left;">PRODUTO</th>
                 <th class="hdr-sub" style="width: 75px;">DATA VP</th>
                 <th class="hdr-sub" style="width: 110px;">Nº NF</th>
-                <th class="hdr-sub" style="width: 75px;">DATA NF</th>
-                <th class="hdr-sub" style="width: 80px;">PESO NF (KG)</th>
-                <th class="hdr-sub" style="width: 85px;">PESO COLHEITA</th>
-                <th class="hdr-sub" style="width: 85px;">VOLUMES</th>
-                <th class="hdr-sub" style="width: 75px;">PREÇO/KG</th>
-                <th class="hdr-sub" style="width: 105px;">VALOR TOTAL NF</th>
-                <th class="hdr-sub" style="width: 90px;">FUNRURAL (1,63%)</th>
-                <th class="hdr-sub" style="width: 85px;">COTAÇÃO DIA</th>
-                <th class="hdr-sub" style="width: 105px; background-color: #166534;">VALOR LIQUIDADO</th>
-                <th class="hdr-sub" style="width: 105px; background-color: #b45309;">VALOR A LIQUIDAR</th>
-                <th class="hdr-sub" style="width: 105px; background-color: #143753;">LÍQUIDO DA NF</th>
+                <th class="hdr-sub" style="width: 80px;">PESO (KG)</th>
+                <th class="hdr-sub" style="width: 110px;">QUANTIDADE</th>
+                <th class="hdr-sub" style="width: 105px; background-color: #1e3a8a;">VALOR NEGOCIADO</th>
+                <th class="hdr-sub" style="width: 105px;">VALOR NF</th>
+                <th class="hdr-sub" style="width: 105px; background-color: #b45309;">SALDO A RECEBER</th>
+                <th class="hdr-sub" style="width: 100px;">ANEXOS</th>
               </tr>
             </thead>
             <tbody>
               ${items.map(it => {
-                const isSettled = it.paymentStatus === 'Recebido' || it.status === 'Concluído' || it.status === 'Recebido';
-                const itLiquidoValor = Number(it.liquido) > 0 ? Number(it.liquido) : Math.max(0, (Number(it.valorVP) || 0) - (Number(it.funrural) || 0));
-                const itLiquidado = isSettled ? itLiquidoValor : 0;
-                const itALiquidar = !isSettled ? itLiquidoValor : 0;
-                const itLiquidoNF = Number(it.liquidoNF) > 0 ? Number(it.liquidoNF) : Math.max(0, (Number(it.valorNF) || 0) - (Number(it.funrural) || 0));
-                const unitAbbr = it.unit?.toLowerCase().includes('saca') || it.product?.toLowerCase().includes('batata') ? 'sc' : 'cx';
-                const cotacaoUnit = it.cotacao <= 10.0 ? 'kg' : unitAbbr;
+                const itALiquidar = Number(it.valorALiquidar) || 0;
+                const unitLabel = abbreviateUnit((it.unit && String(it.unit).trim()) || '');
+                const anexos = [];
+                if (it.evidenceFile && it.evidenceFile !== '-') anexos.push('Pedido: ' + it.evidenceFile);
+                if (it.nfFile && it.nfFile !== '-' && it.nfFile !== 'SEM NF' && it.nfFile !== 'Pendente') anexos.push('NF: ' + it.nfFile);
+                const romaneio = it.romaneioNumber
+                  || ((String(it.notes || '').match(/Planilha\s*VP:\s*(\d+)/i) || [])[1])
+                  || it.planilhaVp
+                  || '—';
 
                 return `
                   <tr style="height: 20px;">
                     <td class="cell-center" style="font-weight: bold; color: #173e27;">${it.vp || '-'}</td>
+                    <td class="cell-center">${romaneio}</td>
                     <td class="cell-left">
                       <div style="font-weight: bold; color: #0f172a;">${it.product || 'Produto'}</div>
-                      <div style="font-size: 7.5pt; color: #2563eb;">${it.producer || it.origin || 'Produtor Rural'}</div>
                     </td>
                     <td class="cell-center">${it.dataVP || '-'}</td>
                     <td class="cell-left" style="font-weight: bold;">${it.nf || '-'}</td>
-                    <td class="cell-center">${it.dataNF || '-'}</td>
-                    <td class="cell-num">${formatNumero(it.pesoNF, 0)} kg</td>
-                    <td class="cell-num" style="font-weight: bold;">${formatNumero(it.pesoColheita, 0)} kg</td>
-                    <td class="cell-num" style="font-weight: bold;">${formatNumero(it.cxs, 2)} ${unitAbbr}</td>
-                    <td class="cell-right">${it.precoKg > 0 ? 'R$ ' + formatNumero(it.precoKg, 2) : '-'}</td>
-                    <td class="cell-money-normal">${formatMoeda(it.valorNF)}</td>
-                    <td class="cell-funrural">-${formatMoeda(it.funrural)}</td>
-                    <td class="cell-right" style="color: #1e40af; font-weight: bold;">
-                      ${it.cotacao > 0 ? 'R$ ' + formatNumero(it.cotacao, 2) + '/' + cotacaoUnit : '-'}
-                    </td>
-                    <td class="cell-money bg-liquidado">
-                      ${itLiquidado > 0 ? formatMoeda(itLiquidado) : '-'}
-                    </td>
-                    <td class="cell-money bg-aliquidar">
-                      ${itALiquidar > 0 ? formatMoeda(itALiquidar) : '-'}
-                    </td>
-                    <td class="cell-money bg-liquido-nf">${formatMoeda(itLiquidoNF)}</td>
+                    <td class="cell-num">${formatNumero(it.pesoNF || it.pesoColheita, 0)} kg</td>
+                    <td class="cell-num" style="font-weight: bold;">${formatNumero(it.cxs, 2)}${unitLabel ? ' ' + unitLabel : ''}</td>
+                    <td class="cell-money" style="background-color: #dbeafe; font-weight: bold;">${formatMoeda(it.valorVP)}</td>
+                    <td class="cell-money-normal">${Number(it.valorNF) > 0 ? formatMoeda(it.valorNF) : 'SEM NF'}</td>
+                    <td class="cell-money bg-aliquidar">${formatMoeda(itALiquidar)}</td>
+                    <td class="cell-left" style="font-size: 7.5pt;">${anexos.length ? anexos.join(' | ') : '-'}</td>
                   </tr>
                 `;
               }).join('')}
             </tbody>
             <tfoot>
-              <!-- Subtotal da Loja -->
               <tr class="row-subtotal-loja" style="height: 24px;">
                 <td colspan="5" class="cell-left" style="font-weight: bold; text-transform: uppercase;">
                   TOTAL ${lojaGroup.loja.split(' ')[0]}
                 </td>
                 <td class="cell-num" style="font-weight: bold;">${formatNumero(lojaGroup.pesoNF, 2)} kg</td>
-                <td class="cell-num" style="font-weight: bold;">${formatNumero(lojaGroup.pesoColheita, 2)} kg</td>
                 <td class="cell-num" style="font-weight: bold;">${formatNumero(lojaGroup.cxsVendidas, 2)}</td>
-                <td class="cell-center">-</td>
+                <td class="cell-money" style="font-weight: bold; background-color: #dbeafe;">${formatMoeda(lojaGroup.totalVendaAReceber)}</td>
                 <td class="cell-money" style="font-weight: bold;">${formatMoeda(lojaGroup.valorTotalNF)}</td>
-                <td class="cell-funrural" style="font-weight: bold;">-${formatMoeda(lojaGroup.funrural)}</td>
-                <td class="cell-center">-</td>
-                <td class="cell-money" style="font-weight: bold; background-color: #d1fae5; color: #064e3b;">
-                  ${formatMoeda(lojaGroup.valorLiquidado)}
-                </td>
                 <td class="cell-money" style="font-weight: bold; background-color: #fef3c7; color: #78350f;">
                   ${formatMoeda(lojaGroup.valorALiquidar)}
                 </td>
-                <td class="cell-money" style="font-weight: bold; background-color: #dcfce7; color: #064e3b;">
-                  ${formatMoeda(lojaGroup.liquidoNF)}
-                </td>
+                <td class="cell-center">-</td>
               </tr>
             </tfoot>
           </table>
@@ -460,7 +425,7 @@ export function buildProducerExcelReportHtml(producers = [], customTotal = null,
             <th class="hdr-sub" style="text-align: left; width: 230px;">PRODUTOR RURAL</th>
             <th class="hdr-sub" style="width: 50px;">NFS</th>
             <th class="hdr-sub" style="width: 95px;">PESO NF (KG)</th>
-            <th class="hdr-sub" style="width: 90px;">CXS ENTREGUES</th>
+            <th class="hdr-sub" style="width: 100px;">QUANTIDADE</th>
             <th class="hdr-sub" style="width: 120px;">TOTAL FATURADO NF</th>
             <th class="hdr-sub" style="width: 110px;">FUNRURAL (1,63% INFO)</th>
             <th class="hdr-sub" style="width: 120px; background-color: #14532d;">LÍQUIDO FISCAL EST.</th>
@@ -524,7 +489,7 @@ export function buildProducerExcelReportHtml(producers = [], customTotal = null,
                 <th class="hdr-sub" style="width: 130px; text-align: left;">PRODUTO</th>
                 <th class="hdr-sub" style="width: 120px; text-align: left;">DESTINO</th>
                 <th class="hdr-sub" style="width: 80px;">PESO (KG)</th>
-                <th class="hdr-sub" style="width: 80px;">VOLUMES</th>
+                <th class="hdr-sub" style="width: 100px;">QUANTIDADE</th>
                 <th class="hdr-sub" style="width: 75px;">PREÇO/KG</th>
                 <th class="hdr-sub" style="width: 110px;">TOTAL DA NF</th>
                 <th class="hdr-sub" style="width: 95px;">FUNRURAL (1,63% INFO)</th>
@@ -540,7 +505,7 @@ export function buildProducerExcelReportHtml(producers = [], customTotal = null,
                   <td class="cell-left">${it.product || 'Produto'}</td>
                   <td class="cell-left" style="color: #475569;">${it.lojaDestino || '-'}</td>
                   <td class="cell-num">${formatNumero(it.pesoNF, 0)} kg</td>
-                  <td class="cell-num" style="font-weight: bold;">${formatNumero(it.cxs, 2)}</td>
+                  <td class="cell-num" style="font-weight: bold;">${formatNumero(it.cxs, 2)}${it.unit ? ' ' + abbreviateUnit(it.unit) : ''}</td>
                   <td class="cell-right">${it.precoKg > 0 ? 'R$ ' + formatNumero(it.precoKg, 2) : '-'}</td>
                   <td class="cell-money-normal">${formatMoeda(it.valorNF)}</td>
                   <td class="cell-funrural">-${formatMoeda(it.funrural)}</td>
@@ -575,6 +540,106 @@ export function buildProducerExcelReportHtml(producers = [], customTotal = null,
         <b>Nota Contábil:</b> A AgroVenda repassa 100% do valor faturado das notas fiscais ao Produtor Rural. O FUNRURAL (1,63%) é discriminado neste extrato com finalidade exclusivamente informativa para fins de escrituração fiscal e retenção direta pelo produtor.
       </div>
 
+    </body>
+    </html>
+  `;
+}
+
+/**
+ * Excel Resultado AgroVenda (spread + comissão) — alinhado à aba corretor / BrokerProfitTable.
+ * Fonte: Arial, Calibri (mesmo pipeline Drive).
+ */
+export function buildBrokerExcelReportHtml(stores = [], customTotal = null, filters = {}) {
+  const hojeFormatado = new Date().toLocaleDateString('pt-BR');
+  const periodoStr = (filters.startDate || filters.endDate)
+    ? `${filters.startDate ? filters.startDate.split('-').reverse().join('/') : 'Início'} até ${filters.endDate ? filters.endDate.split('-').reverse().join('/') : 'Atual'}`
+    : 'Todo o Histórico';
+
+  const formatMoeda = (v) => {
+    const num = Number(v) || 0;
+    return 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  const formatNumero = (v, decimals = 2) => {
+    const num = Number(v) || 0;
+    return num.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  };
+
+  const allItens = stores.flatMap((s) => (s.itens || []).map((it) => ({ ...it, loja: s.loja })));
+  const totalVP = allItens.reduce((a, it) => a + (Number(it.valorVP) || 0), 0);
+  const totalNF = allItens.reduce((a, it) => a + (Number(it.valorNF) || 0), 0);
+  const totalSpread = allItens.reduce(
+    (a, it) => a + (Number(it.spreadComercial) || Math.max(0, (Number(it.valorVP) || 0) - (Number(it.valorNF) || 0))),
+    0
+  );
+  const totalComissao = allItens.reduce((a, it) => a + (Number(it.comissao) || 0), 0);
+  const totalLucro = totalSpread + totalComissao;
+
+  return `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: Arial, Calibri, sans-serif; font-size: 9pt; color: #1e293b; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-family: Arial, Calibri, sans-serif; }
+        th, td { border: 1px solid #cbd5e1; padding: 6px 8px; font-size: 8.5pt; }
+        .hdr-main { background-color: #0e3b5e; color: #ffffff; font-weight: bold; font-size: 11pt; padding: 8px 12px; }
+        .hdr-sub { background-color: #134d7a; color: #ffffff; font-weight: bold; font-size: 8.5pt; text-align: center; }
+        .cell-money { text-align: right; mso-number-format: "\\#\\,\\#\\#0\\.00"; }
+        .lucro { background-color: #ecfdf5; color: #065f46; font-weight: bold; }
+      </style>
+    </head>
+    <body>
+      <table>
+        <tr><td class="hdr-main" colspan="10">AGROVENDA — RESULTADO COMERCIAL &amp; LUCROS · ${hojeFormatado}</td></tr>
+        <tr><td colspan="10">Período: ${periodoStr}</td></tr>
+      </table>
+      <table>
+        <tr>
+          <td><b>Recebimento Lojas (VP)</b><br/>${formatMoeda(totalVP)}</td>
+          <td><b>(-) Total NFs</b><br/>${formatMoeda(totalNF)}</td>
+          <td><b>(=) Spread VP−NF</b><br/>${formatMoeda(totalSpread)}</td>
+          <td><b>(+) Comissões</b><br/>${formatMoeda(totalComissao)}</td>
+          <td class="lucro"><b>(=) Lucro AgroVenda</b><br/>${formatMoeda(customTotal?.lucroCorretor != null ? customTotal.lucroCorretor : totalLucro)}</td>
+        </tr>
+      </table>
+      <table>
+        <thead>
+          <tr>
+            <th class="hdr-sub">Nº VP</th>
+            <th class="hdr-sub">Loja</th>
+            <th class="hdr-sub">Produtor</th>
+            <th class="hdr-sub">Produto</th>
+            <th class="hdr-sub">Qtd</th>
+            <th class="hdr-sub">Valor negociado</th>
+            <th class="hdr-sub">Valor NF</th>
+            <th class="hdr-sub">Spread</th>
+            <th class="hdr-sub">Comissão</th>
+            <th class="hdr-sub">Lucro</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${allItens.map((it) => {
+            const vp = Number(it.valorVP) || 0;
+            const nf = Number(it.valorNF) || 0;
+            const spread = Number(it.spreadComercial) || Math.max(0, vp - nf);
+            const com = Number(it.comissao) || 0;
+            return `
+              <tr>
+                <td>${it.vp || it.id || '-'}</td>
+                <td>${it.loja || '-'}</td>
+                <td>${it.producer || it.origin || '-'}</td>
+                <td>${it.product || '-'}</td>
+                <td class="cell-money">${formatNumero(it.cxs || it.quantity || 0, 2)}</td>
+                <td class="cell-money">${formatMoeda(vp)}</td>
+                <td class="cell-money">${formatMoeda(nf)}</td>
+                <td class="cell-money">${formatMoeda(spread)}</td>
+                <td class="cell-money">${formatMoeda(com)}</td>
+                <td class="cell-money lucro">${formatMoeda(spread + com)}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
     </body>
     </html>
   `;

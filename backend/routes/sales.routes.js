@@ -118,11 +118,21 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
-// DELETE /api/sales/:id (Exclusão via sale.service.js)
+// POST /api/sales/:id/cancel — soft cancel (status Cancelada)
+router.post('/:id/cancel', async (req, res, next) => {
+  try {
+    const sale = await saleService.cancelSale(req.params.id);
+    res.json({ success: true, sale, message: `Venda ${sale.id} cancelada.` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/sales/:id — soft cancel (compatível com UI antiga)
 router.delete('/:id', async (req, res, next) => {
   try {
-    const deleted = await saleService.deleteSale(req.params.id);
-    res.json({ success: true, message: `Venda ${deleted.id} e romaneio vinculado excluídos com sucesso.` });
+    const sale = await saleService.cancelSale(req.params.id);
+    res.json({ success: true, sale, message: `Venda ${sale.id} cancelada (não excluída).` });
   } catch (err) {
     next(err);
   }

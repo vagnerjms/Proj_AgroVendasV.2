@@ -1,0 +1,14 @@
+{
+  "name": "agrovenda-v2",
+  "version": "2.0.0",
+  "private": true,
+  "description": "AgroVenda V2 — monorepo scripts for e2e and local gate",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:backend": "npm --prefix backend test",
+    "build:frontend": "npm --prefix frontend run build"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.49.1"
+  }
+}

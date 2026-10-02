@@ -21,7 +21,10 @@ app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Protected Static Uploads Serving (Exige JWT válido via Header, Cookie ou Query)
-app.use('/uploads', requireAuth, express.static(uploadDir));
+// Fallback 404 explícito — evita SPA catch-all servir index.html (dashboard) para arquivo inexistente
+app.use('/uploads', requireAuth, express.static(uploadDir), (req, res) => {
+  res.status(404).type('text/plain').send('Arquivo não encontrado');
+});
 
 // Modular API Routes
 app.use('/api/auth', require('./routes/auth.routes'));
@@ -70,31 +73,33 @@ app.use(errorHandler);
 
 const { startCleanupScheduler } = require('./services/cleanup.service');
 
-// Start Server and MongoDB Connection
-const server = app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`🌾 [AgroVenda V2 Backend] Servidor rodando na porta ${PORT}`);
-  await connectDB();
-  startCleanupScheduler();
-});
-
-// Graceful Shutdown Handlers
-const handleShutdown = async (signal) => {
-  console.log(`\n🛑 [Servidor] Recebido sinal ${signal}. Encerrando conexões com segurança...`);
-  server.close(async () => {
-    console.log('HTTP server encerrado.');
-    try {
-      await mongoose.connection.close(false);
-      console.log('MongoDB desconectado com sucesso.');
-      process.exit(0);
-    } catch (e) {
-      console.error('Erro ao desconectar MongoDB:', e);
-      process.exit(1);
-    }
+// Only bind port when executed directly (not when required by tests)
+let server = null;
+if (require.main === module) {
+  server = app.listen(PORT, '0.0.0.0', async () => {
+    console.log(`🌾 [AgroVenda V2 Backend] Servidor rodando na porta ${PORT}`);
+    await connectDB();
+    startCleanupScheduler();
   });
-};
 
-process.on('SIGTERM', () => handleShutdown('SIGTERM'));
-process.on('SIGINT', () => handleShutdown('SIGINT'));
+  const handleShutdown = async (signal) => {
+    console.log(`\n🛑 [Servidor] Recebido sinal ${signal}. Encerrando conexões com segurança...`);
+    server.close(async () => {
+      console.log('HTTP server encerrado.');
+      try {
+        await mongoose.connection.close(false);
+        console.log('MongoDB desconectado com sucesso.');
+        process.exit(0);
+      } catch (e) {
+        console.error('Erro ao desconectar MongoDB:', e);
+        process.exit(1);
+      }
+    });
+  };
+
+  process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+  process.on('SIGINT', () => handleShutdown('SIGINT'));
+}
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('⚠️ [Unhandled Rejection]:', reason);

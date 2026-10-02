@@ -73,16 +73,20 @@ function calculateCommission(valorComercialVP, totalOperationNF, taxaPercentual 
     taxa = Number(taxaPercentual) || 3.0;
   }
 
-  // Dedução de FUNRURAL é calculada sobre a NF
-  const fiscal = calculateFiscalDeductions(valorNF > 0 ? valorNF : valorVP);
-  // O repasse líquido ao produtor é rigorosamente o valor da NF menos FUNRURAL
-  const liquidoProdutor = roundMoney(Math.max(0, (valorNF > 0 ? valorNF : valorVP) - fiscal.funruralTotal));
+  // Dedução de FUNRURAL é calculada sobre a NF (SEM NF = 0)
+  const fiscal = calculateFiscalDeductions(valorNF);
+  // Repasse ao produtor = NF − FUNRURAL; SEM NF não gera a pagar
+  const liquidoProdutor = valorNF > 0
+    ? roundMoney(Math.max(0, valorNF - fiscal.funruralTotal))
+    : 0;
 
   // Comissão de corretagem (calculada sobre a base comercial da venda)
   const comissao = roundMoney(valorVP * (taxa / 100));
 
   // Spread comercial: diferença entre o valor recebido da loja (VP) e o valor faturado da NF do produtor
-  const spreadComercial = roundMoney(Math.max(0, valorVP - (valorNF > 0 ? valorNF : valorVP)));
+  const spreadComercial = valorNF > 0
+    ? roundMoney(Math.max(0, valorVP - valorNF))
+    : 0;
 
   // Lucro total da AgroVenda: spread comercial + comissão de corretagem
   const lucroCorretor = roundMoney(spreadComercial + comissao);
@@ -174,11 +178,44 @@ function getSaleCommercialValue(sale) {
   return roundMoney(Number(sale.totalOperation) || 0);
 }
 
+/**
+ * Prestação de contas estilo planilha "Valores por carga":
+ * - FUNRURAL sobre a NF; se SEM NF, estimado sobre o VP comercial
+ * - Líquido pelo VP = VP − FUNRURAL − Frete − Comissão (amarelas; em branco = 0)
+ * - Líquido pela NF = NF − FUNRURAL (vazio/null quando SEM NF)
+ * Comissão aqui é desconto absoluto preenchido (não a taxa % automática do corretor).
+ */
+function calculateCommercialNet(valorComercialVP, totalOperationNF, frete = 0, comissaoDesconto = 0) {
+  const valorVP = roundMoney(valorComercialVP);
+  const valorNF = roundMoney(totalOperationNF);
+  const freteR = roundMoney(frete);
+  const comissaoR = roundMoney(comissaoDesconto);
+  const funruralBase = valorNF > 0 ? valorNF : valorVP;
+  const fiscal = calculateFiscalDeductions(funruralBase);
+  const funrural = fiscal.funruralTotal;
+  const funruralEstimado = valorNF <= 0 && valorVP > 0;
+  const totalDescontos = roundMoney(funrural + freteR + comissaoR);
+  const liquidoPeloVP = roundMoney(Math.max(0, valorVP - totalDescontos));
+  const liquidoPelaNF = valorNF > 0 ? roundMoney(Math.max(0, valorNF - funrural)) : null;
+
+  return {
+    funrural,
+    funruralEstimado,
+    frete: freteR,
+    comissaoDesconto: comissaoR,
+    totalDescontos,
+    liquidoPeloVP,
+    liquidoPelaNF,
+    liquidoNF: liquidoPelaNF || 0
+  };
+}
+
 module.exports = {
   roundMoney,
   TAX_RATES,
   calculateFiscalDeductions,
   calculateCommission,
   calculateLiquidationValue,
-  getSaleCommercialValue
+  getSaleCommercialValue,
+  calculateCommercialNet
 };

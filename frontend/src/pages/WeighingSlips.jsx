@@ -67,6 +67,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
   const [submittingSlip, setSubmittingSlip] = useState(false);
   const [notification, setNotification] = useState('');
   const [errorNotification, setErrorNotification] = useState('');
+  const [vpSortDir, setVpSortDir] = useState('asc'); // saleId VP sort
 
   const fetchSlips = async () => {
     setLoading(true);
@@ -307,7 +308,11 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
 
       {/* Table (Modular) */}
       <WeighingTable
-        slips={slips}
+        slips={[...slips].sort((a, b) => {
+          const numA = parseInt(String(a.saleId || '').replace(/\D/g, ''), 10) || 0;
+          const numB = parseInt(String(b.saleId || '').replace(/\D/g, ''), 10) || 0;
+          return vpSortDir === 'asc' ? numA - numB : numB - numA;
+        })}
         loading={loading}
         statusFilter={statusFilter}
         setStatusFilter={setStatusFilter}
@@ -315,6 +320,8 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
         onOpenEdit={handleOpenEdit}
         onDeleteSlip={handleDeleteSlip}
         onPreviewImage={setPreviewImage}
+        vpSortDir={vpSortDir}
+        onToggleVpSort={() => setVpSortDir(d => d === 'asc' ? 'desc' : 'asc')}
       />
 
       {/* Modal: Editar Romaneio (Modular) */}

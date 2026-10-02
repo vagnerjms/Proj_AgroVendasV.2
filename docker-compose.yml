@@ -27,6 +27,7 @@ services:
       - JWT_SECRET=${JWT_SECRET:-agrovenda_super_secure_jwt_secret_2026_agro_v2}
       - APP_BASE_URL=${APP_BASE_URL:-https://agrovendas.cloud}
       - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL:-}
+      - DISABLE_AUTH_RATE_LIMIT=${DISABLE_AUTH_RATE_LIMIT:-0}
     depends_on:
       - mongodb
     volumes:

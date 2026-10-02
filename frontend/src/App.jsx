@@ -20,6 +20,21 @@ function MainApp() {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [editingSale, setEditingSale] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('agrovenda_sidebar_collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebarCollapse = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem('agrovenda_sidebar_collapsed', next ? '1' : '0'); } catch (e) {}
+      return next;
+    });
+  };
 
   const handleEditSale = (sale) => {
     setEditingSale(sale);
@@ -101,6 +116,8 @@ function MainApp() {
         onLogout={logout}
         mobileOpen={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebarCollapse}
       />
 
       {/* Main App Area */}

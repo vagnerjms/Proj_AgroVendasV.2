@@ -59,19 +59,17 @@ router.post('/', async (req, res) => {
     const tolerance = Math.min(Math.max(Number(body.tolerancePct) || 0.25, 0), 2.0);
     const isDiv = diffPct > tolerance;
 
-    let slipId = '';
-    let saleRef = body.saleId || '';
-    if (saleRef) {
-      slipId = saleRef.startsWith('ROM-') ? saleRef : `ROM-${saleRef}`;
-    } else {
-      const nextSeq = await getNextSequence('weighing_slip_id', WeighingSlip, 'ROM-VP');
-      saleRef = `VP${String(nextSeq).padStart(3, '0')}`;
-      slipId = `ROM-${saleRef}`;
+    let saleRef = (body.saleId || '').trim();
+    if (saleRef.startsWith('ROM-')) {
+      saleRef = saleRef.replace(/^ROM-/, '');
     }
+    // Sempre gera código próprio de pesagem (PSG-); não inventa VP falso
+    const nextSeq = await getNextSequence('weighing_slip_id', WeighingSlip, 'PSG-');
+    const slipId = `PSG-${String(nextSeq).padStart(3, '0')}`;
 
     const newSlip = new WeighingSlip({
       id: slipId,
-      saleId: saleRef,
+      saleId: saleRef || '',
       client: body.client || 'Cliente Padrão',
       product: body.product || 'Cenoura (Caixa 29kg)',
       truckPlate: body.truckPlate || 'ABC-1234',

@@ -24,8 +24,11 @@ import {
 import { formatCurrency, formatKg, formatNumber, getCleanFileName } from '../utils/formatters';
 import { calculateSummary, calculateFunrural } from '../utils/calculations';
 import { api } from '../services/api';
+import { extractRomaneioFromFilename, formatRomaneioNumber, resolveRomaneioNumber } from '../utils/dataHelpers';
+import { DATA_LABELS } from '../constants/dataLabels';
 import SaleItemsTable from '../components/sales/SaleItemsTable';
 import SaleFiscalSummary from '../components/sales/SaleFiscalSummary';
+import CityUfSelect from '../components/forms/CityUfSelect';
 import NfeMatchingCards from '../components/sales/NfeMatchingCards';
 import SaleCommissionCard from '../components/sales/SaleCommissionCard';
 
@@ -41,10 +44,10 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   // Form states (Editable)
   const [operationType, setOperationType] = useState('Intermediação (Corretagem / Comissão)');
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [paymentTermDays, setPaymentTermDays] = useState(30);
+  const [paymentTermDays, setPaymentTermDays] = useState(60);
   const [dueDate, setDueDate] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() + 30);
+    d.setDate(d.getDate() + 60);
     return d.toISOString().split('T')[0];
   });
   const [customTermMode, setCustomTermMode] = useState(false);
@@ -54,6 +57,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   const [destCity, setDestCity] = useState('');
   const [destUF, setDestUF] = useState('');
   const [notes, setNotes] = useState('');
+  const [romaneioNumber, setRomaneioNumber] = useState('');
   
   // Freight & Transport
   const [freightType, setFreightType] = useState('FOB (Retira na Origem)');
@@ -140,10 +144,10 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     setOperationType('Intermediação (Corretagem / Comissão)');
     const today = new Date().toISOString().split('T')[0];
     setSaleDate(today);
-    setPaymentTermDays(30);
+    setPaymentTermDays(60);
     setCustomTermMode(false);
     const defaultDue = new Date();
-    defaultDue.setDate(defaultDue.getDate() + 30);
+    defaultDue.setDate(defaultDue.getDate() + 60);
     setDueDate(defaultDue.toISOString().split('T')[0]);
     setSelectedClient('');
     setClientDocument('');
@@ -151,6 +155,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     setDestCity('');
     setDestUF('');
     setNotes('');
+    setRomaneioNumber('');
     setSaleItems([createEmptyItem()]);
     setNfFile(null);
     setNfeKey('');
@@ -189,6 +194,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       setDestCity(editingSale.destCity || '');
       setDestUF(editingSale.destUF || '');
       setNotes(editingSale.notes || '');
+      setRomaneioNumber(resolveRomaneioNumber(editingSale) || formatRomaneioNumber(editingSale.romaneioNumber) || '');
       setFreightType(editingSale.freightType || 'FOB (Retira na Origem)');
       setCarrierName(editingSale.carrierName || '');
       setTruckPlate(editingSale.truckPlate || '');
@@ -420,7 +426,6 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
 
   const funrural = calculateFunrural(effectiveTotalNF);
   const baseComercial = valorTotalVP > 0 ? valorTotalVP : effectiveTotalNF;
-  const liquidoAReceber = Math.max(0, baseComercial - funrural.funruralTotal);
   const totalCommission = feeType === 'Porcentagem (%)' 
     ? (baseComercial * (Number(feeValue) / 100))
     : (feeType === 'Valor Fixo por Saca/Volume' ? totalVolumes * Number(feeValue) : Number(feeValue));
@@ -682,12 +687,17 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
 
     try {
       const data = await api.upload('/api/upload', formData);
-      setEvidenceFile(data?.filename || file.name);
+      const fname = data?.filename || file.name;
+      setEvidenceFile(fname);
+      const inferred = extractRomaneioFromFilename(fname) || extractRomaneioFromFilename(file.name);
+      if (inferred) setRomaneioNumber(inferred);
       setSuccessMessage('Comprovante/Anexo da venda carregado com sucesso!');
       setTimeout(() => setSuccessMessage(''), 3500);
     } catch (err) {
       console.error(err);
       setEvidenceFile(file.name);
+      const inferred = extractRomaneioFromFilename(file.name);
+      if (inferred) setRomaneioNumber(inferred);
     }
   };
 
@@ -759,6 +769,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         nfFile,
         nfeKey,
         evidenceFile,
+        romaneioNumber: formatRomaneioNumber(romaneioNumber) || '',
         paymentTerms: Number(paymentTermDays) === 0 ? 'À Vista' : `${paymentTermDays} dias`,
         paymentTermDays: Number(paymentTermDays) || 0,
         dueDate,
@@ -908,8 +919,6 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
             totalWeightKg={totalWeightKg}
             totalVolumes={totalVolumes}
             valorTotalVP={valorTotalVP}
-            funrural={funrural}
-            liquidoAReceber={liquidoAReceber}
             effectiveTotalNF={effectiveTotalNF}
           />
 
@@ -1041,12 +1050,12 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                     <option value={15}>15 dias</option>
                     <option value={20}>20 dias</option>
                     <option value={25}>25 dias</option>
-                    <option value={30}>30 dias (Padrão Agro)</option>
+                    <option value={30}>30 dias</option>
                     <option value={35}>35 dias</option>
                     <option value={40}>40 dias</option>
                     <option value={45}>45 dias</option>
                     <option value={50}>50 dias</option>
-                    <option value={60}>60 dias</option>
+                    <option value={60}>60 dias (Padrão Agro)</option>
                     <option value="custom">Outro Prazo (Personalizado)...</option>
                   </select>
                 )}
@@ -1068,6 +1077,21 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                     {Number(paymentTermDays) === 0 ? 'À Vista' : `+${paymentTermDays} dias`}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">{DATA_LABELS.romaneioNumber}</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Ex: 09733"
+                  value={romaneioNumber}
+                  onChange={(e) => setRomaneioNumber(formatRomaneioNumber(e.target.value) || e.target.value.replace(/\D/g, ''))}
+                  className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none font-mono font-bold focus:ring-2 focus:ring-[#091b2e]"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Preenchido automaticamente pelo nome do anexo (ex.: 09733-01082026.jpeg).</p>
               </div>
             </div>
 
@@ -1115,29 +1139,15 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Cidade Destino</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: São Paulo"
-                    value={destCity}
-                    onChange={(e) => setDestCity(e.target.value)}
-                    className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">UF</label>
-                  <input
-                    type="text"
-                    maxLength={2}
-                    placeholder="SP"
-                    value={destUF}
-                    onChange={(e) => setDestUF(e.target.value)}
-                    className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 uppercase outline-none"
-                  />
-                </div>
-              </div>
+              <CityUfSelect
+                cityLabel="Cidade Destino"
+                uf={destUF}
+                city={destCity}
+                onChange={({ uf, city }) => {
+                  setDestUF(uf);
+                  setDestCity(city);
+                }}
+              />
             </div>
 
             <div>
@@ -1168,8 +1178,6 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
             totalWeightKg={totalWeightKg}
             totalVolumes={totalVolumes}
             effectiveTotalNF={effectiveTotalNF}
-            funrural={funrural}
-            liquidoAReceber={liquidoAReceber}
             valorTotalVP={valorTotalVP}
             feeValue={feeValue}
             totalCommission={totalCommission}

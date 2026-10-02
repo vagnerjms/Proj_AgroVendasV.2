@@ -1,6 +1,8 @@
 import React from 'react';
 import { Building2, BadgePercent } from 'lucide-react';
-import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatters';
+import { formatQuantity } from '../../utils/dataHelpers';
+import { DATA_LABELS } from '../../constants/dataLabels';
 
 export default function CommissionsTable({ 
   stores = [], 
@@ -64,7 +66,7 @@ export default function CommissionsTable({
                 <th className="py-2.5 px-3">Loja / Comprador</th>
                 <th className="py-2.5 px-2 text-center">NFs</th>
                 <th className="py-2.5 px-2 text-center">VPs</th>
-                <th className="py-2.5 px-3 text-right">CXS (29kg)</th>
+                <th className="py-2.5 px-3 text-right">{DATA_LABELS.quantity}</th>
                 <th className="py-2.5 px-3 text-right">Valor Total NF</th>
                 <th className="py-2.5 px-3 text-right">FUNRURAL</th>
                 <th className="py-2.5 px-3 text-right bg-[#173e27]">Total Comercial (VP)</th>
@@ -84,7 +86,7 @@ export default function CommissionsTable({
                   </td>
                   <td className="py-3 px-2 text-center font-medium text-gray-700">{row.nfs}</td>
                   <td className="py-3 px-2 text-center font-bold text-gray-900">{row.pedidosVenda}</td>
-                  <td className="py-3 px-3 text-right font-semibold text-gray-800">{formatNumber(row.cxsVendidas, 2)}</td>
+                  <td className="py-3 px-3 text-right font-semibold text-gray-800">{formatQuantity(row.cxsVendidas)}</td>
                   <td className="py-3 px-3 text-right font-bold text-gray-900">{formatCurrency(row.valorTotalNF)}</td>
                   <td className="py-3 px-3 text-right text-red-600 font-medium">-{formatCurrency(row.funrural)}</td>
                   <td className="py-3 px-3 text-right font-black text-blue-950 bg-blue-50/40">
@@ -113,7 +115,7 @@ export default function CommissionsTable({
                 </td>
                 <td className="py-3 px-2 text-center font-black">{currentTotal.nfs}</td>
                 <td className="py-3 px-2 text-center font-black">{currentTotal.pedidosVenda}</td>
-                <td className="py-3 px-3 text-right font-black">{formatNumber(currentTotal.cxsVendidas, 2)}</td>
+                <td className="py-3 px-3 text-right font-black">{formatQuantity(currentTotal.cxsVendidas)}</td>
                 <td className="py-3 px-3 text-right font-black">{formatCurrency(currentTotal.valorTotalNF)}</td>
                 <td className="py-3 px-3 text-right font-black text-red-900">-{formatCurrency(currentTotal.funrural)}</td>
                 <td className="py-3 px-3 text-right font-black text-blue-950 bg-[#83c457]">

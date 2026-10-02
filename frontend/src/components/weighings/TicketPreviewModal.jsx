@@ -1,8 +1,11 @@
 import React from 'react';
 import { Camera, ExternalLink, X, Paperclip } from 'lucide-react';
+import { authorizedUploadUrl } from '../../utils/dataHelpers';
 
 export default function TicketPreviewModal({ previewImage = null, onClose }) {
   if (!previewImage) return null;
+
+  const url = authorizedUploadUrl(previewImage);
 
   return (
     <div 
@@ -20,7 +23,7 @@ export default function TicketPreviewModal({ previewImage = null, onClose }) {
           </div>
           <div className="flex items-center gap-1.5">
             <a
-              href={`/uploads/${previewImage}`}
+              href={url}
               target="_blank"
               rel="noreferrer"
               className="text-xs text-emerald-700 hover:text-emerald-900 font-semibold flex items-center gap-1 px-2.5 py-1 rounded-lg hover:bg-emerald-50 transition-colors"
@@ -41,7 +44,7 @@ export default function TicketPreviewModal({ previewImage = null, onClose }) {
         <div className="flex items-center justify-center bg-gray-900/5 rounded-xl p-2 min-h-[260px] max-h-[70vh] overflow-auto">
           {previewImage.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
             <img 
-              src={`/uploads/${previewImage}`} 
+              src={url} 
               alt="Romaneio do Caminhão" 
               className="max-h-[65vh] w-auto object-contain rounded-lg shadow-sm"
             />
@@ -50,7 +53,7 @@ export default function TicketPreviewModal({ previewImage = null, onClose }) {
               <Paperclip className="w-12 h-12 text-gray-400 mx-auto" />
               <div className="text-xs font-semibold text-gray-700">{previewImage}</div>
               <a
-                href={`/uploads/${previewImage}`}
+                href={url}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 bg-[#091b2e] text-white text-xs font-bold px-4 py-2 rounded-lg cursor-pointer"

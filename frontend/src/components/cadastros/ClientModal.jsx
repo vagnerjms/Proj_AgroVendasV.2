@@ -1,5 +1,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import CityUfSelect from '../forms/CityUfSelect';
 
 export default function ClientModal({
   isOpen,
@@ -97,29 +98,12 @@ export default function ClientModal({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-2">
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Cidade</label>
-            <input
-              type="text"
-              placeholder="Ex: São Gotardo"
-              value={clientForm.city}
-              onChange={e => setClientForm({ ...clientForm, city: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37]"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">UF</label>
-            <input
-              type="text"
-              maxLength={2}
-              placeholder="MG"
-              value={clientForm.uf}
-              onChange={e => setClientForm({ ...clientForm, uf: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#1d5a37] uppercase"
-            />
-          </div>
-        </div>
+        <CityUfSelect
+          cityLabel="Cidade"
+          uf={clientForm.uf || ''}
+          city={clientForm.city || ''}
+          onChange={({ uf, city }) => setClientForm({ ...clientForm, uf, city })}
+        />
 
         <div className="flex justify-end gap-2 pt-3 border-t border-gray-100">
           <button

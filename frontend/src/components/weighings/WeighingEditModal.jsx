@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Check, CheckCircle2, Camera, Paperclip, Eye } from 'lucide-react';
 import { formatNumber } from '../../utils/formatters';
+import { authorizedUploadUrl } from '../../utils/dataHelpers';
 
 export default function WeighingEditModal({
   isOpen = false,
@@ -129,7 +130,7 @@ export default function WeighingEditModal({
           <div className="text-[11px] text-slate-600 bg-white p-2 rounded border border-slate-200 flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             <span>
-              Ao salvar, a venda vinculada (<b>{editingSlip.saleId || editingSlip.id.replace('ROM-', '')}</b>) será ajustada para <b>{formatNumber(editForm.weightChoice === 'origin' ? editForm.originWeightKg : editForm.destWeightKg, 0)} kg</b>.
+              Ao salvar, a venda vinculada (<b>{editingSlip.saleId || '—'}</b>) será ajustada para <b>{formatNumber(editForm.weightChoice === 'origin' ? editForm.originWeightKg : editForm.destWeightKg, 0)} kg</b>.
             </span>
           </div>
         </div>
@@ -158,10 +159,10 @@ export default function WeighingEditModal({
               <div className="flex items-center gap-2.5 overflow-hidden">
                 {editForm.ticketImage.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
                   <img 
-                    src={`/uploads/${editForm.ticketImage}`} 
+                    src={authorizedUploadUrl(editForm.ticketImage)} 
                     alt="Romaneio" 
                     className="w-11 h-11 object-cover rounded-lg border border-emerald-300 shadow-xs cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => window.open(`/uploads/${editForm.ticketImage}`, '_blank')}
+                    onClick={() => window.open(authorizedUploadUrl(editForm.ticketImage), '_blank')}
                     title="Clique para ampliar"
                   />
                 ) : (
@@ -175,7 +176,7 @@ export default function WeighingEditModal({
                   </div>
                   <button
                     type="button"
-                    onClick={() => window.open(`/uploads/${editForm.ticketImage}`, '_blank')}
+                    onClick={() => window.open(authorizedUploadUrl(editForm.ticketImage), '_blank')}
                     className="text-[11px] text-emerald-700 hover:underline flex items-center gap-1 mt-0.5 font-medium cursor-pointer"
                   >
                     <Eye className="w-3 h-3" />

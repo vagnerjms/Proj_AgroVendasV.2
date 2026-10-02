@@ -1,6 +1,8 @@
 import React from 'react';
-import { Tractor, ChevronDown, ChevronUp, Paperclip, ExternalLink } from 'lucide-react';
+import { Tractor, ChevronDown, ChevronUp, Paperclip } from 'lucide-react';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { authorizedUploadUrl, formatQuantity, resolveProductUnit, abbreviateUnit } from '../../utils/dataHelpers';
+import { DATA_LABELS } from '../../constants/dataLabels';
 
 export default function ProducerDetailList({ 
   producers = [], 
@@ -11,7 +13,7 @@ export default function ProducerDetailList({
     <div className="space-y-4 pt-2 print:space-y-6">
       <h2 className="text-sm font-extrabold text-gray-900 uppercase tracking-wider flex items-center gap-2 print:text-xs">
         <Tractor className="w-4 h-4 text-emerald-800" />
-        <span>Detalhamento Individual de Entregas por Produtor Rural (Base NF)</span>
+        <span>Detalhamento Individual de Entregas por Produtor ({DATA_LABELS.valorNegociadoVP})</span>
       </h2>
 
       {producers.length === 0 ? (
@@ -43,10 +45,7 @@ export default function ProducerDetailList({
 
                 <div className="flex flex-wrap items-center gap-4 text-xs">
                   <span className="text-gray-500">
-                    Total NF: <strong className="text-gray-900">{formatCurrency(prodGroup.valorTotalNF)}</strong>
-                  </span>
-                  <span className="text-gray-500">
-                    Líquido Produtor: <strong className="text-emerald-800">{formatCurrency(prodGroup.liquidoProdutor)}</strong>
+                    {DATA_LABELS.valorNegociadoVP}: <strong className="text-blue-950">{formatCurrency(prodGroup.valorTotalVP)}</strong>
                   </span>
                   <span className="text-gray-500">
                     Já Repassado: <strong className="text-emerald-800">{formatCurrency(prodGroup.repassesPagos)}</strong>
@@ -67,15 +66,14 @@ export default function ProducerDetailList({
                   <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-[10px]">
                     <tr>
                       <th className="py-2.5 px-3">Data</th>
-                      <th className="py-2.5 px-3">Nº da NF</th>
+                      <th className="py-2.5 px-3">{DATA_LABELS.vpNumber}</th>
+                      <th className="py-2.5 px-3">{DATA_LABELS.nfNumber}</th>
                       <th className="py-2.5 px-3">Produto / Cultura</th>
                       <th className="py-2.5 px-3">Loja Destino</th>
-                      <th className="py-2.5 px-3 text-right">Peso NF (kg)</th>
-                      <th className="py-2.5 px-3 text-right">Volumes (cx)</th>
-                      <th className="py-2.5 px-3 text-right">Preço/kg NF</th>
-                      <th className="py-2.5 px-3 text-right">Total da NF</th>
-                      <th className="py-2.5 px-3 text-right text-red-600">FUNRURAL (1,63% Info)</th>
-                      <th className="py-2.5 px-3 text-right bg-emerald-50 text-emerald-950 font-bold">Líquido Fiscal Est.</th>
+                      <th className="py-2.5 px-3 text-right">{DATA_LABELS.weightKg}</th>
+                      <th className="py-2.5 px-3 text-right">{DATA_LABELS.quantity}</th>
+                      <th className="py-2.5 px-3 text-right bg-blue-50 text-blue-950">{DATA_LABELS.valorNegociadoVP}</th>
+                      <th className="py-2.5 px-3 text-right">{DATA_LABELS.valorNF}</th>
                       <th className="py-2.5 px-3 text-right bg-emerald-50/70 text-emerald-900 font-bold">Já Repassado</th>
                       <th className="py-2.5 px-3 text-right bg-amber-50 text-amber-950 font-bold">Saldo a Repassar</th>
                       <th className="py-2.5 px-3 text-center">Status</th>
@@ -92,6 +90,9 @@ export default function ProducerDetailList({
                           <td className="py-2 px-3 text-gray-600 font-medium whitespace-nowrap">
                             {it.date}
                           </td>
+                          <td className="py-2 px-3 font-bold text-[#173e27] font-mono whitespace-nowrap">
+                            {it.vp || it.id}
+                          </td>
                           <td className="py-2 px-3 font-bold text-gray-900 whitespace-nowrap">
                             {it.nf}
                           </td>
@@ -105,19 +106,13 @@ export default function ProducerDetailList({
                             {formatNumber(it.pesoNF, 0)} kg
                           </td>
                           <td className="py-2 px-3 text-right font-semibold text-gray-800 whitespace-nowrap">
-                            {formatNumber(it.cxs, 2)}
+                            {formatQuantity(it.cxs, abbreviateUnit(resolveProductUnit(it)))}
                           </td>
-                          <td className="py-2 px-3 text-right text-gray-700 whitespace-nowrap">
-                            {it.precoKg > 0 ? `R$ ${it.precoKg.toFixed(2)}` : '-'}
+                          <td className="py-2 px-3 text-right font-black text-blue-950 bg-blue-50/40 whitespace-nowrap">
+                            {formatCurrency(it.valorVP)}
                           </td>
-                          <td className="py-2 px-3 text-right font-black text-gray-900 whitespace-nowrap">
-                            {formatCurrency(it.valorNF)}
-                          </td>
-                          <td className="py-2 px-3 text-right font-medium text-red-600 whitespace-nowrap">
-                            -{formatCurrency(it.funrural)}
-                          </td>
-                          <td className="py-2 px-3 text-right font-black text-emerald-950 bg-emerald-50/40 whitespace-nowrap">
-                            {formatCurrency(it.liquidoProdutor)}
+                          <td className="py-2 px-3 text-right font-bold text-gray-900 whitespace-nowrap">
+                            {Number(it.valorNF) > 0 ? formatCurrency(it.valorNF) : <span className="text-amber-700 text-[10px]">SEM NF</span>}
                           </td>
                           <td className="py-2 px-3 text-right font-black text-emerald-800 bg-emerald-50/40 whitespace-nowrap">
                             {it.repassado > 0 ? formatCurrency(it.repassado) : <span className="text-gray-400 font-normal">-</span>}
@@ -146,7 +141,7 @@ export default function ProducerDetailList({
                           <td className="py-2 px-3 text-center whitespace-nowrap print:hidden">
                             {it.producerProofFile ? (
                               <a
-                                href={`/uploads/${it.rawProducerProofFile || it.producerProofFile}`}
+                                href={authorizedUploadUrl(it.rawProducerProofFile || it.producerProofFile)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded transition-colors"
@@ -165,15 +160,13 @@ export default function ProducerDetailList({
                   </tbody>
                   <tfoot>
                     <tr className="bg-[#bfe2a5] font-black text-xs text-gray-950 border-t-2 border-emerald-800">
-                      <td colSpan="4" className="py-2.5 px-3 uppercase">
+                      <td colSpan="5" className="py-2.5 px-3 uppercase">
                         SUBTOTAL {prodGroup.producer}
                       </td>
                       <td className="py-2.5 px-3 text-right">{formatNumber(prodGroup.pesoNF, 2)} kg</td>
-                      <td className="py-2.5 px-3 text-right">{formatNumber(prodGroup.cxsVendidas, 2)}</td>
-                      <td className="py-2.5 px-3 text-center">-</td>
+                      <td className="py-2.5 px-3 text-right">{formatQuantity(prodGroup.cxsVendidas)}</td>
+                      <td className="py-2.5 px-3 text-right text-blue-950 bg-[#93c5fd]/formatCurrency(prodGroup.valorTotalVP)}</td>
                       <td className="py-2.5 px-3 text-right">{formatCurrency(prodGroup.valorTotalNF)}</td>
-                      <td className="py-2.5 px-3 text-right text-red-900">-{formatCurrency(prodGroup.funrural)}</td>
-                      <td className="py-2.5 px-3 text-right text-emerald-950 bg-[#aedb8e]">{formatCurrency(prodGroup.liquidoProdutor)}</td>
                       <td className="py-2.5 px-3 text-right text-emerald-950 bg-[#a7f3d0]">{formatCurrency(prodGroup.repassesPagos)}</td>
                       <td className="py-2.5 px-3 text-right text-amber-950 bg-[#fde68a]">{formatCurrency(prodGroup.saldoAPagar)}</td>
                       <td colSpan="2" className="py-2.5 px-3 text-center">-</td>

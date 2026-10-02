@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { formatCurrency, formatDate, getCleanFileName } from '../../utils/formatters';
 import { calculateLiquidation, parseMoneyInput } from '../../utils/calculations';
+import { authorizedUploadUrl } from '../../utils/dataHelpers';
 import { api } from '../../services/api';
 
 export default function SettleModal({ isOpen, sale, target = 'client', onClose, onSuccess, onSettled }) {
@@ -34,8 +35,8 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
   const funrural = Number(sale.funruralTotal) || (totalNF * 0.0163);
   const liquidoProdutor = Math.max(0, totalNF - funrural);
 
-  // O Valor da quitação total para o produtor é 100% da NF; para a loja é o valor comercial (VP)
-  const netTargetTotal = isProducer ? totalNF : Math.max(summary.valorVP || 0, totalNF);
+  // Quitação loja = VP comercial; produtor = valor NF (SEM NF = 0)
+  const netTargetTotal = isProducer ? totalNF : (summary.valorVP || 0);
   const alreadyPaid = isProducer ? (Number(sale.producerPaidAmount) || 0) : (Number(sale.paidAmount) || 0);
   const remainingBalance = Math.max(0, netTargetTotal - alreadyPaid);
   const historyList = isProducer ? (sale.producerPaymentHistory || []) : (sale.paymentHistory || []);
@@ -292,7 +293,7 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
                       </div>
                       {ph.paymentProofFile && (
                         <a
-                          href={`/uploads/${ph.paymentProofFile}`}
+                          href={authorizedUploadUrl(ph.paymentProofFile)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-700 hover:text-blue-900 font-bold flex items-center gap-1 text-[10px] bg-blue-50 px-2 py-0.5 rounded border border-blue-200"

@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Printer, 
   Building2, 
   FileSpreadsheet, 
-  RefreshCw, 
   CheckCircle2, 
   DollarSign, 
   BadgePercent, 
   Calendar, 
-  Filter, 
   X, 
   CloudUpload, 
   FileDown, 
@@ -19,30 +17,32 @@ import {
   Coins,
   TrendingUp,
   ShieldCheck,
-  Package
+  Package,
+  Filter
 } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 import { api } from '../services/api';
-import { buildExcelReportHtml, buildProducerExcelReportHtml } from '../utils/reportExcelBuilder';
+import { buildExcelReportHtml, buildBrokerExcelReportHtml } from '../utils/reportExcelBuilder';
 import { calculateLiquidation, cleanProductName, getValorTotalVP, roundMoney } from '../utils/calculations';
+import { DATA_LABELS } from '../constants/dataLabels';
 
 // Subcomponentes modulares
 import StoreSummaryTable from '../components/reports/StoreSummaryTable';
 import StoreDetailList from '../components/reports/StoreDetailList';
-import CommissionsTable from '../components/reports/CommissionsTable';
-import ProducerSummaryTable from '../components/reports/ProducerSummaryTable';
-import ProducerDetailList from '../components/reports/ProducerDetailList';
 import BrokerProfitTable from '../components/reports/BrokerProfitTable';
 import N8nWebhookModal from '../components/reports/N8nWebhookModal';
 import MultiStoreSelect from '../components/reports/MultiStoreSelect';
+import MultiProductSelect from '../components/reports/MultiProductSelect';
 
 export default function Reports({ setCurrentPage }) {
-  // Controle de Abas: 'produtor' (Prestação de contas NF) | 'corretor' (Lucros AgroVendas) | 'lojas' (Faturamento Lojas)
-  const [activeTab, setActiveTab] = useState('produtor');
+  // Abas: 'lojas' (Prestação unificada) | 'corretor' (Resultado / comissões)
+  const [activeTab, setActiveTab] = useState('lojas');
   
   // Filtros Avançados
-  const [selectedStores, setSelectedStores] = useState([]); // Array vazio = todas as lojas
-  const [selectedProduct, setSelectedProduct] = useState('ALL'); // 'ALL' = todos os produtos
+  const [selectedStores, setSelectedStores] = useState([]); // [] após init = nenhuma; inicia preenchido com todas
+  const storesInitRef = React.useRef(false);
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  const productsInitRef = React.useRef(false);
   const [selectedProducer, setSelectedProducer] = useState('ALL');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -70,8 +70,16 @@ export default function Reports({ setCurrentPage }) {
   const stores = reportData.stores || [];
   const rawTotalGeral = reportData.totalGeral || {};
 
-  // Compatibilidade legada para subcomponentes que esperam string única
-  const selectedLoja = selectedStores.length === 1 ? selectedStores[0] : (selectedStores.length > 1 ? selectedStores.join(', ') : 'ALL');
+  // Inicializa filtro multi-loja com todas as lojas (1x)
+  useEffect(() => {
+    if (!storesInitRef.current && stores.length > 0) {
+      setSelectedStores(stores.map(s => s.loja).filter(Boolean));
+      storesInitRef.current = true;
+    }
+  }, [stores]);
+
+  // Rótulo do TOTAL: só nome da loja se filtro = 1 loja; senão TOTAL GERAL
+  const selectedLoja = selectedStores.length === 1 ? selectedStores[0] : 'ALL';
 
   // Busca catálogo de produtos do backend
   useEffect(() => {
@@ -129,6 +137,23 @@ export default function Reports({ setCurrentPage }) {
     return list.length > 0 ? list : ['Cenoura', 'Batata', 'Cebola', 'Beterraba', 'Repolho'];
   }, [productsCatalog, reportData.stores, producersData.producers]);
 
+  useEffect(() => {
+    if (!productsInitRef.current && availableProducts.length > 0) {
+      setSelectedProducts(availableProducts);
+      productsInitRef.current = true;
+    }
+  }, [availableProducts]);
+
+  const isAllProductsSelected =
+    availableProducts.length > 0 &&
+    selectedProducts.length === availableProducts.length &&
+    availableProducts.every(p => selectedProducts.includes(p));
+
+  // Compat: string única quando exatamente 1 produto; 'ALL' quando todos; 'NONE' quando vazio
+  const selectedProduct = !productsInitRef.current || isAllProductsSelected
+    ? 'ALL'
+    : (selectedProducts.length === 0 ? 'NONE' : (selectedProducts.length === 1 ? selectedProducts[0] : selectedProducts));
+
   // Lista de produtores disponíveis para filtro
   const availableProducers = (reportData.producers && reportData.producers.length > 0)
     ? reportData.producers
@@ -136,7 +161,7 @@ export default function Reports({ setCurrentPage }) {
 
   // --- Funções Auxiliares de Filtragem e Cálculo ---
   const isStoreMatch = (storeName) => {
-    if (!selectedStores || selectedStores.length === 0) return true;
+    if (!selectedStores || selectedStores.length === 0) return false;
     return selectedStores.includes(storeName);
   };
 
@@ -146,36 +171,45 @@ export default function Reports({ setCurrentPage }) {
   };
 
   const isItemProductMatch = (it, targetProduct) => {
+    if (targetProduct === 'NONE') return false;
     if (!targetProduct || targetProduct === 'ALL') return true;
-    const cleanTarget = targetProduct.toLowerCase().trim();
+
+    const targets = Array.isArray(targetProduct) ? targetProduct : [targetProduct];
+
+    const matchesOne = (name) => {
+      const clean = cleanProductName(name || '').toLowerCase();
+      const raw = (name || '').toLowerCase();
+      return targets.some(t => {
+        const cleanTarget = String(t).toLowerCase().trim();
+        return raw.includes(cleanTarget) || clean === cleanTarget;
+      });
+    };
 
     if (it.items && Array.isArray(it.items) && it.items.length > 0) {
-      const matchSub = it.items.some(sub => {
-        const subName = (sub.product || '').toLowerCase();
-        const cleanSub = cleanProductName(sub.product || '').toLowerCase();
-        return subName.includes(cleanTarget) || cleanSub === cleanTarget;
-      });
-      if (matchSub) return true;
+      if (it.items.some(sub => matchesOne(sub.product))) return true;
     }
-
-    const mainProd = (it.product || '').toLowerCase();
-    const cleanMain = cleanProductName(it.product || '').toLowerCase();
-    return mainProd.includes(cleanTarget) || cleanMain === cleanTarget;
+    return matchesOne(it.product);
   };
 
-  // Extrai e recalcula métricas específicas quando o usuário filtra por um tipo de produto
+  // Extrai e recalcula métricas específicas quando o usuário filtra por produto(s)
   const getFilteredItemMetrics = (it, targetProduct) => {
+    if (targetProduct === 'NONE') return null;
     if (!targetProduct || targetProduct === 'ALL') {
       return it;
     }
-    const cleanTarget = targetProduct.toLowerCase().trim();
+    const targets = Array.isArray(targetProduct) ? targetProduct : [targetProduct];
+
+    const matchesOne = (name) => {
+      const clean = cleanProductName(name || '').toLowerCase();
+      const raw = (name || '').toLowerCase();
+      return targets.some(t => {
+        const cleanTarget = String(t).toLowerCase().trim();
+        return raw.includes(cleanTarget) || clean === cleanTarget;
+      });
+    };
 
     if (it.items && Array.isArray(it.items) && it.items.length > 0) {
-      const matchingSubs = it.items.filter(sub => {
-        const subName = (sub.product || '').toLowerCase();
-        const cleanSub = cleanProductName(sub.product || '').toLowerCase();
-        return subName.includes(cleanTarget) || cleanSub === cleanTarget;
-      });
+      const matchingSubs = it.items.filter(sub => matchesOne(sub.product));
 
       if (matchingSubs.length === 0) return null;
 
@@ -195,9 +229,9 @@ export default function Reports({ setCurrentPage }) {
       const itemValorNF = roundMoney(Number(it.valorNF) * ratio);
       const itemFunrural = roundMoney(Number(it.funrural) * ratio);
       const itemLiquidoProdutor = roundMoney(Number(it.liquidoProdutor) * ratio);
-      const itemComissao = roundMoney(Number(it.comissao) * ratio);
+      const itemComissão = roundMoney(Number(it.comissao) * ratio);
       const itemSpread = roundMoney(Math.max(0, subVP - itemValorNF));
-      const itemLucro = roundMoney(itemComissao + itemSpread);
+      const itemLucro = roundMoney(itemComissão + itemSpread);
       const itemValorLiquidado = roundMoney(Number(it.valorLiquidado ?? it.liquido ?? 0) * ratio);
       const itemValorALiquidar = roundMoney(Number(it.valorALiquidar ?? 0) * ratio);
       const itemRepassado = roundMoney(Number(it.repassado ?? it.valorLiquidado ?? 0) * ratio);
@@ -214,7 +248,7 @@ export default function Reports({ setCurrentPage }) {
         funrural: itemFunrural,
         valorVP: subVP > 0 ? subVP : roundMoney(Number(it.valorVP) * ratio),
         liquidoNF: roundMoney(itemValorNF - itemFunrural),
-        comissao: itemComissao,
+        comissao: itemComissão,
         liquidoProdutor: itemLiquidoProdutor,
         spreadComercial: itemSpread,
         lucroCorretor: itemLucro,
@@ -252,13 +286,21 @@ export default function Reports({ setCurrentPage }) {
       const valorTotalNF = matchingItens.reduce((acc, it) => acc + (Number(it.valorNF) || 0), 0);
       const funrural = matchingItens.reduce((acc, it) => acc + (Number(it.funrural) || 0), 0);
       const totalVendaAReceber = matchingItens.reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
-      const totalComissao = matchingItens.reduce((acc, it) => acc + (Number(it.comissao) || 0), 0);
+      const totalComissão = matchingItens.reduce((acc, it) => acc + (Number(it.comissao) || 0), 0);
       const totalLiquidoProdutor = matchingItens.reduce((acc, it) => acc + (Number(it.liquidoProdutor) || 0), 0);
       const totalSpreadComercial = matchingItens.reduce((acc, it) => acc + (Number(it.spreadComercial) || 0), 0);
       const totalLucroCorretor = matchingItens.reduce((acc, it) => acc + (Number(it.lucroCorretor) || 0), 0);
       
       const valorLiquidado = matchingItens.reduce((acc, it) => acc + (Number(it.valorLiquidado ?? calculateLiquidation(it).valorLiquidado) || 0), 0);
       const valorALiquidar = matchingItens.reduce((acc, it) => acc + (Number(it.valorALiquidar ?? calculateLiquidation(it).valorALiquidar) || 0), 0);
+      const liquidoPeloVP = matchingItens.reduce((acc, it) => acc + (Number(it.liquidoPeloVP ?? it.liquidoProdutor) || 0), 0);
+      const liquidoPelaNF = matchingItens.reduce((acc, it) => {
+        const v = it.liquidoPelaNF;
+        if (v == null || !(Number(it.valorNF) > 0)) return acc;
+        return acc + (Number(v) || 0);
+      }, 0);
+      const frete = matchingItens.reduce((acc, it) => acc + (Number(it.frete) || 0), 0);
+      const comissaoDesconto = matchingItens.reduce((acc, it) => acc + (Number(it.comissaoDesconto) || 0), 0);
 
       return {
         ...store,
@@ -270,10 +312,14 @@ export default function Reports({ setCurrentPage }) {
         cxsVendidas: Number(cxsVendidas.toFixed(2)),
         valorTotalNF,
         funrural,
+        frete,
+        comissaoDesconto,
         totalVendaAReceber,
-        liquidoNF: valorTotalNF - funrural,
-        totalComissao,
-        totalLiquidoProdutor,
+        liquidoNF: liquidoPelaNF,
+        liquidoPeloVP,
+        liquidoPelaNF,
+        totalComissão,
+        totalLiquidoProdutor: liquidoPeloVP,
         totalSpreadComercial,
         totalLucroCorretor,
         valorLiquidado,
@@ -297,12 +343,18 @@ export default function Reports({ setCurrentPage }) {
         return null;
       }
 
-      const nfs = matchingItens.filter(it => it.nf && it.nf !== 'Pendente').length;
+      const nfs = matchingItens.filter(it => it.nf && it.nf !== 'Pendente' && it.nf !== 'SEM NF').length;
       const pesoNF = matchingItens.reduce((acc, it) => acc + (Number(it.pesoNF) || 0), 0);
       const cxsVendidas = matchingItens.reduce((acc, it) => acc + (Number(it.cxs) || 0), 0);
       const valorTotalNF = matchingItens.reduce((acc, it) => acc + (Number(it.valorNF) || 0), 0);
+      const valorTotalVP = matchingItens.reduce((acc, it) => acc + (Number(it.valorVP) || 0), 0);
       const funrural = matchingItens.reduce((acc, it) => acc + (Number(it.funrural) || 0), 0);
-      const liquidoProdutor = matchingItens.reduce((acc, it) => acc + (Number(it.liquidoProdutor) || 0), 0);
+      const liquidoProdutor = matchingItens.reduce((acc, it) => acc + (Number(it.liquidoPeloVP ?? it.liquidoProdutor) || 0), 0);
+      const liquidoPelaNF = matchingItens.reduce((acc, it) => {
+        if (!(Number(it.valorNF) > 0)) return acc;
+        return acc + (Number(it.liquidoPelaNF ?? it.liquidoNF) || 0);
+      }, 0);
+      const frete = matchingItens.reduce((acc, it) => acc + (Number(it.frete) || 0), 0);
       const repassesPagos = matchingItens.reduce((acc, it) => acc + (Number(it.repassado) || 0), 0);
       const saldoAPagar = matchingItens.reduce((acc, it) => acc + (Number(it.saldo) || 0), 0);
 
@@ -313,18 +365,22 @@ export default function Reports({ setCurrentPage }) {
         pesoNF,
         cxsVendidas: Number(cxsVendidas.toFixed(2)),
         valorTotalNF,
+        valorTotalVP,
         funrural,
+        frete,
         liquidoProdutor,
+        liquidoPeloVP: liquidoProdutor,
+        liquidoPelaNF,
         repassesPagos,
         saldoAPagar,
-        status: saldoAPagar <= 0.01 && valorTotalNF > 0 ? 'Quitado' : (repassesPagos > 0 ? 'Parcial' : 'A Pagar'),
+        status: saldoAPagar <= 0.01 && liquidoProdutor > 0 ? 'Quitado' : (repassesPagos > 0 ? 'Parcial' : 'A Pagar'),
         itens: matchingItens
       };
     })
     .filter(Boolean);
 
   // Indica se qualquer filtro ativo está alterando o universo de dados
-  const isAnyFilterActive = selectedStores.length > 0 || selectedProducer !== 'ALL' || selectedProduct !== 'ALL';
+  const isAnyFilterActive = (selectedStores.length > 0 && selectedStores.length < stores.length) || selectedProducer !== 'ALL' || !isAllProductsSelected;
 
   // Totais consolidados de Produtores (Calculados sobre os dados filtrados em tempo real)
   const producersTotal = !isAnyFilterActive
@@ -336,8 +392,12 @@ export default function Reports({ setCurrentPage }) {
         pesoNF: acc.pesoNF + (p.pesoNF || 0),
         cxsVendidas: acc.cxsVendidas + (p.cxsVendidas || 0),
         valorTotalNF: acc.valorTotalNF + (p.valorTotalNF || 0),
+        valorTotalVP: acc.valorTotalVP + (p.valorTotalVP || 0),
         funrural: acc.funrural + (p.funrural || 0),
+        frete: acc.frete + (p.frete || 0),
         liquidoProdutor: acc.liquidoProdutor + (p.liquidoProdutor || 0),
+        liquidoPeloVP: acc.liquidoPeloVP + (p.liquidoPeloVP || p.liquidoProdutor || 0),
+        liquidoPelaNF: acc.liquidoPelaNF + (p.liquidoPelaNF || 0),
         repassesPagos: acc.repassesPagos + (p.repassesPagos || 0),
         saldoAPagar: acc.saldoAPagar + (p.saldoAPagar || 0)
       }), {
@@ -347,8 +407,12 @@ export default function Reports({ setCurrentPage }) {
         pesoNF: 0,
         cxsVendidas: 0,
         valorTotalNF: 0,
+        valorTotalVP: 0,
         funrural: 0,
+        frete: 0,
         liquidoProdutor: 0,
+        liquidoPeloVP: 0,
+        liquidoPelaNF: 0,
         repassesPagos: 0,
         saldoAPagar: 0
       });
@@ -365,9 +429,13 @@ export default function Reports({ setCurrentPage }) {
         cxsVendidas: acc.cxsVendidas + (row.cxsVendidas || 0),
         valorTotalNF: acc.valorTotalNF + (row.valorTotalNF || 0),
         funrural: acc.funrural + (row.funrural || 0),
+        frete: acc.frete + (row.frete || 0),
+        comissaoDesconto: acc.comissaoDesconto + (row.comissaoDesconto || 0),
         totalVendaAReceber: acc.totalVendaAReceber + (row.totalVendaAReceber || 0),
         liquidoNF: acc.liquidoNF + (row.liquidoNF || 0),
-        totalComissao: acc.totalComissao + (row.totalComissao || 0),
+        liquidoPeloVP: acc.liquidoPeloVP + (row.liquidoPeloVP || 0),
+        liquidoPelaNF: acc.liquidoPelaNF + (row.liquidoPelaNF || 0),
+        totalComissão: acc.totalComissão + (row.totalComissão || 0),
         totalLiquidoProdutor: acc.totalLiquidoProdutor + (row.totalLiquidoProdutor || 0),
         totalSpreadComercial: acc.totalSpreadComercial + (row.totalSpreadComercial || 0),
         totalLucroCorretor: acc.totalLucroCorretor + (row.totalLucroCorretor || 0),
@@ -382,9 +450,13 @@ export default function Reports({ setCurrentPage }) {
         cxsVendidas: 0,
         valorTotalNF: 0,
         funrural: 0,
+        frete: 0,
+        comissaoDesconto: 0,
         totalVendaAReceber: 0,
         liquidoNF: 0,
-        totalComissao: 0,
+        liquidoPeloVP: 0,
+        liquidoPelaNF: 0,
+        totalComissão: 0,
         totalLiquidoProdutor: 0,
         totalSpreadComercial: 0,
         totalLucroCorretor: 0,
@@ -435,9 +507,20 @@ export default function Reports({ setCurrentPage }) {
     }
   };
 
+  const datesFetchReadyRef = useRef(false);
   useEffect(() => {
     fetchLiveReport();
+    datesFetchReadyRef.current = true;
   }, []);
+
+  // Datas / produtor: recarrega automaticamente (sem botão Atualizar)
+  useEffect(() => {
+    if (!datesFetchReadyRef.current) return;
+    const t = setTimeout(() => {
+      fetchLiveReport(startDate, endDate, selectedProducer);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [startDate, endDate, selectedProducer]);
 
   const handleApplyPreset = (preset) => {
     setPeriodPreset(preset);
@@ -485,33 +568,59 @@ export default function Reports({ setCurrentPage }) {
     fetchLiveReport('', '');
   };
 
-  const saveWebhookConfig = (e) => {
-    e.preventDefault();
-    localStorage.setItem('agrovenda_n8n_drive_webhook', webhookUrl);
-    setShowWebhookModal(false);
-    setDriveNotification('URL do Webhook do n8n salva com sucesso!');
-    setTimeout(() => setDriveNotification(''), 4000);
+  const validateN8nWebhookUrl = (rawUrl) => {
+    const trimmed = String(rawUrl || '').trim();
+    if (!trimmed) return { ok: false, message: 'Informe a URL do webhook do n8n.' };
+    let parsed;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      return { ok: false, message: 'URL inválida. Use um endereço completo (http/https).' };
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return { ok: false, message: 'A URL deve começar com http:// ou https://.' };
+    }
+    if (!/webhook/i.test(parsed.pathname || '')) {
+      return { ok: false, message: 'A URL deve conter o path do webhook (ex.: /webhook/salvar-relatorio).' };
+    }
+    return { ok: true, url: trimmed };
   };
 
-  // Limpeza rápida de todos os filtros ativos
+  const saveWebhookConfig = (e) => {
+    e.preventDefault();
+    setDriveNotification('');
+    setDriveError('');
+    const check = validateN8nWebhookUrl(webhookUrl);
+    if (!check.ok) {
+      setDriveError(check.message);
+      return;
+    }
+    localStorage.setItem('agrovenda_n8n_drive_webhook', check.url);
+    setWebhookUrl(check.url);
+    setShowWebhookModal(false);
+    setDriveNotification('Webhook n8n salvo e validado com sucesso!');
+    setTimeout(() => setDriveNotification(''), 5000);
+  };
+
+  // Limpeza rápida de todos os filtros ativos (restaura universo completo)
   const handleClearAllFilters = () => {
-    setSelectedStores([]);
-    setSelectedProduct('ALL');
+    setSelectedStores(stores.map(s => s.loja).filter(Boolean).sort());
+    setSelectedProducts(availableProducts.length ? [...availableProducts] : []);
     setSelectedProducer('ALL');
   };
 
-  // Constrói o HTML correspondente à aba ativa
+  // Constrói o HTML correspondente à   aba ativa
   const buildCurrentExcelContent = () => {
     const filterMeta = { 
       startDate, 
       endDate, 
       selectedStores,
-      selectedLoja: selectedStores.length === 1 ? selectedStores[0] : (selectedStores.length > 1 ? selectedStores.join(', ') : 'ALL'), 
+      selectedLoja, 
       selectedProducer,
       selectedProduct
     };
-    if (activeTab === 'produtor') {
-      return buildProducerExcelReportHtml(filteredProducers, producersTotal, filterMeta);
+    if (activeTab === 'corretor') {
+      return buildBrokerExcelReportHtml(filteredLojas, currentTotal, filterMeta);
     }
     return buildExcelReportHtml(filteredLojas, currentTotal, filterMeta);
   };
@@ -524,16 +633,23 @@ export default function Reports({ setCurrentPage }) {
       return;
     }
 
+    const check = validateN8nWebhookUrl(activeUrl);
+    if (!check.ok) {
+      setDriveError(check.message);
+      setShowWebhookModal(true);
+      return;
+    }
+
     setSavingDrive(true);
     setDriveNotification('');
     setDriveError('');
     try {
       const excelHtml = buildCurrentExcelContent();
       const res = await api.post('/api/reports/trigger-n8n', {
-        webhookUrl: activeUrl,
+        webhookUrl: check.url,
         startDate: startDate || null,
         endDate: endDate || null,
-        selectedLoja: selectedStores.length === 1 ? selectedStores[0] : (selectedStores.length > 1 ? selectedStores.join(', ') : 'ALL'),
+        selectedLoja,
         selectedStores: selectedStores,
         selectedProduct: selectedProduct,
         selectedProducer: selectedProducer,
@@ -544,7 +660,7 @@ export default function Reports({ setCurrentPage }) {
       });
 
       if (res.success) {
-        setDriveNotification('✅ Relatório enviado e salvo com sucesso no Google Drive!');
+        setDriveNotification('Relatório salvo no Google Drive com sucesso!');
       } else {
         setDriveError(res.message || 'Erro ao processar no n8n.');
       }
@@ -564,20 +680,22 @@ export default function Reports({ setCurrentPage }) {
   const handleDownloadExcelDirect = () => {
     const excelContent = buildCurrentExcelContent();
     const dateStr = new Date().toISOString().split('T')[0];
-    let fileName = `Relatorio_AgroVenda_${dateStr}.xls`;
+    let fileName = `Relatório_AgroVenda_${dateStr}.xls`;
 
     const safeLojaStr = selectedStores.length === 1 
       ? selectedStores[0].replace(/[^a-zA-Z0-9]/g, '_') 
       : (selectedStores.length > 1 ? `${selectedStores.length}_Lojas_Consolidadas` : 'Todas_Lojas');
     const safeProdStr = selectedProducer === 'ALL' ? 'Todos_Produtores' : selectedProducer.replace(/[^a-zA-Z0-9]/g, '_');
-    const safeProdTypeStr = selectedProduct === 'ALL' ? '' : `_${selectedProduct.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const safeProdTypeStr = isAllProductsSelected || selectedProducts.length === 0
+      ? ''
+      : `_${selectedProducts.map(p => String(p).replace(/[^a-zA-Z0-9]/g, '_')).join('-')}`;
 
     if (activeTab === 'produtor') {
       fileName = `Extrato_Produtor_${safeProdStr}${safeProdTypeStr}_${dateStr}.xls`;
     } else if (activeTab === 'corretor') {
       fileName = `Fechamento_Lucros_Corretor_${safeLojaStr}${safeProdTypeStr}_${dateStr}.xls`;
     } else {
-      fileName = `Relatorio_Lojas_${safeLojaStr}${safeProdTypeStr}_${dateStr}.xls`;
+      fileName = `Relatório_Lojas_${safeLojaStr}${safeProdTypeStr}_${dateStr}.xls`;
     }
 
     const blob = new Blob([excelContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
@@ -606,45 +724,45 @@ export default function Reports({ setCurrentPage }) {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
         <div>
           <div className="text-xs font-bold text-[#091b2e] tracking-wider uppercase flex items-center gap-1.5">
-            {activeTab === 'produtor' ? (
+            {activeTab === 'lojas' ? (
               <>
-                <Tractor className="w-4 h-4 text-emerald-700" />
-                <span>AGROVENDA — PRESTAÇÃO DE CONTAS DO PRODUTOR (BASE NOTA FISCAL)</span>
-              </>
-            ) : activeTab === 'corretor' ? (
-              <>
-                <Coins className="w-4 h-4 text-[#df7b1b]" />
-                <span>AGROVENDA — RESULTADO COMERCIAL & LUCROS DO CORRETOR</span>
+                <Building2 className="w-4 h-4 text-blue-700" />
+                <span>AGROVENDA — PRESTAÇÃO (VALORES POR CARGA)</span>
               </>
             ) : (
               <>
-                <Building2 className="w-4 h-4 text-blue-700" />
-                <span>AGROVENDA — FATURAMENTO & RECEBIMENTOS POR LOJA</span>
+                <Coins className="w-4 h-4 text-[#F97316]" />
+                <span>AGROVENDA — RESULTADO COMERCIAL &amp; LUCROS</span>
               </>
             )}
           </div>
           <h1 className="text-2xl font-black text-gray-900 mt-1">
-            {activeTab === 'produtor' && 'Extrato & Prestação de Contas do Produtor Rural'}
-            {activeTab === 'corretor' && 'Fechamento de Lucros do Corretor (AgroVendas)'}
-            {activeTab === 'lojas' && 'Relatório Geral — Faturamento e Vendas por Loja'}
+            {activeTab === 'lojas' && 'Prestação — Valores por carga'}
+            {activeTab === 'corretor' && 'Resultado AgroVenda (Spread + Comissão)'}
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">
-            {activeTab === 'produtor' && 'Valores apurados estritamente sobre a Nota Fiscal do Produtor com dedução oficial do FUNRURAL (1,63%). Zero exposição de cotação da loja.'}
-            {activeTab === 'corretor' && 'Confronto entre o que o corretor recebe da loja (VP Comercial) e o que paga ao produtor (Valor NF), apurando o lucro e spread líquido.'}
-            {activeTab === 'lojas' && 'Acompanhamento consolidado e analítico de entregas, cotações e liquidação agrupados por rede compradora.'}
+            {activeTab === 'lojas' && 'Uma visão unificada: filtre por loja, produtor e produto. Valor negociado e saldo a receber.'}
+            {activeTab === 'corretor' && 'Comissão e lucros da AgroVenda para gestão do resultado.'}
           </p>
 
           {isAnyFilterActive && (
             <div className="hidden print:block text-[11px] font-semibold text-emerald-900 mt-2 border-t border-gray-200 pt-1">
               <strong>Filtros Aplicados:</strong>{' '}
-              {selectedStores.length > 0 ? `Lojas: ${selectedStores.join(', ')}` : 'Todas as Lojas'} |{' '}
-              {selectedProduct !== 'ALL' ? `Produto: ${selectedProduct}` : 'Todos os Produtos'} |{' '}
+              {selectedStores.length === 0
+                ? 'Nenhuma loja'
+                : (selectedStores.length === stores.length
+                  ? 'Todas as Lojas'
+                  : `Lojas: ${selectedStores.join(', ')}`)} |{' '}
+              {selectedProduct !== 'ALL'
+                ? `Produto: ${Array.isArray(selectedProduct) ? selectedProduct.join(', ') : selectedProduct}`
+                : 'Todos os Produtos'} |{' '}
               {selectedProducer !== 'ALL' ? `Produtor: ${selectedProducer}` : 'Todos os Produtores'}
             </div>
           )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 print:hidden">
+        <div className="flex flex-col items-stretch gap-2 print:hidden min-w-0 md:max-w-[55%]">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Seletor Multi-Lojas com Busca e Soma Consolidada */}
           <MultiStoreSelect
             stores={stores}
@@ -652,25 +770,11 @@ export default function Reports({ setCurrentPage }) {
             onChange={setSelectedStores}
           />
 
-          {/* Seletor de Tipo de Produto */}
-          <div className="relative inline-flex items-center">
-            <select
-              value={selectedProduct}
-              onChange={(e) => setSelectedProduct(e.target.value)}
-              className={`bg-white border text-xs rounded-lg pl-8 pr-3 py-2 outline-none font-semibold transition-all shadow-sm cursor-pointer ${
-                selectedProduct !== 'ALL'
-                  ? 'border-emerald-600 ring-2 ring-emerald-600/20 text-emerald-950 bg-emerald-50/30'
-                  : 'border-gray-300 text-gray-800 hover:bg-gray-50'
-              }`}
-              title="Filtrar por tipo de produto"
-            >
-              <option value="ALL">Todos os Produtos ({availableProducts.length})</option>
-              {availableProducts.map(p => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-            <Package className={`w-3.5 h-3.5 absolute left-2.5 pointer-events-none ${selectedProduct !== 'ALL' ? 'text-emerald-700' : 'text-gray-400'}`} />
-          </div>
+          <MultiProductSelect
+            products={availableProducts}
+            selectedProducts={selectedProducts}
+            onChange={setSelectedProducts}
+          />
 
           {/* Seletor de Produtor */}
           <div className="relative inline-flex items-center">
@@ -693,22 +797,12 @@ export default function Reports({ setCurrentPage }) {
           </div>
 
           <button
-            onClick={() => fetchLiveReport(startDate, endDate)}
-            className="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Atualizar dados do MongoDB"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${loading ? 'animate-spin' : ''}`} />
-            Atualizar
-          </button>
-
-          {/* Botão Baixar Excel */}
-          <button
             onClick={handleDownloadExcelDirect}
             className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
             title="Baixar planilha formatada para Excel (.xls)"
           >
             <FileDown className="w-3.5 h-3.5" />
-            <span>{activeTab === 'produtor' ? 'Baixar Excel Produtor' : 'Baixar Excel'}</span>
+            <span>{activeTab === 'corretor' ? 'Baixar Excel Resultado' : 'Baixar Excel'}</span>
           </button>
 
           {/* Botão Salvar no Google Drive */}
@@ -740,32 +834,36 @@ export default function Reports({ setCurrentPage }) {
             <span>Imprimir / PDF</span>
           </button>
         </div>
+
+        {/* Feedback imediato sob os botões Drive / engrenagem */}
+        {(driveNotification || driveError) && (
+          <div className="w-full print:hidden space-y-2">
+            {driveNotification && (
+              <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 px-4 py-3 rounded-xl flex items-center justify-between text-xs font-bold shadow-xs animate-fadeIn">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{driveNotification}</span>
+                </div>
+                <button type="button" onClick={() => setDriveNotification('')} className="text-emerald-700 hover:text-emerald-900 cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            {driveError && (
+              <div className="bg-red-50 border border-red-300 text-red-900 px-4 py-3 rounded-xl flex items-center justify-between text-xs font-bold shadow-xs animate-fadeIn">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>{driveError}</span>
+                </div>
+                <button type="button" onClick={() => setDriveError('')} className="text-red-700 hover:text-red-900 cursor-pointer">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        </div>
       </div>
-
-      {/* Notificações do Google Drive / n8n */}
-      {driveNotification && (
-        <div className="bg-emerald-50 border border-emerald-300 text-emerald-900 px-4 py-3 rounded-xl flex items-center justify-between text-xs font-bold shadow-xs animate-fadeIn print:hidden">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{driveNotification}</span>
-          </div>
-          <button onClick={() => setDriveNotification('')} className="text-emerald-700 hover:text-emerald-900 cursor-pointer">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {driveError && (
-        <div className="bg-red-50 border border-red-300 text-red-900 px-4 py-3 rounded-xl flex items-center justify-between text-xs font-bold shadow-xs animate-fadeIn print:hidden">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-            <span>{driveError}</span>
-          </div>
-          <button onClick={() => setDriveError('')} className="text-red-700 hover:text-red-900 cursor-pointer">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       {/* Modal de Configuração do Webhook do n8n */}
       <N8nWebhookModal
@@ -782,7 +880,7 @@ export default function Reports({ setCurrentPage }) {
         {/* Form de Seleção de Datas */}
         <form onSubmit={handleFilterDateSubmit} className="flex flex-wrap items-center gap-2.5 sm:gap-3">
           <div className="flex items-center gap-2 text-xs font-bold text-gray-800">
-            <Calendar className="w-4 h-4 text-[#df7b1b]" />
+            <Calendar className="w-4 h-4 text-[#F97316]" />
             <span>Período do Relatório:</span>
           </div>
 
@@ -882,63 +980,8 @@ export default function Reports({ setCurrentPage }) {
 
       </div>
 
-      {/* Banner de Filtros Avançados Ativos (Consolidação Multi-Lojas e Produto) */}
       {isAnyFilterActive && (
-        <div className="bg-emerald-50/90 border border-emerald-300/80 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs print:hidden animate-fadeIn">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-black text-emerald-950 flex items-center gap-1.5 uppercase tracking-wide text-[11px]">
-              <Filter className="w-3.5 h-3.5 text-emerald-700" />
-              <span>Filtros Ativos:</span>
-            </span>
-
-            {selectedStores.length > 0 && (
-              <span className="inline-flex items-center gap-1.5 bg-white border border-emerald-300 text-emerald-900 font-bold px-2.5 py-1 rounded-lg text-xs shadow-2xs">
-                <Building2 className="w-3.5 h-3.5 text-emerald-700" />
-                <span>
-                  {selectedStores.length === 1 ? selectedStores[0] : `${selectedStores.length} Lojas (${selectedStores.join(', ')})`}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedStores([])}
-                  className="hover:text-emerald-950 p-0.5 rounded cursor-pointer ml-1 text-gray-400 hover:text-gray-700"
-                  title="Remover filtro de lojas"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-
-            {selectedProduct !== 'ALL' && (
-              <span className="inline-flex items-center gap-1.5 bg-white border border-emerald-300 text-emerald-900 font-bold px-2.5 py-1 rounded-lg text-xs shadow-2xs">
-                <Package className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Produto: {selectedProduct}</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedProduct('ALL')}
-                  className="hover:text-emerald-950 p-0.5 rounded cursor-pointer ml-1 text-gray-400 hover:text-gray-700"
-                  title="Remover filtro de produto"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-
-            {selectedProducer !== 'ALL' && (
-              <span className="inline-flex items-center gap-1.5 bg-white border border-emerald-300 text-emerald-900 font-bold px-2.5 py-1 rounded-lg text-xs shadow-2xs">
-                <Tractor className="w-3.5 h-3.5 text-emerald-700" />
-                <span>Produtor: {selectedProducer}</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedProducer('ALL')}
-                  className="hover:text-emerald-950 p-0.5 rounded cursor-pointer ml-1 text-gray-400 hover:text-gray-700"
-                  title="Remover filtro de produtor"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-          </div>
-
+        <div className="bg-emerald-50/90 border border-emerald-300/80 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-end gap-3 text-xs shadow-xs print:hidden">
           <button
             type="button"
             onClick={handleClearAllFilters}
@@ -950,36 +993,8 @@ export default function Reports({ setCurrentPage }) {
         </div>
       )}
 
-      {/* Seletor de Abas Principais */}
+      {/* Abas: Prestação unificada | Resultado AgroVenda */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 border-b border-gray-200 pb-1 print:hidden">
-        
-        {/* ABA 1: PRODUTOR */}
-        <button
-          onClick={() => setActiveTab('produtor')}
-          className={`flex items-center gap-2.5 px-5 py-3 rounded-t-xl font-bold text-xs transition-all border-b-2 cursor-pointer ${
-            activeTab === 'produtor'
-              ? 'border-emerald-700 text-emerald-950 bg-white shadow-sm font-black'
-              : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-100/60'
-          }`}
-        >
-          <Tractor className="w-4 h-4 text-emerald-700 shrink-0" />
-          <span>Extrato do Produtor (Prestação de Contas Base NF)</span>
-        </button>
-
-        {/* ABA 2: CORRETOR */}
-        <button
-          onClick={() => setActiveTab('corretor')}
-          className={`flex items-center gap-2.5 px-5 py-3 rounded-t-xl font-bold text-xs transition-all border-b-2 cursor-pointer ${
-            activeTab === 'corretor'
-              ? 'border-[#091b2e] text-[#091b2e] bg-white shadow-sm font-black'
-              : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-100/60'
-          }`}
-        >
-          <Coins className="w-4 h-4 text-[#df7b1b] shrink-0" />
-          <span>Lucros do Corretor (Fechamento AgroVendas)</span>
-        </button>
-
-        {/* ABA 3: LOJAS */}
         <button
           onClick={() => setActiveTab('lojas')}
           className={`flex items-center gap-2.5 px-5 py-3 rounded-t-xl font-bold text-xs transition-all border-b-2 cursor-pointer ${
@@ -989,56 +1004,66 @@ export default function Reports({ setCurrentPage }) {
           }`}
         >
           <Building2 className="w-4 h-4 text-blue-700 shrink-0" />
-          <span>Visão por Lojas (Vendas e Faturamento)</span>
+          <span>Prestação (Valores por carga)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('corretor')}
+          className={`flex items-center gap-2.5 px-5 py-3 rounded-t-xl font-bold text-xs transition-all border-b-2 cursor-pointer ${
+            activeTab === 'corretor'
+              ? 'border-[#091b2e] text-[#091b2e] bg-white shadow-sm font-black'
+              : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-100/60'
+          }`}
+        >
+          <Coins className="w-4 h-4 text-[#F97316] shrink-0" />
+          <span>Resultado AgroVenda</span>
         </button>
       </div>
 
-      {/* ======================================================== */}
-      {/* CONTEÚDO DA ABA 1: EXTRATO DO PRODUTOR (BASE NF)          */}
-      {/* ======================================================== */}
-      {activeTab === 'produtor' && (
-        <div className="space-y-6">
-          <ProducerSummaryTable 
-            producers={filteredProducers} 
-            totalGeral={producersTotal} 
-            selectedProducer={selectedProducer} 
-          />
-          <ProducerDetailList 
-            producers={filteredProducers} 
-            expandedProducers={expandedProducers} 
-            toggleExpandProducer={toggleExpandProducer} 
-          />
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* CONTEÚDO DA ABA 2: LUCROS DO CORRETOR (AGROVENDAS)       */}
-      {/* ======================================================== */}
-      {activeTab === 'corretor' && (
-        <div className="space-y-6">
-          <BrokerProfitTable 
-            stores={filteredLojas} 
-            currentTotal={currentTotal} 
-            selectedLoja={selectedLoja} 
-          />
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* CONTEÚDO DA ABA 3: VISÃO POR LOJAS                       */}
-      {/* ======================================================== */}
       {activeTab === 'lojas' && (
         <div className="space-y-6">
-          <StoreSummaryTable 
-            stores={filteredLojas} 
-            currentTotal={currentTotal} 
-            selectedLoja={selectedLoja} 
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="bg-white p-4 rounded-xl border border-blue-200 bg-blue-50/20 shadow-sm space-y-1">
+              <div className="text-xs font-bold text-blue-900 uppercase">{DATA_LABELS.valorNegociadoVP}</div>
+              <div className="text-xl font-black text-blue-950">{formatCurrency(currentTotal.totalVendaAReceber)}</div>
+              <span className="text-[11px] text-blue-700">{currentTotal.pedidosVenda || 0} cargas no filtro</span>
+            </div>
+            <div className="bg-white p-4 rounded-xl border-2 border-emerald-500 bg-emerald-50/30 shadow-sm space-y-1">
+              <div className="text-xs font-black text-emerald-900 uppercase">Já liquidado</div>
+              <div className="text-xl font-black text-emerald-800">{formatCurrency(currentTotal.valorTotalLiquidado)}</div>
+              <span className="text-[11px] text-emerald-800">Recebido das lojas</span>
+            </div>
+            <div className="bg-white p-4 rounded-xl border-2 border-amber-400 bg-amber-50/30 shadow-sm space-y-1">
+              <div className="text-xs font-black text-amber-900 uppercase">Saldo a receber</div>
+              <div className="text-xl font-black text-amber-950">{formatCurrency(currentTotal.valorTotalALiquidar)}</div>
+              <span className="text-[11px] text-amber-800">VP - já recebido</span>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-1">
+              <div className="text-xs font-bold text-gray-500 uppercase">Valor NF</div>
+              <div className="text-xl font-black text-gray-900">{formatCurrency(currentTotal.valorTotalNF)}</div>
+              <span className="text-[11px] text-gray-400">Referência fiscal</span>
+            </div>
+          </div>
+          <StoreSummaryTable
+            stores={filteredLojas}
+            currentTotal={currentTotal}
+            selectedLoja={selectedLoja}
           />
-          <StoreDetailList 
-            stores={filteredLojas} 
-            expandedLojas={expandedLojas} 
-            toggleExpand={toggleExpandLoja} 
+          <StoreDetailList
+            stores={filteredLojas}
+            expandedLojas={expandedLojas}
+            toggleExpand={toggleExpandLoja}
             showCommissions={false}
+          />
+        </div>
+      )}
+
+      {activeTab === 'corretor' && (
+        <div className="space-y-6">
+          <BrokerProfitTable
+            stores={filteredLojas}
+            currentTotal={currentTotal}
+            selectedLoja={selectedLoja}
           />
         </div>
       )}

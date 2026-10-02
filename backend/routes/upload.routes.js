@@ -4,7 +4,7 @@ const fs = require('fs');
 const { upload } = require('../middlewares/upload');
 const { requireAuth } = require('../middlewares/auth');
 const NfeParserService = require('../services/nfeParser.service');
-const { ensureProductsRegistered } = require('../services/product.service');
+const productService = require('../services/product.service');
 const { cleanupOrphanUploads } = require('../services/cleanup.service');
 
 // POST /api/upload (Generic upload for canhotos, recibos, fotos with proper error handling)
@@ -48,7 +48,7 @@ router.post('/nfe/parse', requireAuth, (req, res) => {
 
       // Auto-cadastra os produtos da NF no Catálogo de Produtos do sistema se ainda não existirem
       if (parsedData.items && Array.isArray(parsedData.items) && parsedData.items.length > 0) {
-        ensureProductsRegistered(parsedData.items).catch(e => 
+        productService.ensureProductsRegistered(parsedData.items).catch(e =>
           console.warn('Aviso ao auto-cadastrar produtos:', e.message)
         );
       }

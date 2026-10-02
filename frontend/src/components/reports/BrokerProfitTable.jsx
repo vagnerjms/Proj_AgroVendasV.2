@@ -1,6 +1,8 @@
 import React from 'react';
 import { DollarSign, TrendingUp, Building2, Tractor, BadgePercent, Coins, ArrowUpRight } from 'lucide-react';
-import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { formatCurrency } from '../../utils/formatters';
+import { formatQuantity, resolveProductUnit, abbreviateUnit } from '../../utils/dataHelpers';
+import { DATA_LABELS } from '../../constants/dataLabels';
 
 export default function BrokerProfitTable({ 
   stores = [], 
@@ -21,7 +23,7 @@ export default function BrokerProfitTable({
     <div className="space-y-6">
       
       {/* 5 Cards de Conciliação e Lucro do Corretor */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4 print-kpi-grid">
         
         {/* Card 1: Recebimento Loja (VP) */}
         <div className="bg-white p-4 sm:p-4.5 rounded-xl border border-blue-200 bg-blue-50/20 shadow-sm space-y-1.5 min-w-0">
@@ -33,7 +35,7 @@ export default function BrokerProfitTable({
             {formatCurrency(totalVP)}
           </div>
           <span className="text-[11px] text-blue-600 block font-medium truncate">
-            Cotação diária das {allItens.length} vendas
+            Base comercial das {allItens.length} vendas
           </span>
         </div>
 
@@ -98,7 +100,7 @@ export default function BrokerProfitTable({
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden space-y-3 page-break-after print:shadow-none print:border-none">
         <div className="bg-[#091b2e] text-white px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Coins className="w-4 h-4 text-[#df7b1b]" />
+            <Coins className="w-4 h-4 text-[#F97316]" />
             <span className="text-xs font-black uppercase tracking-wider">
               Fechamento do Corretor — Confronto VP Comercial (Loja) vs. NF (Produtor)
             </span>
@@ -116,12 +118,11 @@ export default function BrokerProfitTable({
                 <th className="py-2.5 px-3">Produtor Rural</th>
                 <th className="py-2.5 px-2 text-center">Nº VP</th>
                 <th className="py-2.5 px-2 text-center">Nº NF</th>
-                <th className="py-2.5 px-3 text-right">Caixas</th>
-                <th className="py-2.5 px-3 text-right">Cotação Loja</th>
+                <th className="py-2.5 px-3 text-right">{DATA_LABELS.quantity}</th>
                 <th className="py-2.5 px-3 text-right bg-blue-900/80 font-black">Total Comercial VP</th>
                 <th className="py-2.5 px-3 text-right bg-gray-700">Total NF Produtor</th>
-                <th className="py-2.5 px-3 text-right text-red-300">(-) FUNRURAL</th>
-                <th className="py-2.5 px-3 text-right bg-emerald-950">Líquido Produtor</th>
+                <th className="py-2.5 px-3 text-right text-red-300 print-hide-col">(-) FUNRURAL</th>
+                <th className="py-2.5 px-3 text-right bg-emerald-950 print-hide-col">Líquido Produtor</th>
                 <th className="py-2.5 px-3 text-right bg-amber-900/90 font-black">Spread (VP - NF)</th>
                 <th className="py-2.5 px-3 text-right bg-emerald-900 font-black">Lucro AgroVenda</th>
               </tr>
@@ -153,10 +154,7 @@ export default function BrokerProfitTable({
                     <td className="py-3 px-2 text-center font-bold text-[#173e27]">{it.vp}</td>
                     <td className="py-3 px-2 text-center font-semibold text-gray-800">{it.nf}</td>
                     <td className="py-3 px-3 text-right font-semibold text-gray-800 whitespace-nowrap">
-                      {formatNumber(it.cxs, 2)} cx
-                    </td>
-                    <td className="py-3 px-3 text-right font-bold text-blue-900 whitespace-nowrap">
-                      R$ {Number(it.cotacao || 0).toFixed(2)}
+                      {formatQuantity(it.cxs, abbreviateUnit(resolveProductUnit(it)))}
                     </td>
                     <td className="py-3 px-3 text-right font-black text-blue-950 bg-blue-50/40 whitespace-nowrap">
                       {formatCurrency(itemVP)}
@@ -164,10 +162,10 @@ export default function BrokerProfitTable({
                     <td className="py-3 px-3 text-right font-bold text-gray-900 bg-gray-50/50 whitespace-nowrap">
                       {formatCurrency(itemNF)}
                     </td>
-                    <td className="py-3 px-3 text-right text-red-600 font-medium whitespace-nowrap">
+                    <td className="py-3 px-3 text-right text-red-600 font-medium whitespace-nowrap print-hide-col">
                       -{formatCurrency(itemFunrural)}
                     </td>
-                    <td className="py-3 px-3 text-right font-bold text-emerald-950 bg-emerald-50/30 whitespace-nowrap">
+                    <td className="py-3 px-3 text-right font-bold text-emerald-950 bg-emerald-50/30 whitespace-nowrap print-hide-col">
                       {formatCurrency(itemLiquidoProd)}
                     </td>
                     <td className="py-3 px-3 text-right font-black text-amber-950 bg-amber-50/50 whitespace-nowrap">
@@ -186,19 +184,18 @@ export default function BrokerProfitTable({
                   TOTAL CONSOLIDADO CORRETOR
                 </td>
                 <td className="py-3 px-3 text-right font-black">
-                  {formatNumber(allItens.reduce((acc, it) => acc + (Number(it.cxs) || 0), 0), 2)} cx
+                  {formatQuantity(allItens.reduce((acc, it) => acc + (Number(it.cxs) || 0), 0))}
                 </td>
-                <td className="py-3 px-3 text-center">-</td>
                 <td className="py-3 px-3 text-right font-black bg-blue-950 text-blue-200">
                   {formatCurrency(totalVP)}
                 </td>
                 <td className="py-3 px-3 text-right font-black bg-gray-800 text-gray-100">
                   {formatCurrency(totalNF)}
                 </td>
-                <td className="py-3 px-3 text-right font-black text-red-300">
+                <td className="py-3 px-3 text-right font-black text-red-300 print-hide-col">
                   -{formatCurrency(totalFunrural)}
                 </td>
-                <td className="py-3 px-3 text-right font-black bg-emerald-950 text-emerald-200">
+                <td className="py-3 px-3 text-right font-black bg-emerald-950 text-emerald-200 print-hide-col">
                   {formatCurrency(totalLiquidoProdutor)}
                 </td>
                 <td className="py-3 px-3 text-right font-black bg-amber-950 text-amber-200">

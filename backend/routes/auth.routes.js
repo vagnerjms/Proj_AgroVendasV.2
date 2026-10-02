@@ -21,17 +21,19 @@ router.post('/login', async (req, res) => {
     const password = (req.body.password || '').trim();
     const ip = req.ip || req.connection?.remoteAddress || 'unknown';
 
-    // Rate limiting: Max 10 attempts per minute per IP
+    // Rate limiting: Max 10 *failed* attempts per minute per IP (success does not count).
+    // Skip when DISABLE_AUTH_RATE_LIMIT=1 (e2e/CI) to avoid flaky suites from prior failed attempts.
     const now = Date.now();
     const attempts = loginAttempts.get(ip) || [];
     const recentAttempts = attempts.filter(t => now - t < 60000);
-    if (recentAttempts.length >= 10) {
+    const skipRateLimit = process.env.DISABLE_AUTH_RATE_LIMIT === '1' || process.env.E2E === '1';
+    if (!skipRateLimit && recentAttempts.length >= 10) {
       return res.status(429).json({ error: 'Muitas tentativas de login consecutivas. Aguarde 1 minuto.' });
     }
-    recentAttempts.push(now);
-    loginAttempts.set(ip, recentAttempts);
 
     if (!rawEmail || !password) {
+      recentAttempts.push(now);
+      loginAttempts.set(ip, recentAttempts);
       return res.status(400).json({ error: 'Informe e-mail e senha para acessar' });
     }
 
@@ -74,10 +76,14 @@ router.post('/login', async (req, res) => {
     }
 
     if (!user) {
+      recentAttempts.push(now);
+      loginAttempts.set(ip, recentAttempts);
       return res.status(401).json({ error: 'Usuário não cadastrado no sistema.' });
     }
 
     if (user.status === 'Inativo') {
+      recentAttempts.push(now);
+      loginAttempts.set(ip, recentAttempts);
       return res.status(403).json({ error: 'Este usuário está inativo. Contate o administrador.' });
     }
 
@@ -85,6 +91,8 @@ router.post('/login', async (req, res) => {
     const isValid = await comparePassword(password, user.password);
 
     if (!isValid) {
+      recentAttempts.push(now);
+      loginAttempts.set(ip, recentAttempts);
       return res.status(401).json({ error: 'Senha incorreta. Verifique e tente novamente.' });
     }
 

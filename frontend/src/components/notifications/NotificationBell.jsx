@@ -341,7 +341,7 @@ export default function NotificationBell({ onNavigate }) {
             <button
               type="button"
               onClick={() => fetchNotifications(true)}
-              className="text-[#df7b1b] hover:underline font-semibold cursor-pointer"
+              className="text-[#F97316] hover:underline font-semibold cursor-pointer"
             >
               Recalcular Tudo
             </button>

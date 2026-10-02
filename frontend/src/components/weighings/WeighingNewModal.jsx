@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Camera, Paperclip, Eye } from 'lucide-react';
+import { authorizedUploadUrl } from '../../utils/dataHelpers';
 
 export default function WeighingNewModal({
   isOpen = false,
@@ -84,10 +85,10 @@ export default function WeighingNewModal({
               <div className="flex items-center gap-2.5 overflow-hidden">
                 {newForm.ticketImage.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
                   <img 
-                    src={`/uploads/${newForm.ticketImage}`} 
+                    src={authorizedUploadUrl(newForm.ticketImage)} 
                     alt="Romaneio" 
                     className="w-10 h-10 object-cover rounded-lg border border-emerald-300 shadow-xs cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => window.open(`/uploads/${newForm.ticketImage}`, '_blank')}
+                    onClick={() => window.open(authorizedUploadUrl(newForm.ticketImage), '_blank')}
                     title="Clique para ampliar"
                   />
                 ) : (
@@ -101,7 +102,7 @@ export default function WeighingNewModal({
                   </div>
                   <button
                     type="button"
-                    onClick={() => window.open(`/uploads/${newForm.ticketImage}`, '_blank')}
+                    onClick={() => window.open(authorizedUploadUrl(newForm.ticketImage), '_blank')}
                     className="text-[10px] text-emerald-700 hover:underline flex items-center gap-1 mt-0.5 font-medium cursor-pointer"
                   >
                     <Eye className="w-3 h-3" />

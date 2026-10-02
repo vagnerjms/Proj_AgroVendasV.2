@@ -224,41 +224,59 @@ async function settleSale(id, payload = {}) {
     paymentMethod = 'PIX',
     checkNumber = '',
     checkBank = '',
-    checkDueDate = ''
+    checkDueDate = '',
+    discountAmount: rawDiscount
   } = payload;
   const currentPaid = Number(sale.paidAmount) || 0;
   const remainingBalance = roundMoney(Math.max(0, targetReceivable - currentPaid));
+  const discountAmount = roundMoney(Math.max(0, Number(rawDiscount) || 0));
+  const notesTrim = String(notes || '').trim();
+
+  if (discountAmount > 0 && !notesTrim) {
+    const err = new Error('Informe a observação/justificativa do desconto.');
+    err.statusCode = 400;
+    throw err;
+  }
 
   if (isPartial) {
-    const paymentValue = roundMoney(Number(inputAmount) || 0);
-    if (paymentValue <= 0) {
+    const gross = roundMoney(Number(inputAmount) || 0);
+    if (gross <= 0) {
       const err = new Error('Informe um valor de liquidação parcial válido maior que zero.');
       err.statusCode = 400;
       throw err;
     }
 
-    if (paymentValue > remainingBalance + 0.05) {
-      const err = new Error(`O valor informado (R$ ${paymentValue.toFixed(2)}) não pode ser maior que o saldo em aberto (R$ ${remainingBalance.toFixed(2)}).`);
+    if (gross > remainingBalance + 0.05) {
+      const err = new Error(`O valor informado (R$ ${gross.toFixed(2)}) não pode ser maior que o saldo em aberto (R$ ${remainingBalance.toFixed(2)}).`);
       err.statusCode = 400;
       throw err;
     }
 
+    if (discountAmount > gross + 0.05) {
+      const err = new Error(`O desconto (R$ ${discountAmount.toFixed(2)}) não pode ser maior que o valor da liquidação (R$ ${gross.toFixed(2)}).`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    // Desconto reduz só o recebido (VP/NF intactos); líquido creditado = gross − desconto
+    const paymentValue = roundMoney(Math.max(0, gross - discountAmount));
     const newAccumulated = roundMoney(Math.min(targetReceivable, currentPaid + paymentValue));
     sale.paidAmount = newAccumulated;
 
     if (!Array.isArray(sale.paymentHistory)) sale.paymentHistory = [];
     sale.paymentHistory.push({
       amount: paymentValue,
+      discountAmount,
       date: paymentDate || new Date().toISOString().split('T')[0],
       paymentMethod: paymentMethod || 'PIX',
       checkNumber: checkNumber || '',
       checkBank: checkBank || '',
       checkDueDate: checkDueDate || '',
       paymentProofFile: paymentProofFile || null,
-      notes: notes || 'Pagamento parcial registrado'
+      notes: notesTrim || 'Pagamento parcial registrado'
     });
 
-    if (newAccumulated >= targetReceivable - 0.05) {
+    if (newAccumulated >= targetReceivable - 0.05 && discountAmount <= 0) {
       sale.paidAmount = targetReceivable;
       sale.paymentStatus = 'Recebido';
       
@@ -268,34 +286,46 @@ async function settleSale(id, payload = {}) {
       sale.paymentStatus = 'Parcial';
     }
   } else {
-    // Quitação Total
-    const remainingToSettle = roundMoney(Math.max(0, targetReceivable - currentPaid));
-    sale.paidAmount = targetReceivable;
+    // Quitação do saldo em aberto, com desconto manual opcional (não altera VP/NF)
+    if (discountAmount > remainingBalance + 0.05) {
+      const err = new Error(`O desconto (R$ ${discountAmount.toFixed(2)}) não pode ser maior que o saldo em aberto (R$ ${remainingBalance.toFixed(2)}).`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const paymentValue = roundMoney(Math.max(0, remainingBalance - discountAmount));
+    sale.paidAmount = roundMoney(currentPaid + paymentValue);
 
     if (!Array.isArray(sale.paymentHistory)) sale.paymentHistory = [];
     sale.paymentHistory.push({
-      amount: remainingToSettle > 0 ? remainingToSettle : targetReceivable,
+      amount: paymentValue,
+      discountAmount,
       date: paymentDate || new Date().toISOString().split('T')[0],
       paymentMethod: paymentMethod || 'PIX',
       checkNumber: checkNumber || '',
       checkBank: checkBank || '',
       checkDueDate: checkDueDate || '',
       paymentProofFile: paymentProofFile || null,
-      notes: notes || 'Quitação integral registrada'
+      notes: notesTrim || (discountAmount > 0 ? 'Liquidação com desconto' : 'Quitação integral registrada')
     });
 
-    sale.paymentStatus = 'Recebido';
-
-    // Conclui o status geral da venda somente se o repasse do produtor também já estiver quitado
-    const isProducerSettled = sale.producerPaymentStatus === 'Pago' || (Number(sale.producerPaidAmount) || 0) >= totalNF - 0.05;
-    if (isProducerSettled) {
-      sale.status = 'Concluído';
-    } else if (payload.syncProducerPayment) {
-      sale.producerPaidAmount = totalNF;
-      sale.producerPaymentStatus = 'Pago';
-      sale.status = 'Concluído';
-    } else {
+    if (discountAmount > 0 || sale.paidAmount < targetReceivable - 0.05) {
+      sale.paymentStatus = 'Parcial';
       sale.status = sale.nfFile ? 'Faturado' : 'Pendente NF';
+    } else {
+      sale.paidAmount = targetReceivable;
+      sale.paymentStatus = 'Recebido';
+
+      const isProducerSettled = sale.producerPaymentStatus === 'Pago' || (Number(sale.producerPaidAmount) || 0) >= totalNF - 0.05;
+      if (isProducerSettled) {
+        sale.status = 'Concluído';
+      } else if (payload.syncProducerPayment) {
+        sale.producerPaidAmount = totalNF;
+        sale.producerPaymentStatus = 'Pago';
+        sale.status = 'Concluído';
+      } else {
+        sale.status = sale.nfFile ? 'Faturado' : 'Pendente NF';
+      }
     }
   }
 

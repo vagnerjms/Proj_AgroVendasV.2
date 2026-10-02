@@ -65,6 +65,7 @@ const SaleSchema = new mongoose.Schema({
   paymentHistory: [
     {
       amount: { type: Number, default: 0 },
+      discountAmount: { type: Number, default: 0 },
       date: { type: String, default: '' },
       paymentMethod: { type: String, default: 'PIX' },
       checkNumber: { type: String, default: '' },

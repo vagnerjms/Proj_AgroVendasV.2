@@ -43,6 +43,7 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
 
   const [settleType, setSettleType] = useState('full'); // 'full' | 'partial'
   const [partialAmount, setPartialAmount] = useState('');
+  const [discountAmount, setDiscountAmount] = useState('');
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [paymentMethod, setPaymentMethod] = useState('PIX'); // 'PIX' | 'Cheque' | 'TED/DOC'
   const [checkNumber, setCheckNumber] = useState('');
@@ -56,6 +57,10 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
   const [showHistory, setShowHistory] = useState(false);
 
   const parsedCurrentPartial = parseMoneyInput(partialAmount);
+  const parsedDiscount = !isProducer ? Math.max(0, parseMoneyInput(discountAmount) || 0) : 0;
+  const settleGross = settleType === 'partial' ? parsedCurrentPartial : remainingBalance;
+  const settleNet = Math.max(0, (Number(settleGross) || 0) - parsedDiscount);
+  const saldoAfter = Math.max(0, remainingBalance - settleNet);
 
   const handleFileChange = (e) => {
     if (e.target.files?.[0]) {
@@ -86,6 +91,16 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
       }
     }
 
+    const discountVal = !isProducer ? Math.max(0, parseMoneyInput(discountAmount) || 0) : 0;
+    if (!isProducer && discountVal > paidVal + 0.05) {
+      setError(`O desconto (${formatCurrency(discountVal)}) não pode ser maior que o valor da liquidação (${formatCurrency(paidVal)}).`);
+      return;
+    }
+    if (!isProducer && discountVal > 0 && !String(notes || '').trim()) {
+      setError('Informe a observação/justificativa do desconto.');
+      return;
+    }
+
     setLoading(true);
     try {
       let uploadedFilename = null;
@@ -109,7 +124,8 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
         checkNumber: paymentMethod === 'Cheque' ? checkNumber : '',
         checkBank: paymentMethod === 'Cheque' ? checkBank : '',
         checkDueDate: paymentMethod === 'Cheque' ? checkDueDate : '',
-        notes
+        notes,
+        ...(!isProducer ? { discountAmount: discountVal } : {})
       });
 
       handleCallback(
@@ -266,6 +282,11 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-black text-gray-900">{formatCurrency(ph.amount)}</span>
+                          {Number(ph.discountAmount) > 0 && (
+                            <span className="inline-flex items-center bg-amber-50 text-amber-900 border border-amber-200 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                              Desconto {formatCurrency(ph.discountAmount)}
+                            </span>
+                          )}
                           {/* Badge do Tipo de Pagamento */}
                           {ph.paymentMethod === 'Cheque' ? (
                             <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-200 text-[10px] font-extrabold px-2 py-0.5 rounded-full">
@@ -408,8 +429,40 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
               </div>
               {parsedCurrentPartial > 0 && (
                 <span className="text-[10px] text-gray-500 font-semibold block pt-0.5">
-                  Saldo que continuará em aberto: <b>{formatCurrency(Math.max(0, remainingBalance - parsedCurrentPartial))}</b>
+                  Saldo que continuará em aberto: <b>{formatCurrency(Math.max(0, remainingBalance - settleNet))}</b>
                 </span>
+              )}
+            </div>
+          )}
+
+          {/* Desconto manual — só loja; não altera VP/NF */}
+          {!isProducer && (
+            <div className="space-y-1.5 bg-amber-50/50 p-3 rounded-xl border border-amber-200">
+              <label className="block text-xs font-bold text-amber-950">
+                Desconto (R$) — opcional, manual
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-xs font-bold text-gray-400">R$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={discountAmount}
+                  onChange={(e) => {
+                    setError('');
+                    setDiscountAmount(e.target.value);
+                  }}
+                  className="w-full bg-white border border-amber-300 rounded-lg py-2 pl-9 pr-3 text-xs font-black text-amber-950 outline-none focus:ring-2 focus:ring-amber-600"
+                />
+              </div>
+              <p className="text-[10px] text-amber-900/80 font-medium leading-snug">
+                Afeta apenas <strong>Valor Recebido</strong> e <strong>Saldo a receber</strong>. Valor negociado e Valor NF não mudam.
+              </p>
+              {(parsedDiscount > 0 || settleType === 'full') && (
+                <div className="text-[10px] text-gray-700 font-semibold space-y-0.5 pt-0.5">
+                  <div>Recebido neste lançamento: <b className="text-emerald-800">{formatCurrency(settleNet)}</b></div>
+                  <div>Saldo a receber após baixa: <b className="text-amber-900">{formatCurrency(saldoAfter)}</b></div>
+                </div>
               )}
             </div>
           )}
@@ -540,14 +593,23 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
           {/* Observações */}
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1">
-              Observações / Identificação do Depósito:
+              Observações / Identificação do Depósito
+              {!isProducer && parsedDiscount > 0 && (
+                <span className="text-amber-800 font-black"> (obrigatória com desconto)</span>
+              )}:
             </label>
-            <input
-              type="text"
-              placeholder="Ex: Depósito Bradesco ref. 1ª parcela"
+            <textarea
+              rows={2}
+              placeholder={
+                !isProducer && parsedDiscount > 0
+                  ? 'Justificativa do desconto (obrigatória)'
+                  : 'Ex: Depósito Bradesco ref. 1ª parcela'
+              }
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg p-2 text-xs text-gray-800 outline-none focus:ring-2 focus:ring-emerald-600"
+              className={`w-full border rounded-lg p-2 text-xs text-gray-800 outline-none focus:ring-2 focus:ring-emerald-600 ${
+                !isProducer && parsedDiscount > 0 ? 'border-amber-400 bg-amber-50/30' : 'border-gray-300'
+              }`}
             />
           </div>
 

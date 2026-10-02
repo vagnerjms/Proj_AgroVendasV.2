@@ -40,6 +40,17 @@ function paymentMethodLabel(sale) {
   return method;
 }
 
+function settlementDiscountInfo(sale) {
+  const hist = Array.isArray(sale.paymentHistory) ? sale.paymentHistory : [];
+  const totalDiscount = hist.reduce((acc, h) => acc + (Number(h?.discountAmount) || 0), 0);
+  const lastWithDisc = [...hist].reverse().find((h) => Number(h?.discountAmount) > 0 || (h?.notes && Number(h?.discountAmount) > 0));
+  const note = lastWithDisc?.notes || hist.filter((h) => h?.notes).slice(-1)[0]?.notes || '';
+  return {
+    totalDiscount: Math.round((totalDiscount + Number.EPSILON) * 100) / 100,
+    note: note || ''
+  };
+}
+
 function extractProductName(sale) {
   if (sale.items?.[0]?.product) return sale.items[0].product;
   if (sale.product) return sale.product;
@@ -563,6 +574,7 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
               ) : (
                 paginatedSales.map(s => {
                   const liq = calculateLiquidation(s);
+                  const discInfo = settlementDiscountInfo(s);
                   return (
                     <tr key={s.id} className="hover:bg-gray-50/80">
                       <td className="py-2.5 px-2 whitespace-nowrap">{formatDate(s.saleDate)}</td>
@@ -581,9 +593,19 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
                       <td className="py-2.5 px-2 text-right font-semibold text-gray-800">{formatCurrency(liq.valorTotalNF)}</td>
                       <td className="py-2.5 px-2 text-right font-black text-emerald-800 bg-emerald-50/30">
                         {liq.valorLiquidado > 0 ? formatCurrency(liq.valorLiquidado) : <span className="text-gray-400 font-normal">-</span>}
+                        {discInfo.totalDiscount > 0 && (
+                          <div className="text-[9px] font-bold text-amber-800 mt-0.5" title={discInfo.note || ''}>
+                            − desc. {formatCurrency(discInfo.totalDiscount)}
+                          </div>
+                        )}
                       </td>
                       <td className="py-2.5 px-2 text-right font-black text-amber-900 bg-amber-50/30">
                         {liq.valorALiquidar > 0 ? formatCurrency(liq.valorALiquidar) : <span className="text-gray-400 font-normal">-</span>}
+                        {discInfo.note && discInfo.totalDiscount > 0 && (
+                          <div className="text-[9px] font-semibold text-amber-800/90 mt-0.5 max-w-[9rem] ml-auto truncate" title={discInfo.note}>
+                            {discInfo.note}
+                          </div>
+                        )}
                       </td>
                       <td className="py-2.5 px-2 whitespace-nowrap">{s.dueDate ? formatDate(s.dueDate) : '—'}</td>
                       <td className="py-2.5 px-2 text-center whitespace-nowrap min-w-[6.5rem]">

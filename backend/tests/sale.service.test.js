@@ -122,6 +122,81 @@ describe('sale.service — settle / unsettle loja', () => {
     await expect(saleService.settleSale('NOPE', {})).rejects.toMatchObject({ statusCode: 404 });
   });
 
+  test('desconto manual: reduz recebido, mantém VP, exige observação', async () => {
+    const sale = await saleService.createSale(baseBody({
+      nfeKey: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+    }));
+    const vp = 50000;
+
+    await expect(saleService.settleSale(sale.id, {
+      isPartial: false,
+      discountAmount: 413.79,
+      notes: ''
+    })).rejects.toMatchObject({ statusCode: 400 });
+
+    await expect(saleService.settleSale(sale.id, {
+      isPartial: false,
+      discountAmount: vp + 1,
+      notes: 'desconto inválido'
+    })).rejects.toMatchObject({ statusCode: 400 });
+
+    await expect(saleService.settleSale(sale.id, {
+      isPartial: true,
+      paidAmount: 1000,
+      discountAmount: 2000,
+      notes: 'desconto maior que parcial'
+    })).rejects.toMatchObject({ statusCode: 400 });
+
+    const partialDisc = await saleService.settleSale(sale.id, {
+      isPartial: true,
+      paidAmount: 10000,
+      discountAmount: 500,
+      notes: 'Desconto parcial de teste',
+      paymentMethod: 'PIX'
+    });
+    expect(partialDisc.paymentStatus).toBe('Parcial');
+    expect(partialDisc.paidAmount).toBeCloseTo(9500, 2);
+    expect(partialDisc.paymentHistory[0].discountAmount).toBeCloseTo(500, 2);
+    expect(Number(partialDisc.totalOperation)).toBe(Number(sale.totalOperation));
+    expect(Number(partialDisc.valorTotalVP || sale.valorTotalVP)).toBe(vp);
+
+    const withDisc = await saleService.settleSale(sale.id, {
+      isPartial: false,
+      discountAmount: 413.79,
+      notes: 'Ajuste acerto manual — gap cheque vs VP−FUNRURAL(NF)',
+      paymentMethod: 'Cheque'
+    });
+
+    expect(withDisc.paymentStatus).toBe('Parcial');
+    expect(withDisc.paidAmount).toBeCloseTo(9500 + (vp - 9500 - 413.79), 2);
+    expect(withDisc.paymentHistory).toHaveLength(2);
+    expect(withDisc.paymentHistory[1].discountAmount).toBeCloseTo(413.79, 2);
+    expect(withDisc.paymentHistory[1].notes).toMatch(/Ajuste acerto/);
+    // VP comercial / NF não são alterados pelo desconto
+    expect(Number(withDisc.totalOperation)).toBe(Number(sale.totalOperation));
+
+    // Sem NF + desconto → permanece Pendente NF; defaults de método/cheque
+    const semNf = await saleService.createSale(baseBody({
+      nfFile: null,
+      nfeKey: '',
+      totalOperation: 0,
+      paymentTermDays: 0
+    }));
+    const discSemNf = await saleService.settleSale(semNf.id, {
+      isPartial: false,
+      discountAmount: 100,
+      notes: 'Desconto sem NF',
+      paymentMethod: '',
+      checkNumber: null,
+      checkBank: null,
+      checkDueDate: null
+    });
+    expect(discSemNf.paymentStatus).toBe('Parcial');
+    expect(discSemNf.status).toBe('Pendente NF');
+    expect(discSemNf.paymentHistory[0].paymentMethod).toBe('PIX');
+    expect(discSemNf.paidAmount).toBeCloseTo(vp - 100, 2);
+  });
+
   test('unsettle last e full', async () => {
     const sale = await saleService.createSale(baseBody());
     await saleService.settleSale(sale.id, { isPartial: true, paidAmount: 10000, paymentProofFile: 'a.pdf' });

@@ -56,6 +56,7 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  jest.useRealTimers();
   await clearCollections();
   jest.clearAllMocks();
   global.fetch = jest.fn().mockResolvedValue({
@@ -68,26 +69,38 @@ beforeEach(async () => {
 describe('threshold close — functions & branches', () => {
   test('auth rate-limit 429 + setInterval eviction via fake timers', async () => {
     await ensureAdmin({ password: 'Admin123!' });
+    jest.useRealTimers();
+    const prevDisable = process.env.DISABLE_AUTH_RATE_LIMIT;
+    const prevE2e = process.env.E2E;
+    delete process.env.DISABLE_AUTH_RATE_LIMIT;
+    delete process.env.E2E;
 
-    for (let i = 0; i < 10; i++) {
-      await request(app)
+    try {
+      for (let i = 0; i < 12; i++) {
+        await request(app)
+          .post('/api/auth/login')
+          .send({ email: 'nobody@x.com', password: 'wrong' });
+      }
+      const limited = await request(app)
         .post('/api/auth/login')
         .send({ email: 'nobody@x.com', password: 'wrong' });
+      expect(limited.status).toBe(429);
+
+      jest.useFakeTimers({ advanceTimers: true });
+      jest.advanceTimersByTime(5 * 60 * 1000 + 100);
+      jest.useRealTimers();
+
+      // after eviction window, attempts map should accept again (not necessarily 200)
+      const after = await request(app)
+        .post('/api/auth/login')
+        .send({ email: 'admin@agrovenda.com.br', password: 'Admin123!' });
+      expect([200, 429]).toContain(after.status);
+    } finally {
+      if (prevDisable !== undefined) process.env.DISABLE_AUTH_RATE_LIMIT = prevDisable;
+      else delete process.env.DISABLE_AUTH_RATE_LIMIT;
+      if (prevE2e !== undefined) process.env.E2E = prevE2e;
+      else delete process.env.E2E;
     }
-    const limited = await request(app)
-      .post('/api/auth/login')
-      .send({ email: 'nobody@x.com', password: 'wrong' });
-    expect(limited.status).toBe(429);
-
-    jest.useFakeTimers({ advanceTimers: true });
-    jest.advanceTimersByTime(5 * 60 * 1000 + 100);
-    jest.useRealTimers();
-
-    // after eviction window, attempts map should accept again (not necessarily 200)
-    const after = await request(app)
-      .post('/api/auth/login')
-      .send({ email: 'admin@agrovenda.com.br', password: 'Admin123!' });
-    expect([200, 429]).toContain(after.status);
   });
 
   test('money batata some() via notes+items fallthrough; commission empty taxa', () => {

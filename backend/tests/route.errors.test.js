@@ -149,20 +149,31 @@ describe('error paths and leftover functions', () => {
   });
 
   test('auth rate limit + login 500', async () => {
-    // use unique IP-ish email flood then different email for 500
-    for (let i = 0; i < 12; i++) {
-      await request(app).post('/api/auth/login').send({ email: 'rl@x.com', password: 'bad' });
-    }
-    const limited = await request(app).post('/api/auth/login').send({ email: 'rl@x.com', password: 'bad' });
-    expect(limited.status).toBe(429);
+    const prevDisable = process.env.DISABLE_AUTH_RATE_LIMIT;
+    const prevE2e = process.env.E2E;
+    delete process.env.DISABLE_AUTH_RATE_LIMIT;
+    delete process.env.E2E;
+    try {
+      // use unique IP-ish email flood then different email for 500
+      for (let i = 0; i < 12; i++) {
+        await request(app).post('/api/auth/login').send({ email: 'rl@x.com', password: 'bad' });
+      }
+      const limited = await request(app).post('/api/auth/login').send({ email: 'rl@x.com', password: 'bad' });
+      expect(limited.status).toBe(429);
 
-    jest.spyOn(User, 'findOne').mockRejectedValueOnce(new Error('auth boom'));
-    // Rate limit is per IP, so 429 may still apply — accept either if limited
-    const boom = await request(app).post('/api/auth/login')
-      .set('X-Forwarded-For', '203.0.113.99')
-      .send({ email: 'ok@x.com', password: 'x' });
-    expect([500, 429, 401]).toContain(boom.status);
-    User.findOne.mockRestore();
+      // Cobre o catch 500 do login sem interferência do rate-limit
+      process.env.DISABLE_AUTH_RATE_LIMIT = '1';
+      jest.spyOn(User, 'findOne').mockRejectedValueOnce(new Error('auth boom'));
+      const boom = await request(app).post('/api/auth/login')
+        .send({ email: 'ok@x.com', password: 'x' });
+      expect(boom.status).toBe(500);
+      User.findOne.mockRestore();
+    } finally {
+      if (prevDisable !== undefined) process.env.DISABLE_AUTH_RATE_LIMIT = prevDisable;
+      else delete process.env.DISABLE_AUTH_RATE_LIMIT;
+      if (prevE2e !== undefined) process.env.E2E = prevE2e;
+      else delete process.env.E2E;
+    }
   });
 
   test('deleteSale + webhook setImmediate flush + sale settle syncProducer false branch', async () => {

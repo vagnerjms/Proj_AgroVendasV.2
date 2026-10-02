@@ -45,18 +45,30 @@ export function calculateFunrural(totalNF = 0) {
 
 /**
  * Função canônica única para apuração do Valor Total Comercial (VP).
- * Suporta:
- * 1. Soma dos itens múltiplos da venda (se existirem itens cadastrados);
- * 2. Cotações por caixa vs por kg (<= 10.0 ou Granel);
- * 3. Peso padrão por cultura (Batata 25kg, Granel 1kg, Cenoura/Padrão 29kg);
- * 4. Extração de cotação via Regex em notas ('Cotação: R$ ...');
- * 5. Fallback consistente para totalOperation / total faturado.
+ * Ordem:
+ * 1. VP explícito gravado (sale.valorTotalVP / soma items[].valorTotalVP);
+ * 2. Recálculo por cotação × caixas/kg quando não há VP gravado;
+ * 3. Fallback para totalOperation (NF) apenas se nada mais existir.
  */
 export function getValorTotalVP(sale = {}) {
   if (!sale) return 0;
 
-  // 1. Prioriza soma dos sub-itens da venda
+  // 1. VP explícito no registro (planilha / conciliação) — prioridade sobre cotação×volumes
+  if (Number(sale.valorTotalVP) > 0) {
+    return roundMoney(sale.valorTotalVP);
+  }
+  if (Number(sale.valorVP) > 0) {
+    return roundMoney(sale.valorVP);
+  }
+
   if (sale.items && Array.isArray(sale.items) && sale.items.length > 0) {
+    const explicitItemsVp = sale.items.reduce((acc, it) => {
+      if (Number(it.valorTotalVP) > 0) return acc + Number(it.valorTotalVP);
+      return acc;
+    }, 0);
+    if (explicitItemsVp > 0) return roundMoney(explicitItemsVp);
+
+    // 2. Sem VP gravado: recalcula por cotação nos itens
     const itemsSum = sale.items.reduce((acc, it) => {
       const itKg = Number(it.kg) || 0;
       const bw = Number(it.boxWeightKg) || 25;
@@ -66,20 +78,11 @@ export function getValorTotalVP(sale = {}) {
         const isQKg = (q > 0 && q <= 10.0) || (it.unit && it.unit.includes('Granel')) || bw === 1;
         return acc + (isQKg ? (itKg * q) : (itVol * q));
       }
-      if (Number(it.valorTotalVP) > 0) return acc + Number(it.valorTotalVP);
       if (Number(it.total) > 0) return acc + Number(it.total);
       return acc;
     }, 0);
 
     if (itemsSum > 0) return roundMoney(itemsSum);
-  }
-
-  // 2. Propriedade explícita gravada no registro
-  if (Number(sale.valorTotalVP) > 0) {
-    return roundMoney(sale.valorTotalVP);
-  }
-  if (Number(sale.valorVP) > 0) {
-    return roundMoney(sale.valorVP);
   }
 
   // 3. Heurística com cotação informada ou presente nas observações
@@ -94,7 +97,6 @@ export function getValorTotalVP(sale = {}) {
   const bw = isBatata ? 25 : 29;
   const caixas = Number(sale.totalVolumes) || (kg > 0 ? (kg / bw) : 0);
 
-  // Se a cotação foi informada em R$/kg (ex: R$ 2,15/kg), multiplica pelo peso total em kg
   if (cotacao > 0 && cotacao <= 10.0 && kg > 0) {
     return roundMoney(kg * cotacao);
   }

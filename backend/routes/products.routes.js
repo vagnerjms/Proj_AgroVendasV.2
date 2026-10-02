@@ -46,6 +46,9 @@ router.post('/', async (req, res) => {
     }
 
     const seq = await getNextSequence('product_id', Product, 'PROD-');
+    const parentId = req.body.parentProductId
+      ? String(req.body.parentProductId).trim() || null
+      : null;
     const newProduct = new Product({
       id: `PROD-${seq}`,
       name: name,
@@ -53,7 +56,8 @@ router.post('/', async (req, res) => {
       defaultUnit: req.body.defaultUnit || 'Caixas (29kg)',
       unitKg: Number(req.body.unitKg) || 29,
       currentStock: Number(req.body.currentStock) || 0,
-      averageCost: Number(req.body.averageCost) || 0
+      averageCost: Number(req.body.averageCost) || 0,
+      parentProductId: parentId
     });
     await newProduct.save();
     res.status(201).json(newProduct);
@@ -72,6 +76,11 @@ router.put('/:id', async (req, res) => {
     if (req.body.unitKg !== undefined) updateData.unitKg = Number(req.body.unitKg) || 29;
     if (req.body.currentStock !== undefined) updateData.currentStock = Number(req.body.currentStock) || 0;
     if (req.body.averageCost !== undefined) updateData.averageCost = Number(req.body.averageCost) || 0;
+    if (req.body.parentProductId !== undefined) {
+      updateData.parentProductId = req.body.parentProductId
+        ? String(req.body.parentProductId).trim() || null
+        : null;
+    }
 
     const updated = await Product.findOneAndUpdate(
       { id: req.params.id },

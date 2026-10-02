@@ -222,7 +222,12 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
       fetchProducts();
     } catch (err) {
       console.error(err);
-      showErrorNotification(err.message || 'Erro de rede ao tentar excluir produto.');
+      const msg = err?.message || err?.error || 'Erro de rede ao tentar excluir produto.';
+      showErrorNotification(
+        msg.includes('registros associados')
+          ? msg
+          : `Falha ao excluir "${product.name}": ${msg}`
+      );
     }
   };
 

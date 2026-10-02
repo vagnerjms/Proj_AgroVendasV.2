@@ -21,6 +21,7 @@ import { DATA_LABELS } from '../constants/dataLabels';
 import SettleModal from '../components/sales/SettleModal';
 import MultiStoreSelect from '../components/reports/MultiStoreSelect';
 import MultiProductSelect from '../components/reports/MultiProductSelect';
+import MultiProducerSelect from '../components/reports/MultiProducerSelect';
 import SaleAttachmentLinks from '../components/sales/SaleAttachmentLinks';
 import PaymentProofPreviewModal from '../components/sales/PaymentProofPreviewModal';
 
@@ -49,6 +50,17 @@ function extractProductName(sale) {
   return 'Outros';
 }
 
+function extractProducerName(sale) {
+  const origin = (sale.origin || '').trim();
+  if (origin) {
+    // "NOME (Cidade/UF)" → NOME
+    const bare = origin.replace(/\s*\([^)]*\)\s*$/, '').trim();
+    return bare || origin;
+  }
+  if (sale.producer) return String(sale.producer).trim();
+  return 'Sem produtor';
+}
+
 export default function Financial({ view = 'overview', setCurrentPage }) {
   const [sales, setSales] = useState([]);
   const [financial, setFinancial] = useState({
@@ -69,6 +81,7 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedStores, setSelectedStores] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState([]);
+  const [selectedProducers, setSelectedProducers] = useState([]);
   const [currentPage, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(15);
   const [settleSaleModal, setSettleSaleModal] = useState(null);
@@ -78,6 +91,7 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
   const [uploadingId, setUploadingId] = useState(null);
   const storesInitRef = useRef(false);
   const productsInitRef = useRef(false);
+  const producersInitRef = useRef(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -99,6 +113,7 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
 
   const uniqueLojas = useMemo(() => [...new Set(sales.map(s => s.client).filter(Boolean))].sort(), [sales]);
   const uniqueProducts = useMemo(() => [...new Set(sales.map(extractProductName).filter(Boolean))].sort(), [sales]);
+  const uniqueProducers = useMemo(() => [...new Set(sales.map(extractProducerName).filter(Boolean))].sort(), [sales]);
 
   useEffect(() => {
     if (!storesInitRef.current && uniqueLojas.length > 0) {
@@ -114,9 +129,21 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
     }
   }, [uniqueProducts]);
 
+  useEffect(() => {
+    if (!producersInitRef.current && uniqueProducers.length > 0) {
+      setSelectedProducers(uniqueProducers);
+      producersInitRef.current = true;
+    }
+  }, [uniqueProducers]);
+
   const productMatches = (sale) => {
     if (selectedProducts.length === 0) return false;
     return selectedProducts.includes(extractProductName(sale));
+  };
+
+  const producerMatches = (sale) => {
+    if (selectedProducers.length === 0) return false;
+    return selectedProducers.includes(extractProducerName(sale));
   };
 
   const showNotification = (msg) => {
@@ -174,10 +201,11 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
       if (statusFilter === 'PENDING' && liq.isFullySettled) return false;
       if (statusFilter === 'PARTIAL' && !liq.isPartial) return false;
 
-      // vazio = nenhuma loja
+      // vazio = nenhuma loja / produto / produtor
       if (selectedStores.length === 0) return false;
       if (!selectedStores.includes(s.client)) return false;
       if (!productMatches(s)) return false;
+      if (!producerMatches(s)) return false;
 
       if (!searchTerm.trim()) return true;
       const term = searchTerm.toLowerCase();
@@ -193,7 +221,7 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
         (s.paymentStatus || '').toLowerCase().includes(term)
       );
     });
-  }, [sales, statusFilter, searchTerm, selectedStores, selectedProducts]);
+  }, [sales, statusFilter, searchTerm, selectedStores, selectedProducts, selectedProducers]);
 
   const totalsFiltered = useMemo(() => {
     return filteredSales.reduce((acc, s) => {
@@ -220,6 +248,7 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
         if (selectedStores.length === 0) return false;
         if (!selectedStores.includes(s.client)) return false;
         if (!productMatches(s)) return false;
+        if (!producerMatches(s)) return false;
         if (!searchTerm.trim()) return true;
         const term = searchTerm.toLowerCase();
         const nf = nfDisplayLabel(s).toLowerCase();
@@ -229,6 +258,7 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
           nf.includes(term) ||
           rom.includes(term) ||
           (s.client || '').toLowerCase().includes(term) ||
+          (s.origin || '').toLowerCase().includes(term) ||
           extractProductName(s).toLowerCase().includes(term)
         );
       })
@@ -237,7 +267,7 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
         const fr = calculateFunrural(liq.valorTotalNF);
         return { sale: s, liq, fr };
       });
-  }, [sales, selectedStores, selectedProducts, searchTerm]);
+  }, [sales, selectedStores, selectedProducts, selectedProducers, searchTerm]);
 
   const funruralTotals = useMemo(() => {
     return funruralRows.reduce((acc, row) => {
@@ -469,6 +499,12 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
               products={uniqueProducts}
               selectedProducts={selectedProducts}
               onChange={(v) => { setSelectedProducts(v); setPage(1); }}
+            />
+
+            <MultiProducerSelect
+              producers={uniqueProducers}
+              selectedProducers={selectedProducers}
+              onChange={(v) => { setSelectedProducers(v); setPage(1); }}
             />
 
             <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200 text-xs flex-wrap">

@@ -415,11 +415,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
     const vol = isGr ? kg : (bw > 0 ? (kg / bw) : 0);
     const q = parseNum(it.dailyQuote);
-    if (q <= 0) {
-      const p = parseNum(it.pricePerKg);
-      const nf = it.totalNf !== '' && it.totalNf !== undefined ? parseNum(it.totalNf) : (kg * p);
-      return acc + nf;
-    }
+    if (q <= 0) return acc;
     const isQKg = (q > 0 && q <= 10.0) || isGr;
     return acc + (isQKg ? (kg * q) : (vol * q));
   }, 0);
@@ -468,18 +464,25 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       if (data.saleDate) setSaleDate(data.saleDate);
       if (data.notes && !notes) setNotes(data.notes);
 
-      // 🏪 VÍNCULO INTELIGENTE DO CLIENTE / COMPRADOR (DESTINATÁRIO DA NOTA FISCAL)
-      if (data.dest?.name || data.dest?.document) {
-        const rawDestDoc = (data.dest.document || '').replace(/\D/g, '');
-        const destNameClean = (data.dest.name || '').trim().toLowerCase();
+      // Loja = destinatário (dest); match forte por CNPJ/CPF, senão nome exatamente igual
+      const findPartnerByDocOrExactName = (docRaw, nameRaw) => {
+        const docDigits = (docRaw || '').replace(/\D/g, '');
+        const nameNorm = (nameRaw || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        if (docDigits) {
+          const byDoc = clients.find(c => {
+            const cDoc = (c.document || '').replace(/\D/g, '');
+            return cDoc && cDoc === docDigits;
+          });
+          if (byDoc) return byDoc;
+        }
+        if (nameNorm.length >= 3) {
+          return clients.find(c => (c.name || '').trim().toLowerCase().replace(/\s+/g, ' ') === nameNorm) || null;
+        }
+        return null;
+      };
 
-        const foundCli = clients.find(c => {
-          const cDoc = (c.document || '').replace(/\D/g, '');
-          const cName = (c.name || '').trim().toLowerCase();
-          const docMatch = rawDestDoc && cDoc && rawDestDoc === cDoc;
-          const nameMatch = destNameClean && cName && (cName === destNameClean || cName.includes(destNameClean) || destNameClean.includes(cName));
-          return docMatch || nameMatch;
-        });
+      if (data.dest?.name || data.dest?.document) {
+        const foundCli = findPartnerByDocOrExactName(data.dest.document, data.dest.name);
 
         if (foundCli) {
           setMatchedClient(foundCli);
@@ -492,7 +495,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         } else {
           setMatchedClient(null);
           setUnmatchedClient({
-            name: data.dest.name || 'Cliente Comprador',
+            name: (data.dest.name || '').trim(),
             document: data.dest.document || '',
             ie: data.dest.ie || '',
             city: data.dest.city || '',
@@ -500,41 +503,27 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
             address: data.dest.address || ''
           });
           setClientRegisteredNotice('');
-          setSelectedClient(data.dest.name || '');
-          setClientDocument(data.dest.document || '');
+          // Não preencher loja até confirmação / seleção manual
+          setSelectedClient('');
+          setClientDocument('');
           setDestCity(data.dest.city || '');
           setDestUF(data.dest.uf || '');
         }
       }
 
-      if (data.emit?.originText) {
-        setOrigin(data.emit.originText);
-      }
-
-      // 🌾 VÍNCULO INTELIGENTE DO PRODUTOR (EMITENTE DA NOTA FISCAL)
+      // Produtor = emitente (emit)
       if (data.emit?.name || data.emit?.document) {
-        const rawDoc = (data.emit.document || '').replace(/\D/g, '');
-        const emitNameClean = (data.emit.name || '').trim().toLowerCase();
-
-        const foundProd = clients.find(c => {
-          const cDoc = (c.document || '').replace(/\D/g, '');
-          const cName = (c.name || '').trim().toLowerCase();
-          const docMatch = rawDoc && cDoc && rawDoc === cDoc;
-          const nameMatch = emitNameClean && cName && (cName === emitNameClean || cName.includes(emitNameClean) || emitNameClean.includes(cName));
-          return docMatch || nameMatch;
-        });
+        const foundProd = findPartnerByDocOrExactName(data.emit.document, data.emit.name);
 
         if (foundProd) {
           setMatchedProducer(foundProd);
           setUnmatchedProducer(null);
           setProducerRegisteredNotice('');
-          if (!origin || origin.toLowerCase().includes('fazenda') || origin.toLowerCase().includes('silo')) {
-            setOrigin(foundProd.name + (foundProd.city ? ` (${foundProd.city}/${foundProd.uf || foundProd.state || 'GO'})` : ''));
-          }
+          setOrigin(foundProd.name + (foundProd.city ? ` (${foundProd.city}/${foundProd.uf || foundProd.state || 'GO'})` : ''));
         } else {
           setMatchedProducer(null);
           setUnmatchedProducer({
-            name: data.emit.name || 'Produtor Rural',
+            name: (data.emit.name || '').trim(),
             document: data.emit.document || '',
             ie: data.emit.ie || '',
             city: data.emit.city || '',
@@ -553,16 +542,19 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
           const rawName = (it.product || '').toLowerCase();
           const matchedCatalogProd = products.find(p => {
             const pL = p.name.toLowerCase();
-            return pL === rawName ||
-              (rawName.includes('especial') && pL.includes('especial')) ||
-              (rawName.includes('miuda') && pL.includes('miuda')) ||
-              (rawName.includes('miúda') && pL.includes('miúda')) ||
-              (rawName.includes('cenoura') && pL.includes('cenoura')) ||
-              (rawName.includes('cebola') && pL.includes('cebola')) ||
-              (rawName.includes('beterraba') && pL.includes('beterraba'));
+            if (pL === rawName) return true;
+            if (rawName.includes('cenoura') && pL === 'cenoura') return true;
+            if (rawName.includes('diversa') && pL.includes('diversa')) return true;
+            if (rawName.includes('especial') && pL.includes('especial')) return true;
+            if (rawName.includes('primeira') && pL.includes('primeira')) return true;
+            if ((rawName.includes('miuda') || rawName.includes('miúda')) && pL.includes('miúda')) return true;
+            if (rawName.includes('bolinha') && pL.includes('bolinha')) return true;
+            if (rawName.includes('cebola') && pL === 'cebola') return true;
+            return false;
           });
 
-          const resolvedProdName = matchedCatalogProd?.name || it.product || 'Batata Especial';
+          const resolvedProdName = matchedCatalogProd?.name
+            || (rawName.includes('cenoura') ? 'Cenoura' : (it.product || 'Batata Especial'));
           const resolvedUnit = it.unit || matchedCatalogProd?.defaultUnit || 'Sacas (25kg)';
           const boxW = it.boxWeightKg || matchedCatalogProd?.unitKg || (resolvedUnit.includes('25kg') ? 25 : (resolvedUnit.includes('20kg') ? 20 : (resolvedUnit.includes('Granel') ? 1 : 29)));
           const itemKg = it.kg || (it.quantity ? it.quantity * boxW : 0);
@@ -878,11 +870,13 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         registeringClient={registeringClient}
         clientRegisteredNotice={clientRegisteredNotice}
         handleQuickRegisterClient={handleQuickRegisterClient}
+        onDismissUnmatchedClient={() => setUnmatchedClient(null)}
         matchedProducer={matchedProducer}
         unmatchedProducer={unmatchedProducer}
         registeringProducer={registeringProducer}
         producerRegisteredNotice={producerRegisteredNotice}
         handleQuickRegisterProducer={handleQuickRegisterProducer}
+        onDismissUnmatchedProducer={() => setUnmatchedProducer(null)}
         duplicateWarning={duplicateWarning}
       />
 

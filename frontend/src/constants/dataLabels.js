@@ -15,7 +15,11 @@ export const DATA_LABELS = {
   weighingSlipId: 'Pesagem',
   includeCancelled: 'Incluir canceladas',
   quantity: 'Quantidade',
-  weightKg: 'Peso (kg)'
+  weightKg: 'Peso (kg)',
+  pesoTotalKg: 'Peso Total (kg)',
+  precoNfKg: 'Preço NF (R$/kg)',
+  cotacaoDia: 'Cotação do dia',
+  subtotalNf: 'Subtotal NF (R$)'
 };
 
 export default DATA_LABELS;

@@ -131,7 +131,10 @@ export default function SaleItemsTable({
           const itemNfVal = item.totalNf !== '' && item.totalNf !== undefined ? parseNum(item.totalNf) : (itemKg * itemP);
           const itemQuote = parseNum(item.dailyQuote);
           const isQuoteKg = (itemQuote > 0 && itemQuote <= 10.0) || isItemGranel;
-          const itemVPVal = itemQuote > 0 ? (isQuoteKg ? (itemKg * itemQuote) : (itemVol * itemQuote)) : itemNfVal;
+          // Valor negociado = quantidade × cotação do dia (nunca usa NF como fallback)
+          const itemVPVal = itemQuote > 0
+            ? (isQuoteKg ? (itemKg * itemQuote) : (itemVol * itemQuote))
+            : 0;
 
           return (
             <div 
@@ -227,10 +230,10 @@ export default function SaleItemsTable({
               {/* Linha 2: Pesos, Preços e Cotações */}
               <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5 bg-white p-3 rounded-lg border border-slate-200">
                 
-                {/* Peso Total do Item */}
+                {/* Peso Total do Item — da NF, editável */}
                 <div>
                   <label className="block text-[10px] font-bold text-gray-700 mb-0.5">
-                    1. Peso Total (kg) *
+                    1. {DATA_LABELS.pesoTotalKg} *
                   </label>
                   <input
                     type="text"
@@ -257,24 +260,25 @@ export default function SaleItemsTable({
                   </div>
                 </div>
 
-                {/* Preço Unitário NF (R$/kg) */}
+                {/* Preço NF — somente leitura */}
                 <div>
                   <label className="block text-[10px] font-bold text-gray-700 mb-0.5">
-                    3. Preço NF (R$/kg)
+                    3. {DATA_LABELS.precoNfKg}
                   </label>
                   <input
                     type="text"
-                    placeholder="Ex: 1,41"
+                    readOnly
+                    tabIndex={-1}
+                    placeholder="—"
                     value={item.pricePerKg}
-                    onChange={(e) => onItemFieldChange(index, 'pricePerKg', e.target.value)}
-                    className="w-full bg-white border border-gray-300 text-xs rounded-lg px-2 py-1.5 font-bold text-gray-900 outline-none"
+                    className="w-full bg-gray-100 border border-gray-200 text-xs rounded-lg px-2 py-1.5 font-bold text-gray-700 outline-none cursor-not-allowed"
                   />
                 </div>
 
-                {/* Cotação do Dia Comercial */}
+                {/* Cotação do dia — editável */}
                 <div>
-                  <label className="block text-[10px] font-bold text-emerald-900 mb-0.5">
-                    4. Cotação (R$/{unitShort})
+                  <label className="block text-[10px] font-bold text-blue-900 mb-0.5">
+                    4. {DATA_LABELS.cotacaoDia} (R$/{unitShort})
                   </label>
                   <input
                     type="text"
@@ -285,24 +289,25 @@ export default function SaleItemsTable({
                   />
                 </div>
 
-                {/* Subtotal NF */}
+                {/* Subtotal NF — somente leitura */}
                 <div>
                   <label className="block text-[10px] font-bold text-gray-700 mb-0.5">
-                    Subtotal NF (R$)
+                    {DATA_LABELS.subtotalNf}
                   </label>
                   <input
                     type="text"
+                    readOnly
+                    tabIndex={-1}
                     placeholder="0,00"
                     value={item.totalNf}
-                    onChange={(e) => onItemFieldChange(index, 'totalNf', e.target.value)}
-                    className="w-full bg-white border border-emerald-400 text-xs rounded-lg px-2 py-1.5 font-extrabold text-emerald-950 outline-none"
+                    className="w-full bg-gray-100 border border-emerald-200 text-xs rounded-lg px-2 py-1.5 font-extrabold text-emerald-950 outline-none cursor-not-allowed"
                   />
                 </div>
 
-                {/* Subtotal Comercial VP */}
+                {/* Valor negociado = quantidade × cotação */}
                 <div>
                   <label className="block text-[10px] font-bold text-blue-900 mb-0.5">
-                    Subtotal VP (R$)
+                    {DATA_LABELS.valorNegociadoVP} (R$)
                   </label>
                   <div className="w-full bg-blue-50 border border-blue-200 text-xs rounded-lg px-2 py-1.5 font-black text-blue-950 whitespace-nowrap overflow-x-auto">
                     {formatCurrency(itemVPVal)}

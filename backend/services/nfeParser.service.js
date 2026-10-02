@@ -123,34 +123,45 @@ class NfeParserService {
     let carrierName = '';
     let truckPlate = '';
 
-    if (entityMatches.length >= 2) {
-      emitName = entityMatches[0].name;
-      emitDoc = entityMatches[0].doc;
+    // Preferir âncoras EMITENTE / DESTINATÁRIO no texto do DANFE
+    const emitAnchor = text.match(
+      /(?:IDENTIFICA[ÇC][ÃA]O\s+DO\s+EMITENTE|EMITENTE|REMETENTE)[\s\S]{0,220}?([A-ZÀ-Ú0-9\s.,'/-]{3,80}?)\s+(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/i
+    );
+    const destAnchor = text.match(
+      /(?:DESTINAT[ÁA]RIO|IDENTIFICA[ÇC][ÃA]O\s+DO\s+DESTINAT[ÁA]RIO)[\s\S]{0,220}?([A-ZÀ-Ú0-9\s.,'/-]{3,80}?)\s+(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})/i
+    );
+    if (emitAnchor) {
+      emitName = emitAnchor[1]
+        .replace(/^(?:NOME|RAZ[ÃA]O\s*SOCIAL|EMITENTE|REMETENTE)\s*/gi, '')
+        .replace(/CPF\s*\/\s*CNPJ|CNPJ\s*\/\s*CPF|ENDEREÇO|DATA|BAIRRO|CEP|MUNICÍPIO/gi, '')
+        .trim();
+      emitDoc = emitAnchor[2].trim();
+    }
+    if (destAnchor) {
+      destName = destAnchor[1]
+        .replace(/^(?:NOME|RAZ[ÃA]O\s*SOCIAL|DESTINAT[ÁA]RIO)\s*/gi, '')
+        .replace(/CPF\s*\/\s*CNPJ|CNPJ\s*\/\s*CPF|ENDEREÇO|DATA|BAIRRO|CEP|MUNICÍPIO/gi, '')
+        .trim();
+      destDoc = destAnchor[2].trim();
+    }
 
-      destName = entityMatches[1].name;
-      destDoc = entityMatches[1].doc;
-
-      if (entityMatches.length >= 3) {
+    if ((!emitName || emitName.length < 3 || !destName || destName.length < 3) && entityMatches.length >= 2) {
+      if (!emitName || emitName.length < 3) {
+        emitName = entityMatches[0].name;
+        emitDoc = entityMatches[0].doc;
+      }
+      if (!destName || destName.length < 3) {
+        destName = entityMatches[1].name;
+        destDoc = entityMatches[1].doc;
+      }
+      if (entityMatches.length >= 3 && !carrierName) {
         carrierName = entityMatches[2].name;
       }
-    } else if (entityMatches.length === 1) {
+    } else if ((!emitName || emitName.length < 3) && entityMatches.length === 1) {
       emitName = entityMatches[0].name;
       emitDoc = entityMatches[0].doc;
     }
-
-    // Fallbacks para nomes específicos se não capturados
-    if (!emitName || emitName.length < 3) {
-      if (text.includes('CARLOS CESAR CANTELE')) {
-        emitName = 'CARLOS CESAR CANTELE';
-        emitDoc = '041.284.679-95';
-      }
-    }
-    if (!destName || destName.length < 3) {
-      if (text.includes('DDM DISTRIBUIDORA')) {
-        destName = 'DDM DISTRIBUIDORA LTDA';
-        destDoc = '08.018.149/0001-00';
-      }
-    }
+    // Sem fallbacks hardcoded de loja/produtor — usuário confirma no modal
 
     // Extrair Inscrições Estaduais
     const allIes = text.match(/\b00\d{7,10}[.\d-]*\b/g) || text.match(/INSCRI[ÇC][ÃA]O\s*ESTADUAL[\s\S]*?([\d.-]+)/gi) || [];
@@ -284,16 +295,18 @@ class NfeParserService {
       saleDate: dhEmi,
       nfeDate: dhEmi,
       emit: {
-        name: emitName || 'Produtor Rural',
+        name: (emitName || '').trim(),
         document: emitDoc,
         ie: emitIE,
         city: emitCity,
         uf: emitUF,
         address: emitAddress,
-        originText: await normalizeProducerOrigin(emitName ? `${emitName} (${emitCity || 'Fazenda'}/${emitUF || 'MG'})` : 'Produtor Rural', emitName)
+        originText: emitName
+          ? await normalizeProducerOrigin(`${emitName} (${emitCity || 'Fazenda'}/${emitUF || 'MG'})`, emitName)
+          : ''
       },
       dest: {
-        name: destName || 'Cliente Comprador',
+        name: (destName || '').trim(),
         document: destDoc,
         ie: destIE,
         city: destCity,
@@ -414,7 +427,7 @@ class NfeParserService {
     }
 
     const emit = infNFe.emit || {};
-    const emitName = emit.xNome || '';
+    const emitName = String(emit.xNome || '').replace(/\s+/g, ' ').trim();
     const emitDoc = emit.CNPJ || emit.CPF || '';
     const emitIE = emit.IE || '';
     const emitCity = emit.enderEmit?.xMun || '';
@@ -422,7 +435,7 @@ class NfeParserService {
     const emitAddress = [emit.enderEmit?.xLgr, emit.enderEmit?.nro, emit.enderEmit?.xBairro].filter(Boolean).join(', ');
 
     const dest = infNFe.dest || {};
-    const destName = dest.xNome || '';
+    const destName = String(dest.xNome || '').replace(/\s+/g, ' ').trim();
     const destDoc = dest.CNPJ || dest.CPF || '';
     const destIE = dest.IE || '';
     const destCity = dest.enderDest?.xMun || '';

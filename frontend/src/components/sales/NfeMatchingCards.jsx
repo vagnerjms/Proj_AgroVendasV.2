@@ -9,11 +9,13 @@ export default function NfeMatchingCards({
   registeringClient,
   clientRegisteredNotice,
   handleQuickRegisterClient,
+  onDismissUnmatchedClient,
   matchedProducer,
   unmatchedProducer,
   registeringProducer,
   producerRegisteredNotice,
   handleQuickRegisterProducer,
+  onDismissUnmatchedProducer,
   duplicateWarning
 }) {
   return (
@@ -92,6 +94,7 @@ export default function NfeMatchingCards({
         matchedClient={matchedClient}
         registeringClient={registeringClient}
         onQuickRegister={handleQuickRegisterClient}
+        onDismiss={onDismissUnmatchedClient}
       />
 
       {/* 🌾 CARD DE VÍNCULO INTELIGENTE DO PRODUTOR */}
@@ -152,6 +155,7 @@ export default function NfeMatchingCards({
         matchedProducer={matchedProducer}
         registeringProducer={registeringProducer}
         onQuickRegister={handleQuickRegisterProducer}
+        onDismiss={onDismissUnmatchedProducer}
       />
 
       {/* Alerta de NF-e Duplicada */}

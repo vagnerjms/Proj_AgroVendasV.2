@@ -162,10 +162,30 @@ describe('CRUD routes authenticated', () => {
   });
 
   test('products CRUD', async () => {
+    const parent = await request(app).post('/api/products').set(headers)
+      .send({ name: 'Batata', category: 'Hortifruti', defaultUnit: 'Sacas (sc)', unitKg: 25 });
+    expect(parent.status).toBe(201);
+
     const created = await request(app).post('/api/products').set(headers)
-      .send({ name: 'Soja Premium' });
+      .send({ name: 'Soja Premium', parentProductId: parent.body.id });
     expect(created.status).toBe(201);
     expect(created.body.category).toBe('Grãos');
+    expect(created.body.parentProductId).toBe(parent.body.id);
+
+    const orphan = await request(app).post('/api/products').set(headers)
+      .send({ name: 'Milho Temp', parentProductId: '   ' });
+    expect(orphan.status).toBe(201);
+    expect(orphan.body.parentProductId == null).toBe(true);
+    expect((await request(app).delete(`/api/products/${orphan.body.id}`).set(headers)).status).toBe(200);
+
+    const childLink = await request(app).post('/api/products').set(headers)
+      .send({ name: 'Batata Especial Temp', category: 'Hortifruti', parentProductId: parent.body.id });
+    expect(childLink.status).toBe(201);
+    const clearParent = await request(app).put(`/api/products/${childLink.body.id}`).set(headers)
+      .send({ parentProductId: '' });
+    expect(clearParent.status).toBe(200);
+    expect(clearParent.body.parentProductId == null).toBe(true);
+    expect((await request(app).delete(`/api/products/${childLink.body.id}`).set(headers)).status).toBe(200);
 
     expect((await request(app).post('/api/products').set(headers).send({})).status).toBe(400);
     expect((await request(app).post('/api/products').set(headers).send({ name: 'Soja Premium' })).status).toBe(400);
@@ -179,13 +199,23 @@ describe('CRUD routes authenticated', () => {
     expect(byCat.status).toBe(200);
 
     const upd = await request(app).put(`/api/products/${created.body.id}`).set(headers)
-      .send({ currentStock: 10, unitKg: 60, averageCost: 1.5, defaultUnit: 'Sacas', category: 'Grãos', name: 'Soja Premium' });
+      .send({
+        currentStock: 10,
+        unitKg: 60,
+        averageCost: 1.5,
+        defaultUnit: 'Sacas',
+        category: 'Grãos',
+        name: 'Soja Premium',
+        parentProductId: null
+      });
     expect(upd.status).toBe(200);
     expect(upd.body.currentStock).toBe(10);
+    expect(upd.body.parentProductId == null).toBe(true);
     expect((await request(app).put('/api/products/NOPE').set(headers).send({ name: 'X' })).status).toBe(404);
 
     const del = await request(app).delete(`/api/products/${created.body.id}`).set(headers);
     expect(del.status).toBe(200);
+    expect((await request(app).delete(`/api/products/${parent.body.id}`).set(headers)).status).toBe(200);
 
     const p2 = await request(app).post('/api/products').set(headers).send({ name: 'Cenoura' });
     await Sale.create({

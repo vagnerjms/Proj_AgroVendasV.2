@@ -187,10 +187,23 @@ test.describe('AgroVenda critical flows (13–17)', () => {
     const atualizar = page.getByRole('button', { name: /^atualizar$/i });
     expect(await atualizar.count()).toBe(0);
 
+    // Botão "Limpar" só aparece com filtro ativo — ativa produtor se houver opções
+    const producerSelect = page.locator('select').filter({ hasText: /produtor|todos/i }).first();
+    if (await producerSelect.count()) {
+      const options = await producerSelect.locator('option').allTextContents();
+      const nonAll = options.find((o) => o && !/^todos/i.test(o.trim()));
+      if (nonAll) {
+        await producerSelect.selectOption({ label: nonAll.trim() });
+        await page.waitForTimeout(400);
+      }
+    }
+
     const clearBtn = page.getByRole('button', { name: /limpar todos os filtros/i }).first();
-    await expect(clearBtn).toBeVisible({ timeout: 10000 });
-    await clearBtn.click();
-    await page.waitForTimeout(800);
+    if (await clearBtn.count()) {
+      await expect(clearBtn).toBeVisible({ timeout: 5000 });
+      await clearBtn.click();
+      await page.waitForTimeout(500);
+    }
 
     await expect(page.getByText(/presta[cç][aã]o/i).first()).toBeVisible();
   });

@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 /**
- * Fluxos críticos 8–17 — ver docs/E2E_CRITICAL_FLOWS.md.
+ * Fluxos críticos 8–18 — ver docs/E2E_CRITICAL_FLOWS.md.
  * Sessão via e2e/auth.setup.js (storageState).
  */
 
@@ -91,7 +91,7 @@ test.describe('AgroVenda critical flows (8–12)', () => {
   });
 });
 
-test.describe('AgroVenda critical flows (13–17)', () => {
+test.describe('AgroVenda critical flows (13–18)', () => {
   test('13. Agenda: MultiStore/MultiProduct; Status sem PIX/Cheque; sem select legado', async ({ page }) => {
     await ensureApp(page);
     await page.getByText(/agenda\s*&\s*alertas/i).first().click();
@@ -206,5 +206,40 @@ test.describe('AgroVenda critical flows (13–17)', () => {
     }
 
     await expect(page.getByText(/presta[cç][aã]o/i).first()).toBeVisible();
+  });
+
+  test('18. Fiscal: Baixar Excel do filtro com Observações', async ({ page }) => {
+    await ensureApp(page);
+    await page.getByText(/financeiro\s*&\s*fiscal/i).first().click();
+    await page.waitForTimeout(600);
+    await page.getByText(/contas e fluxo/i).first().click();
+    await page.waitForTimeout(1500);
+
+    const excelBtn = page.getByRole('button', { name: /baixar excel/i }).first();
+    await expect(excelBtn).toBeVisible({ timeout: 10000 });
+
+    // Sem registros no filtro o botão fica disabled — ainda assim o controle deve existir
+    if (await excelBtn.isDisabled()) {
+      expect(true).toBeTruthy();
+      return;
+    }
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download', { timeout: 15000 }),
+      excelBtn.click()
+    ]);
+
+    const suggested = download.suggestedFilename();
+    expect(suggested).toMatch(/^Fiscal_Contas_.*\.xls$/i);
+
+    const filePath = await download.path();
+    expect(filePath).toBeTruthy();
+    const fs = require('fs');
+    const content = fs.readFileSync(filePath, 'utf8');
+    expect(/FISCAL\s*\(CONTAS\s*\/\s*FLUXOS\)/i.test(content)).toBeTruthy();
+    expect(/Observações/i.test(content)).toBeTruthy();
+    expect(/Valor Recebido/i.test(content)).toBeTruthy();
+    expect(/Desconto/i.test(content)).toBeTruthy();
+    expect(/TOTAL\s*\(filtro\)/i.test(content)).toBeTruthy();
   });
 });

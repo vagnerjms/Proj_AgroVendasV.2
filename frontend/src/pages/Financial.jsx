@@ -11,13 +11,15 @@ import {
   Tractor,
   Building2,
   Paperclip,
-  FileText
+  FileText,
+  Download
 } from 'lucide-react';
 import { formatCurrency, formatDate, getCleanFileName } from '../utils/formatters';
 import { api } from '../services/api';
 import { calculateLiquidation, calculateFunrural } from '../utils/calculations';
 import { nfDisplayLabel, resolveRomaneioNumber, quantityOf, formatQuantity, resolveProductUnit } from '../utils/dataHelpers';
 import { DATA_LABELS } from '../constants/dataLabels';
+import { downloadFiscalExcel } from '../utils/fiscalExcelBuilder';
 import SettleModal from '../components/sales/SettleModal';
 import MultiStoreSelect from '../components/reports/MultiStoreSelect';
 import MultiProductSelect from '../components/reports/MultiProductSelect';
@@ -300,6 +302,16 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
   const startIndex = (currentPage - 1) * pageSize;
   const paginatedSales = filteredSales.slice(startIndex, startIndex + pageSize);
 
+  const handleDownloadFiscalExcel = () => {
+    downloadFiscalExcel(filteredSales, totalsFiltered, {
+      statusFilter,
+      selectedStores,
+      selectedProducts,
+      selectedProducers,
+      searchTerm
+    });
+  };
+
   // —— Apuração FUNRURAL (tela dedicada) ——
   if (view === 'funrural') {
     return (
@@ -537,6 +549,17 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
                 </button>
               ))}
             </div>
+
+            <button
+              type="button"
+              onClick={handleDownloadFiscalExcel}
+              disabled={loading || filteredSales.length === 0}
+              title="Baixar planilha do Fiscal com o filtro atual (inclui Observações)"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#091b2e] text-white hover:bg-[#132c4a] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Baixar Excel
+            </button>
           </div>
           <p className="text-[11px] text-gray-500">
             {filteredSales.length} registro(s) · somas do filtro: VP {formatCurrency(totalsFiltered.vp)} · Recebido {formatCurrency(totalsFiltered.recebido)} · Saldo {formatCurrency(totalsFiltered.saldo)}

@@ -72,20 +72,18 @@ async function sendSaleWebhook(event, sale) {
     const folderMonth = `${year}-${month}`;
 
     // Leitura assíncrona não-bloqueante de anexos físicos
+    const { resolveUploadFile } = require('../utils/resolveUploadFile');
     const files = [];
     const targets = [sale.nfFile, sale.evidenceFile, sale.paymentProofFile].filter(Boolean);
     try {
       if (fs.existsSync(uploadDir)) {
         const diskFiles = await fs.promises.readdir(uploadDir);
         for (const target of targets) {
-          const diskMatch = diskFiles.find(df =>
-            df === target ||
-            df.endsWith(target) ||
-            (target.includes('.') && df.includes(target))
-          );
+          const resolved = resolveUploadFile(target, { dir: uploadDir, diskFiles });
+          const diskMatch = resolved?.filename;
           if (diskMatch) {
             try {
-              const filePath = path.join(uploadDir, diskMatch);
+              const filePath = resolved.absolutePath;
               const stat = await fs.promises.stat(filePath);
               if (stat.isFile() && stat.size > 0 && stat.size <= 5 * 1024 * 1024) {
                 const dataBuffer = await fs.promises.readFile(filePath);

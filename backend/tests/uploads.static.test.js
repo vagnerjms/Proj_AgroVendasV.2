@@ -60,4 +60,28 @@ describe('GET /uploads — auth + 404 (sem SPA)', () => {
     const res = await request(app).get('/uploads/qualquer.pdf');
     expect(res.status).toBe(401);
   });
+
+  test('alias VP012 - NF-xxx.pdf resolve ficheiro Multer no disco → 200', async () => {
+    const { token } = await authHeader();
+    const diskName = `1790984754718-961184305-NF-28008239.pdf`;
+    const aliasName = 'VP012 - NF-28008239.pdf';
+    const fixturePath = path.join(uploadDir, diskName);
+    fs.mkdirSync(uploadDir, { recursive: true });
+    fs.writeFileSync(fixturePath, 'nf-pdf-content');
+
+    try {
+      const res = await request(app)
+        .get(`/uploads/${encodeURIComponent(aliasName)}?token=${token}`)
+        .buffer(true)
+        .parse((res, cb) => {
+          const chunks = [];
+          res.on('data', (c) => chunks.push(c));
+          res.on('end', () => cb(null, Buffer.concat(chunks)));
+        });
+      expect(res.status).toBe(200);
+      expect(Buffer.isBuffer(res.body) ? res.body.toString('utf8') : String(res.text || '')).toBe('nf-pdf-content');
+    } finally {
+      try { fs.unlinkSync(fixturePath); } catch (_) {}
+    }
+  });
 });

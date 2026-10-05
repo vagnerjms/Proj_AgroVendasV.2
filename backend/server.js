@@ -21,8 +21,18 @@ app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Protected Static Uploads Serving (Exige JWT válido via Header, Cookie ou Query)
-// Fallback 404 explícito — evita SPA catch-all servir index.html (dashboard) para arquivo inexistente
+// Fallback: resolve aliases (VP012 - NF-xxx.pdf → ficheiro Multer no disco) antes do 404
+const { resolveUploadFile, safeBasename } = require('./utils/resolveUploadFile');
 app.use('/uploads', requireAuth, express.static(uploadDir), (req, res) => {
+  try {
+    const requested = safeBasename(req.path || req.url || '');
+    const resolved = resolveUploadFile(requested, { dir: uploadDir });
+    if (resolved && resolved.absolutePath) {
+      return res.sendFile(resolved.absolutePath);
+    }
+  } catch (_) {
+    // fall through to 404
+  }
   res.status(404).type('text/plain').send('Arquivo não encontrado');
 });
 

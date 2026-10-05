@@ -11,6 +11,7 @@ const {
 } = require('../models');
 const { recalibrateCounters } = require('./sequence.service');
 const { uploadDir } = require('../middlewares/upload');
+const { resolveUploadFile } = require('../utils/resolveUploadFile');
 
 /**
  * Coleta estatísticas consolidadas de contagem de registros e tamanho em disco dos anexos
@@ -86,11 +87,8 @@ async function generateBackupPackage() {
     for (const s of sales) {
       const targets = [s.nfFile, s.evidenceFile, s.paymentProofFile].filter(Boolean);
       for (const target of targets) {
-        const diskMatch = diskFiles.find(df => 
-          df === target || 
-          df.endsWith(target) || 
-          (target.includes('.') && df.includes(target))
-        );
+        const resolved = resolveUploadFile(target, { dir: uploadDir, diskFiles });
+        const diskMatch = resolved?.filename;
 
         if (diskMatch && !addedDiskFiles.has(diskMatch)) {
           try {
@@ -230,10 +228,46 @@ async function restoreBackup(backupData) {
     for (const f of files) {
       try {
         if (f.filename && f.contentBase64) {
-          const targetPath = path.join(uploadDir, f.filename);
+          const writtenName = path.basename(String(f.filename).replace(/\\/g, '/'));
+          if (!writtenName || writtenName === '.' || writtenName === '..') continue;
+          const targetPath = path.join(uploadDir, writtenName);
           const buffer = Buffer.from(f.contentBase64, 'base64');
           await fs.promises.writeFile(targetPath, buffer);
           restoredFilesCount++;
+
+          // Alinha campos da venda ao nome realmente escrito no disco
+          const saleId = f.saleId || f.saleID || '';
+          if (saleId) {
+            const sale = await Sale.findOne({ id: saleId });
+            if (sale) {
+              const lower = writtenName.toLowerCase();
+              const isNf = /(?:^|[-_\s])nf[-_]|nota|nfe/i.test(writtenName)
+                || (sale.nfFile && (
+                  writtenName === sale.nfFile
+                  || writtenName.includes(path.basename(String(sale.nfFile)))
+                  || String(sale.nfFile).includes(writtenName)
+                ));
+              const isEvidence = /pedido|canhoto|romaneio|evidence/i.test(lower)
+                || (sale.evidenceFile && (
+                  writtenName === sale.evidenceFile
+                  || writtenName.includes(path.basename(String(sale.evidenceFile)))
+                ));
+              const isProof = /(?:^|[-_\s])cp[-_]|comprovante|payment|pix|recibo/i.test(lower)
+                || (sale.paymentProofFile && writtenName === sale.paymentProofFile);
+
+              // Só atualiza campos com classificação clara — nunca atribui
+              // ficheiro genérico a evidenceFile (evita poluir pedido/CP).
+              // Não toca paidAmount / paymentHistory.
+              const patch = {};
+              if (isNf) patch.nfFile = writtenName;
+              else if (isEvidence) patch.evidenceFile = writtenName;
+              else if (isProof) patch.paymentProofFile = writtenName;
+
+              if (Object.keys(patch).length) {
+                await Sale.updateOne({ id: saleId }, { $set: patch });
+              }
+            }
+          }
         }
       } catch (e) {}
     }

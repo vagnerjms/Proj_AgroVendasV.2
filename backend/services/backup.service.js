@@ -14,6 +14,19 @@ const { uploadDir } = require('../middlewares/upload');
 const { resolveUploadFile } = require('../utils/resolveUploadFile');
 
 /**
+ * Conta vendas com baixas/recebimentos (paidAmount > 0 ou paymentHistory não vazio).
+ * Usado como guarda antes do wipe completo no restore.
+ */
+async function countSalesWithPayments() {
+  return Sale.countDocuments({
+    $or: [
+      { paidAmount: { $gt: 0 } },
+      { 'paymentHistory.0': { $exists: true } }
+    ]
+  });
+}
+
+/**
  * Coleta estatísticas consolidadas de contagem de registros e tamanho em disco dos anexos
  */
 async function getBackupStats() {
@@ -292,5 +305,6 @@ async function restoreBackup(backupData) {
 module.exports = {
   getBackupStats,
   generateBackupPackage,
-  restoreBackup
+  restoreBackup,
+  countSalesWithPayments
 };

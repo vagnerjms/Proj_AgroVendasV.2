@@ -17,7 +17,8 @@ jest.mock('../services/nfeParser.service', () => ({
 jest.mock('../services/backup.service', () => ({
   getBackupStats: jest.fn().mockResolvedValue({}),
   generateBackupPackage: jest.fn().mockResolvedValue({}),
-  restoreBackup: jest.fn().mockResolvedValue({ success: true })
+  restoreBackup: jest.fn().mockResolvedValue({ success: true }),
+  countSalesWithPayments: jest.fn().mockResolvedValue(0)
 }));
 jest.mock('../services/cleanup.service', () => ({
   cleanupOrphanUploads: jest.fn().mockResolvedValue({ deletedCount: 0 }),
@@ -769,7 +770,7 @@ describe('branches ≥90 — weighings + sale + auth/upload', () => {
     const restore = await request(app)
       .post('/api/backup/restore')
       .set(headers)
-      .send({ backupJson: { version: 1, sales: [] } });
+      .send({ backupJson: { version: 1, sales: [] }, confirmPhrase: 'RESTAURAR' });
     expect([200, 500]).toContain(restore.status);
   });
 });

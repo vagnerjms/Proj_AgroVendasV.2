@@ -22,6 +22,8 @@ export default function BackupRestore({ setCurrentPage }) {
   const [exporting, setExporting] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [restoreFile, setRestoreFile] = useState(null);
+  const [confirmPhrase, setConfirmPhrase] = useState('');
+  const [acknowledgePaymentsLoss, setAcknowledgePaymentsLoss] = useState(false);
   const [restoreResult, setRestoreResult] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -75,6 +77,16 @@ export default function BackupRestore({ setCurrentPage }) {
       return;
     }
 
+    if (confirmPhrase !== 'RESTAURAR') {
+      setErrorMessage('Digite exatamente RESTAURAR no campo de confirmação para continuar.');
+      return;
+    }
+
+    if (!acknowledgePaymentsLoss) {
+      setErrorMessage('Marque a confirmação de que baixas/recebimentos atuais serão substituídos pelo backup.');
+      return;
+    }
+
     if (!window.confirm('ATENÇÃO: A restauração irá substituir os dados atuais pelos dados contidos no arquivo de backup. Deseja continuar?')) {
       return;
     }
@@ -87,11 +99,15 @@ export default function BackupRestore({ setCurrentPage }) {
     try {
       const formData = new FormData();
       formData.append('backupFile', restoreFile);
+      formData.append('confirmPhrase', confirmPhrase);
+      formData.append('acknowledgePaymentsLoss', String(acknowledgePaymentsLoss));
 
       const data = await api.upload('/api/backup/restore', formData);
       if (data && data.success) {
         setRestoreResult(data.restoredStats);
         setSuccessMessage('Sistema restaurado com sucesso no novo servidor!');
+        setConfirmPhrase('');
+        setAcknowledgePaymentsLoss(false);
         fetchStats();
       } else {
         throw new Error(data?.error || 'Erro ao processar arquivo de restauração');
@@ -235,6 +251,10 @@ export default function BackupRestore({ setCurrentPage }) {
               Selecione o arquivo de backup gerado anteriormente para recriar todo o banco de dados e arquivos no novo servidor:
             </p>
 
+            <div className="bg-amber-50 border border-amber-300 text-amber-950 px-3 py-2.5 rounded-lg text-xs leading-relaxed">
+              Exporte um backup <strong>antes</strong> de restaurar se fez baixas recentes. A restauração substitui 100% dos dados atuais (incluindo baixas/recebimentos) pelo conteúdo do arquivo.
+            </div>
+
             <div className="border-2 border-dashed border-gray-300 hover:border-emerald-500 rounded-xl p-6 text-center cursor-pointer transition-colors bg-gray-50/50">
               <input
                 type="file"
@@ -254,6 +274,33 @@ export default function BackupRestore({ setCurrentPage }) {
               </label>
             </div>
 
+            <div className="space-y-2">
+              <label htmlFor="restore-confirm-phrase" className="text-xs font-bold text-gray-800 block">
+                Digite RESTAURAR para confirmar
+              </label>
+              <input
+                id="restore-confirm-phrase"
+                type="text"
+                value={confirmPhrase}
+                onChange={(e) => setConfirmPhrase(e.target.value)}
+                autoComplete="off"
+                placeholder="RESTAURAR"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono tracking-wide focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <label className="flex items-start gap-2 text-xs text-gray-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={acknowledgePaymentsLoss}
+                onChange={(e) => setAcknowledgePaymentsLoss(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Entendo que baixas/recebimentos atuais serão substituídos pelo backup
+              </span>
+            </label>
+
             {restoreResult && (
               <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200 text-xs text-emerald-950 space-y-1">
                 <strong>Resultado da Restauração:</strong>
@@ -268,7 +315,7 @@ export default function BackupRestore({ setCurrentPage }) {
 
             <button
               type="submit"
-              disabled={restoring || !restoreFile}
+              disabled={restoring || !restoreFile || confirmPhrase !== 'RESTAURAR' || !acknowledgePaymentsLoss}
               className="w-full bg-blue-700 hover:bg-blue-800 disabled:bg-gray-300 text-white font-bold text-xs py-3.5 rounded-lg shadow-md transition-all flex items-center justify-center gap-2"
             >
               <UploadCloud className="w-4 h-4" />

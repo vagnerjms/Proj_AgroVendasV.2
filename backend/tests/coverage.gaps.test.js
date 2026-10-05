@@ -378,6 +378,7 @@ describe('coverage gaps — routes extras', () => {
     const restore = await request(app)
       .post('/api/backup/restore')
       .set(headers)
+      .field('confirmPhrase', 'RESTAURAR')
       .attach('backupFile', bak);
     expect([200, 400, 500]).toContain(restore.status);
 

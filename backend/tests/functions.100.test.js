@@ -24,7 +24,8 @@ jest.mock('../services/nfeParser.service', () => ({
 jest.mock('../services/backup.service', () => ({
   getBackupStats: jest.fn().mockResolvedValue({}),
   generateBackupPackage: jest.fn().mockResolvedValue({}),
-  restoreBackup: jest.fn().mockResolvedValue({ success: true })
+  restoreBackup: jest.fn().mockResolvedValue({ success: true }),
+  countSalesWithPayments: jest.fn().mockResolvedValue(0)
 }));
 
 jest.mock('../services/cleanup.service', () => ({

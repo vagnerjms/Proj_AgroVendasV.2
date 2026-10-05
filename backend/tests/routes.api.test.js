@@ -17,7 +17,8 @@ jest.mock('../services/nfeParser.service', () => ({
 jest.mock('../services/backup.service', () => ({
   getBackupStats: jest.fn().mockResolvedValue({ salesCount: 0 }),
   generateBackupPackage: jest.fn().mockResolvedValue({ version: 1, sales: [] }),
-  restoreBackup: jest.fn().mockResolvedValue({ success: true, restored: 1 })
+  restoreBackup: jest.fn().mockResolvedValue({ success: true, restored: 1 }),
+  countSalesWithPayments: jest.fn().mockResolvedValue(0)
 }));
 
 jest.mock('../services/cleanup.service', () => ({
@@ -491,7 +492,7 @@ describe('CRUD routes authenticated', () => {
     const restore = await request(app)
       .post('/api/backup/restore')
       .set(headers)
-      .send({ backupJson: { sales: [] } });
+      .send({ backupJson: { sales: [] }, confirmPhrase: 'RESTAURAR' });
     expect(restore.status).toBe(200);
 
     expect((await request(app).post('/api/backup/restore').set(headers).send({})).status).toBe(400);

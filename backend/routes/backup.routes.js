@@ -5,6 +5,12 @@ const { upload } = require('../middlewares/upload');
 const { requireAuth, requirePermission } = require('../middlewares/auth');
 const backupService = require('../services/backup.service');
 
+const RESTORE_CONFIRM_PHRASE = 'RESTAURAR';
+
+function parseTruthy(value) {
+  return value === true || value === 'true' || value === '1' || value === 1;
+}
+
 // Proteger todas as rotas de backup (apenas usuários autenticados com permissão de backup)
 router.use(requireAuth);
 router.use(requirePermission('backup_sistema'));
@@ -35,6 +41,22 @@ router.get('/export', async (req, res, next) => {
 // POST /api/backup/restore
 router.post('/restore', upload.single('backupFile'), async (req, res, next) => {
   try {
+    const confirmPhrase = req.body?.confirmPhrase;
+    if (confirmPhrase !== RESTORE_CONFIRM_PHRASE) {
+      return res.status(400).json({
+        error: 'Confirmação inválida. Digite RESTAURAR para continuar.'
+      });
+    }
+
+    const salesWithPayments = await backupService.countSalesWithPayments();
+    const acknowledgePaymentsLoss = parseTruthy(req.body?.acknowledgePaymentsLoss);
+    if (salesWithPayments > 0 && !acknowledgePaymentsLoss) {
+      return res.status(409).json({
+        error: 'Existem vendas com baixas/recebimentos. Confirme que entende a perda dessas baixas para restaurar.',
+        salesWithPayments
+      });
+    }
+
     let backupData = null;
 
     if (req.file) {

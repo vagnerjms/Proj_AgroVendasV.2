@@ -9,7 +9,8 @@ jest.mock('../services/nfeParser.service', () => ({
 jest.mock('../services/backup.service', () => ({
   getBackupStats: jest.fn().mockResolvedValue({ salesCount: 1 }),
   generateBackupPackage: jest.fn().mockResolvedValue({ ok: true }),
-  restoreBackup: jest.fn().mockResolvedValue({ success: true })
+  restoreBackup: jest.fn().mockResolvedValue({ success: true }),
+  countSalesWithPayments: jest.fn().mockResolvedValue(0)
 }));
 
 jest.mock('../services/cleanup.service', () => ({
@@ -143,7 +144,7 @@ describe('error paths and leftover functions', () => {
     expect((await request(app).get('/api/backup/export').set(headers)).status).toBe(500);
     backup.restoreBackup.mockRejectedValueOnce(new Error('b'));
     expect((await request(app).post('/api/backup/restore').set(headers)
-      .send({ backupJson: { sales: [] } })).status).toBe(500);
+      .send({ backupJson: { sales: [] }, confirmPhrase: 'RESTAURAR' })).status).toBe(500);
 
     try { fs.unlinkSync(xml); } catch (_) {}
   });

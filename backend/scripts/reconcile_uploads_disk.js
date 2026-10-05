@@ -1,6 +1,6 @@
 /**
  * Reconcilia campos de anexo das vendas (nfFile / evidenceFile / paymentProofFile)
- * com ficheiros reais em backend/uploads.
+ * e proofs em paymentHistory[] / producerPaymentHistory[] com ficheiros reais em backend/uploads.
  *
  * Uso:
  *   node scripts/reconcile_uploads_disk.js           # dry-run
@@ -13,6 +13,39 @@ const fs = require('fs');
 const mongoose = require('mongoose');
 
 const APPLY = process.argv.includes('--apply');
+
+async function reconcileField(sale, fieldPath, value, report, Sale, uploadDir, diskFiles, resolveUploadFile) {
+  if (!value) return;
+
+  const exactPath = path.join(uploadDir, path.basename(String(value)));
+  if (fs.existsSync(exactPath)) {
+    report.alreadyOk.push({ id: sale.id, field: fieldPath, value });
+    return;
+  }
+
+  const resolved = resolveUploadFile(value, { dir: uploadDir, diskFiles });
+  if (!resolved) {
+    report.missing.push({ id: sale.id, field: fieldPath, value });
+    return;
+  }
+
+  if (resolved.filename === value) {
+    report.alreadyOk.push({ id: sale.id, field: fieldPath, value });
+    return;
+  }
+
+  report.matched.push({
+    id: sale.id,
+    field: fieldPath,
+    from: value,
+    to: resolved.filename
+  });
+
+  if (APPLY) {
+    await Sale.updateOne({ id: sale.id }, { $set: { [fieldPath]: resolved.filename } });
+    report.updated.push({ id: sale.id, field: fieldPath, to: resolved.filename });
+  }
+}
 
 async function main() {
   if (!process.env.MONGO_URI) {
@@ -40,46 +73,55 @@ async function main() {
     $or: [
       { nfFile: { $exists: true, $ne: null, $ne: '' } },
       { evidenceFile: { $exists: true, $ne: null, $ne: '' } },
-      { paymentProofFile: { $exists: true, $ne: null, $ne: '' } }
+      { paymentProofFile: { $exists: true, $ne: null, $ne: '' } },
+      { 'paymentHistory.paymentProofFile': { $exists: true, $ne: null, $ne: '' } },
+      { 'producerPaymentHistory.paymentProofFile': { $exists: true, $ne: null, $ne: '' } }
     ]
   }).lean();
 
   const report = { matched: [], missing: [], alreadyOk: [], updated: [] };
-  const fields = ['nfFile', 'evidenceFile', 'paymentProofFile'];
+  const topFields = ['nfFile', 'evidenceFile', 'paymentProofFile'];
 
   for (const sale of sales) {
-    for (const field of fields) {
-      const value = sale[field];
-      if (!value) continue;
-
-      const exactPath = path.join(uploadDir, path.basename(String(value)));
-      if (fs.existsSync(exactPath)) {
-        report.alreadyOk.push({ id: sale.id, field, value });
-        continue;
-      }
-
-      const resolved = resolveUploadFile(value, { dir: uploadDir, diskFiles });
-      if (!resolved) {
-        report.missing.push({ id: sale.id, field, value });
-        continue;
-      }
-
-      if (resolved.filename === value) {
-        report.alreadyOk.push({ id: sale.id, field, value });
-        continue;
-      }
-
-      report.matched.push({
-        id: sale.id,
+    for (const field of topFields) {
+      await reconcileField(
+        sale,
         field,
-        from: value,
-        to: resolved.filename
-      });
+        sale[field],
+        report,
+        Sale,
+        uploadDir,
+        diskFiles,
+        resolveUploadFile
+      );
+    }
 
-      if (APPLY) {
-        await Sale.updateOne({ id: sale.id }, { $set: { [field]: resolved.filename } });
-        report.updated.push({ id: sale.id, field, to: resolved.filename });
-      }
+    const paymentHistory = Array.isArray(sale.paymentHistory) ? sale.paymentHistory : [];
+    for (let i = 0; i < paymentHistory.length; i++) {
+      await reconcileField(
+        sale,
+        `paymentHistory.${i}.paymentProofFile`,
+        paymentHistory[i]?.paymentProofFile,
+        report,
+        Sale,
+        uploadDir,
+        diskFiles,
+        resolveUploadFile
+      );
+    }
+
+    const producerHistory = Array.isArray(sale.producerPaymentHistory) ? sale.producerPaymentHistory : [];
+    for (let i = 0; i < producerHistory.length; i++) {
+      await reconcileField(
+        sale,
+        `producerPaymentHistory.${i}.paymentProofFile`,
+        producerHistory[i]?.paymentProofFile,
+        report,
+        Sale,
+        uploadDir,
+        diskFiles,
+        resolveUploadFile
+      );
     }
   }
 

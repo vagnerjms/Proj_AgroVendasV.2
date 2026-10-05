@@ -17,7 +17,8 @@ jest.mock('../services/nfeParser.service', () => ({
 jest.mock('../services/backup.service', () => ({
   getBackupStats: jest.fn().mockResolvedValue({ salesCount: 0 }),
   generateBackupPackage: jest.fn().mockResolvedValue({ version: 1, sales: [] }),
-  restoreBackup: jest.fn().mockResolvedValue({ success: true, restored: 0 })
+  restoreBackup: jest.fn().mockResolvedValue({ success: true, restored: 0 }),
+  countSalesWithPayments: jest.fn().mockResolvedValue(0)
 }));
 
 jest.mock('../services/cleanup.service', () => ({
@@ -204,6 +205,7 @@ describe('threshold close — functions & branches', () => {
     const restore = await request(app)
       .post('/api/backup/restore')
       .set(headers)
+      .field('confirmPhrase', 'RESTAURAR')
       .attach('backupFile', bak);
     expect(restore.status).toBe(200);
     unlinkBak.mockRestore();

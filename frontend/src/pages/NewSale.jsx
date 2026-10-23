@@ -112,6 +112,12 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
+  // Conciliação com captura de pátio (módulo motorista /m)
+  const [patioCandidates, setPatioCandidates] = useState([]);
+  /** null = auto; '' = usuário optou por não vincular; id = escolhido */
+  const [selectedPatioSlipId, setSelectedPatioSlipId] = useState(null);
+  const [patioLoading, setPatioLoading] = useState(false);
+
   // Calculate Due Date automatically when saleDate or paymentTermDays changes
   useEffect(() => {
     if (saleDate && paymentTermDays !== '' && paymentTermDays !== null && !isNaN(Number(paymentTermDays))) {
@@ -123,6 +129,42 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       setDueDate(`${yyyy}-${mm}-${dd}`);
     }
   }, [saleDate, paymentTermDays]);
+
+  // Busca capturas de pátio compatíveis (NF / placa)
+  useEffect(() => {
+    const nfDigits = String(nfFile || nfeKey || '').replace(/\D/g, '');
+    const plate = String(truckPlate || '').trim();
+    if (!nfeKey && nfDigits.length < 4 && !plate) {
+      setPatioCandidates([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setPatioLoading(true);
+      try {
+        const qs = new URLSearchParams();
+        if (nfeKey) qs.set('nfeKey', nfeKey);
+        if (nfDigits) qs.set('nfNumber', nfDigits.slice(-9));
+        if (plate) qs.set('truckPlate', plate);
+        const data = await api.get(`/api/weighings/patio/candidates?${qs.toString()}`);
+        if (!cancelled) {
+          const list = data?.candidates || [];
+          setPatioCandidates(list);
+          if (list.length === 1) {
+            setSelectedPatioSlipId((prev) => (prev === null ? list[0].id : prev));
+          }
+        }
+      } catch {
+        if (!cancelled) setPatioCandidates([]);
+      } finally {
+        if (!cancelled) setPatioLoading(false);
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [nfeKey, nfFile, truckPlate]);
 
   const handleDueDateChange = (newDateStr) => {
     setDueDate(newDateStr);
@@ -169,6 +211,8 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     setClientRegisteredNotice('');
     setErrorMessage('');
     setSuccessMessage('');
+    setPatioCandidates([]);
+    setSelectedPatioSlipId(null);
   };
 
   // Prefill when in edit mode
@@ -782,7 +826,9 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         funruralTotal: funrural.funruralTotal,
         previdenciaSocial: funrural.previdencia,
         rat: funrural.rat,
-        senar: funrural.senar
+        senar: funrural.senar,
+        patioSlipId: selectedPatioSlipId || undefined,
+        skipPatioReconcile: selectedPatioSlipId === ''
       };
 
       let result;
@@ -879,6 +925,64 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         onDismissUnmatchedProducer={() => setUnmatchedProducer(null)}
         duplicateWarning={duplicateWarning}
       />
+
+      {(patioLoading || patioCandidates.length > 0) && (
+        <div className="bg-sky-50 border border-sky-300 text-sky-950 px-4 py-3 rounded-lg text-xs shadow-sm">
+          <div className="flex items-start gap-2">
+            <Scale className="w-4 h-4 text-sky-700 shrink-0 mt-0.5" />
+            <div className="flex-1 space-y-2">
+              <p className="font-bold">
+                {patioLoading
+                  ? 'Buscando captura de pátio do motorista…'
+                  : `${patioCandidates.length} captura(s) de pátio compatível(is)`}
+              </p>
+              {!patioLoading && patioCandidates.length > 0 && (
+                <ul className="space-y-1.5">
+                  {patioCandidates.map((c) => {
+                    const kg = c.netWeightKg || c.destWeightKg || c.originWeightKg || 0;
+                    const checked = selectedPatioSlipId === c.id;
+                    return (
+                      <li key={c.id}>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="patioSlip"
+                            checked={checked}
+                            onChange={() => setSelectedPatioSlipId(c.id)}
+                          />
+                          <span>
+                            <strong>{c.id}</strong>
+                            {' · '}
+                            placa {c.truckPlate || '—'}
+                            {' · '}
+                            NF {c.nfNumber || '—'}
+                            {' · '}
+                            {Number(kg).toLocaleString('pt-BR')} kg
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                  <li>
+                    <label className="flex items-center gap-2 cursor-pointer text-sky-800/80">
+                      <input
+                        type="radio"
+                        name="patioSlip"
+                        checked={selectedPatioSlipId === ''}
+                        onChange={() => setSelectedPatioSlipId('')}
+                      />
+                      <span>Não vincular captura de pátio</span>
+                    </label>
+                  </li>
+                </ul>
+              )}
+              <p className="text-sky-800/70">
+                Ao salvar, a venda será conciliada com o romaneio do pátio (sem criar pesagem duplicada).
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notifications */}
       {successMessage && (

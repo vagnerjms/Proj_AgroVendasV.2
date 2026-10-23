@@ -50,7 +50,8 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
   const [checkBank, setCheckBank] = useState('');
   const [checkDueDate, setCheckDueDate] = useState('');
   const [notes, setNotes] = useState('');
-  const [proofFile, setProofFile] = useState(null);
+  const [proofFiles, setProofFiles] = useState([]);
+  const [autoFillNote, setAutoFillNote] = useState('');
   const [loading, setLoading] = useState(false);
   const [reverting, setReverting] = useState(false);
   const [error, setError] = useState('');
@@ -62,9 +63,29 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
   const settleNet = Math.max(0, (Number(settleGross) || 0) - parsedDiscount);
   const saldoAfter = Math.max(0, remainingBalance - settleNet);
 
-  const handleFileChange = (e) => {
-    if (e.target.files?.[0]) {
-      setProofFile(e.target.files[0]);
+  const handleFileChange = async (e) => {
+    const list = Array.from(e.target.files || []);
+    if (!list.length) return;
+    setProofFiles(list);
+    setAutoFillNote('');
+    // Autofill a partir do primeiro arquivo (best-effort)
+    try {
+      const formData = new FormData();
+      formData.append('file', list[0]);
+      formData.append('remainingBalance', String(remainingBalance));
+      const parsed = await api.upload('/api/payment-proof/parse', formData);
+      const s = parsed?.suggested || {};
+      if (s.paidAmount != null && settleType === 'partial') {
+        setPartialAmount(String(s.paidAmount).replace('.', ','));
+      }
+      if (s.paymentDate) setPaymentDate(s.paymentDate);
+      if (s.paymentMethod) setPaymentMethod(s.paymentMethod);
+      if (s.notes) setNotes((prev) => prev || s.notes);
+      if (parsed?.confidence && parsed.confidence !== 'none') {
+        setAutoFillNote(`Preenchido automaticamente (${parsed.confidence}) — revise antes de confirmar.`);
+      }
+    } catch (err) {
+      /* parse opcional */
     }
   };
 
@@ -103,12 +124,12 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
 
     setLoading(true);
     try {
-      let uploadedFilename = null;
-      if (proofFile) {
+      const uploadedNames = [];
+      for (const file of proofFiles) {
         const formData = new FormData();
-        formData.append('file', proofFile);
+        formData.append('file', file);
         const upRes = await api.upload('/api/upload', formData);
-        uploadedFilename = upRes?.filename || proofFile.name;
+        uploadedNames.push(upRes?.filename || file.name);
       }
 
       const endpoint = isProducer 
@@ -118,7 +139,8 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
       await api.post(endpoint, {
         paidAmount: paidVal,
         isPartial: settleType === 'partial',
-        paymentProofFile: uploadedFilename,
+        paymentProofFile: uploadedNames[0] || null,
+        paymentProofFiles: uploadedNames,
         paymentDate,
         paymentMethod,
         checkNumber: paymentMethod === 'Cheque' ? checkNumber : '',
@@ -312,17 +334,30 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
                           {ph.notes && <span>• {ph.notes}</span>}
                         </div>
                       </div>
-                      {ph.paymentProofFile && (
-                        <a
-                          href={authorizedUploadUrl(ph.paymentProofFile)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-700 hover:text-blue-900 font-bold flex items-center gap-1 text-[10px] bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
-                        >
-                          <Paperclip className="w-3 h-3" />
-                          <span>Comprovante</span>
-                        </a>
-                      )}
+                      {(() => {
+                        const files = [
+                          ...(Array.isArray(ph.paymentProofFiles) ? ph.paymentProofFiles : []),
+                          ph.paymentProofFile
+                        ].filter(Boolean);
+                        const unique = [...new Set(files)];
+                        if (!unique.length) return null;
+                        return (
+                          <div className="flex flex-col gap-0.5 items-end">
+                            {unique.map((f, fi) => (
+                              <a
+                                key={`${f}-${fi}`}
+                                href={authorizedUploadUrl(f)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-700 hover:text-blue-900 font-bold flex items-center gap-1 text-[10px] bg-blue-50 px-2 py-0.5 rounded border border-blue-200"
+                              >
+                                <Paperclip className="w-3 h-3" />
+                                <span>CP{unique.length > 1 ? fi + 1 : ''}</span>
+                              </a>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -570,23 +605,31 @@ export default function SettleModal({ isOpen, sale, target = 'client', onClose, 
               />
             </div>
 
-            {/* Comprovante */}
+            {/* Comprovante(s) — multi */}
             <div>
               <label className="block text-xs font-bold text-gray-700 mb-1">
-                Comprovante (Opcional):
+                Comprovante(s) (opcional, vários):
               </label>
               <label className="flex items-center gap-1.5 border border-dashed border-gray-300 hover:border-emerald-600 bg-gray-50 rounded-lg p-2 cursor-pointer text-xs text-gray-600 transition-colors truncate">
                 <input
                   type="file"
                   accept="image/*,.pdf"
+                  multiple
                   onChange={handleFileChange}
                   className="hidden"
                 />
                 <Paperclip className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span className="truncate text-[11px] font-semibold">
-                  {proofFile ? proofFile.name : 'Anexar PIX/TED'}
+                  {proofFiles.length
+                    ? `${proofFiles.length} arquivo(s): ${proofFiles.map((f) => f.name).join(', ')}`
+                    : 'Anexar PIX/TED (um ou mais)'}
                 </span>
               </label>
+              {autoFillNote && (
+                <p className="text-[10px] text-emerald-800 font-semibold mt-1 bg-emerald-50 border border-emerald-100 rounded px-2 py-1">
+                  {autoFillNote}
+                </p>
+              )}
             </div>
           </div>
 

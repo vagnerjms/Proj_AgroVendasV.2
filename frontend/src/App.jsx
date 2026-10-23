@@ -14,6 +14,13 @@ import AgendaAlerts from './pages/AgendaAlerts';
 import BackupRestore from './pages/BackupRestore';
 import UserManagement from './pages/UserManagement';
 import Login from './pages/Login';
+import DriverPatio from './pages/DriverPatio';
+
+function isDriverPatioPath() {
+  if (typeof window === 'undefined') return false;
+  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  return path === '/m' || path.endsWith('/m') || window.location.hash === '#/m';
+}
 
 function MainApp() {
   const { currentUser, login, logout } = useAuth();
@@ -140,7 +147,7 @@ function MainApp() {
 export default function App() {
   return (
     <AuthProvider>
-      <MainApp />
+      {isDriverPatioPath() ? <DriverPatio /> : <MainApp />}
     </AuthProvider>
   );
 }

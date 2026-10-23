@@ -23,10 +23,13 @@ const sampleSale = {
   items: [{ product: 'Cenoura', quantity: 100, kg: 2900, valorTotalVP: 50000 }],
   paymentHistory: [
     {
+      seq: 1,
       amount: 49586.21,
       discountAmount: 413.79,
       paymentMethod: 'Cheque',
-      notes: 'Gap cheque vs VP−FUNRURAL(NF)'
+      notes: 'Gap cheque vs VP−FUNRURAL(NF)',
+      paymentProofFile: 'cp-001.pdf',
+      paymentProofFiles: ['cp-001.pdf']
     }
   ]
 };
@@ -65,6 +68,61 @@ describe('buildFiscalExcelHtml', () => {
     expect(html).not.toMatch(/>\s*Ações\s*</i);
   });
 
+  it('emite abas Resumo + Ledger_Baixas + Ledger_Repasses', () => {
+    const html = buildFiscalExcelHtml(
+      [{
+        ...sampleSale,
+        paidAmount: 3500,
+        paymentProofFile: 'b.pdf',
+        paymentHistory: [
+          {
+            seq: 1,
+            amount: 2000,
+            date: '2025-08-10',
+            paymentMethod: 'PIX',
+            paymentProofFiles: ['a.pdf'],
+            paymentProofFile: 'a.pdf'
+          },
+          {
+            seq: 2,
+            amount: 1500,
+            date: '2025-08-15',
+            paymentMethod: 'TED',
+            paymentProofFiles: ['b.pdf'],
+            paymentProofFile: 'b.pdf'
+          }
+        ],
+        producerPaymentHistory: [
+          {
+            seq: 1,
+            amount: 1000,
+            date: '2025-08-20',
+            paymentMethod: 'PIX',
+            paymentProofFiles: ['prod.pdf'],
+            paymentProofFile: 'prod.pdf'
+          }
+        ]
+      }],
+      { vp: 50000, nf: 40000, recebido: 3500, saldo: 46500, caixas: 100 },
+      {}
+    );
+
+    expect(html).toMatch(/<x:Name>Resumo<\/x:Name>/);
+    expect(html).toMatch(/<x:Name>Ledger_Baixas<\/x:Name>/);
+    expect(html).toMatch(/<x:Name>Ledger_Repasses<\/x:Name>/);
+    expect(html).toMatch(/data-sheet="Resumo"/);
+    expect(html).toMatch(/data-sheet="Ledger_Baixas"/);
+    expect(html).toMatch(/data-sheet="Ledger_Repasses"/);
+
+    const baixaRows = html.match(/data-ledger-row="Ledger_Baixas"/g) || [];
+    expect(baixaRows.length).toBe(2);
+    expect(html).toMatch(/CP×2/i);
+
+    const repasseRows = html.match(/data-ledger-row="Ledger_Repasses"/g) || [];
+    expect(repasseRows.length).toBe(1);
+    expect(html).toMatch(/CPProd01=/i);
+  });
+
   it('escapa HTML nas observações e lista vazia sem quebrar', () => {
     const html = buildFiscalExcelHtml(
       [{
@@ -82,5 +140,6 @@ describe('buildFiscalExcelHtml', () => {
 
     const empty = buildFiscalExcelHtml([], {}, {});
     expect(empty).toMatch(/Nenhum título no filtro/i);
+    expect(empty).toMatch(/data-sheet="Ledger_Baixas"/);
   });
 });

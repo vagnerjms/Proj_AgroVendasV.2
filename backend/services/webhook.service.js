@@ -7,7 +7,9 @@ const {
   formatNfNumber,
   resolveRomaneioNumber,
   buildDriveAttachmentName,
-  classifySaleAttachment
+  classifySaleAttachment,
+  collectSaleAttachmentTargets,
+  buildDriveSuggestedPath
 } = require('../utils/dataHelpers');
 
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || '';
@@ -71,14 +73,68 @@ async function sendSaleWebhook(event, sale) {
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');
     const folderMonth = `${year}-${month}`;
 
-    // Leitura assíncrona não-bloqueante de anexos físicos
+    // Leitura assíncrona — todos os anexos do ledger (não só o escalar)
     const { resolveUploadFile } = require('../utils/resolveUploadFile');
     const files = [];
-    const targets = [sale.nfFile, sale.evidenceFile, sale.paymentProofFile].filter(Boolean);
+    const collected = collectSaleAttachmentTargets(sale);
+    const targets = [collected.nf, collected.evidence, ...collected.clientProofs, ...collected.producerProofs]
+      .filter(Boolean);
+    // Seq global por arquivo (não reutilizar p.seq no lote — evita CP01 duplicado)
+    const cpSeqByFile = new Map();
+    let cpSeqCounter = 0;
+    (Array.isArray(sale.paymentHistory) ? sale.paymentHistory : []).forEach((p) => {
+      const batch = [
+        p?.paymentProofFile,
+        ...(Array.isArray(p?.paymentProofFiles) ? p.paymentProofFiles : [])
+      ].filter(Boolean);
+      batch.forEach((f) => {
+        if (!cpSeqByFile.has(f)) {
+          cpSeqCounter += 1;
+          cpSeqByFile.set(f, cpSeqCounter);
+        }
+      });
+    });
+    const cpProdSeqByFile = new Map();
+    let cpProdSeqCounter = 0;
+    (Array.isArray(sale.producerPaymentHistory) ? sale.producerPaymentHistory : []).forEach((p) => {
+      const batch = [
+        p?.paymentProofFile,
+        ...(Array.isArray(p?.paymentProofFiles) ? p.paymentProofFiles : [])
+      ].filter(Boolean);
+      batch.forEach((f) => {
+        if (!cpProdSeqByFile.has(f)) {
+          cpProdSeqCounter += 1;
+          cpProdSeqByFile.set(f, cpProdSeqCounter);
+        }
+      });
+    });
+
+    // Anexos do romaneio de pátio vinculado à VP
+    const patioTargets = [];
+    try {
+      const { WeighingSlip } = require('../db');
+      const patioSlips = await WeighingSlip.find({ saleId: sale.id, source: 'patio' })
+        .select('nfPhotoFile scaleRomaneioImage ticketImage attachment')
+        .lean();
+      for (const slip of patioSlips) {
+        if (slip.nfPhotoFile) patioTargets.push({ file: slip.nfPhotoFile, kind: 'patio_nf' });
+        if (slip.scaleRomaneioImage) patioTargets.push({ file: slip.scaleRomaneioImage, kind: 'patio_romaneio' });
+        else if (slip.ticketImage && slip.ticketImage !== slip.nfPhotoFile) {
+          patioTargets.push({ file: slip.ticketImage, kind: 'patio_romaneio' });
+        }
+      }
+    } catch (_) { /* ignore */ }
+
+    const allTargets = [
+      ...targets.map((t) => ({ file: t, kind: null })),
+      ...patioTargets
+    ];
+
     try {
       if (fs.existsSync(uploadDir)) {
         const diskFiles = await fs.promises.readdir(uploadDir);
-        for (const target of targets) {
+        for (const entry of allTargets) {
+          const target = entry.file;
           const resolved = resolveUploadFile(target, { dir: uploadDir, diskFiles });
           const diskMatch = resolved?.filename;
           if (diskMatch) {
@@ -88,14 +144,18 @@ async function sendSaleWebhook(event, sale) {
               if (stat.isFile() && stat.size > 0 && stat.size <= 5 * 1024 * 1024) {
                 const dataBuffer = await fs.promises.readFile(filePath);
                 let cleanFileName = diskMatch.replace(/^\d+-\d+-/, '');
-                const kind = classifySaleAttachment(target, sale);
+                const kind = entry.kind || classifySaleAttachment(target, sale);
                 const ext = path.extname(cleanFileName).toLowerCase() || path.extname(target).toLowerCase() || '.bin';
+                const seq = kind === 'cpprod'
+                  ? (cpProdSeqByFile.get(target) || 1)
+                  : (kind === 'cp' ? (cpSeqByFile.get(target) || 1) : undefined);
                 const driveFileName = buildDriveAttachmentName(kind, {
                   romaneioNumber,
                   nfNumber: nfNumber || formatNfNumber(target) || formatNfNumber(cleanFileName),
                   ext,
                   originalName: cleanFileName,
-                  nfFile: sale.nfFile
+                  nfFile: sale.nfFile,
+                  seq
                 });
                 const mimeType = ext === '.pdf' ? 'application/pdf'
                   : (ext === '.xml' ? 'application/xml'
@@ -116,6 +176,13 @@ async function sendSaleWebhook(event, sale) {
         }
       }
     } catch (eDir) {}
+
+    const drivePath = buildDriveSuggestedPath({
+      client: clientName,
+      saleId: sale.id,
+      storeName: clientName,
+      monthFolder: folderMonth
+    });
 
     const dueBr = dueDate.split('-').reverse().join('/');
     const valorBr = valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -146,8 +213,21 @@ async function sendSaleWebhook(event, sale) {
         monthFolder: folderMonth,
         clientFolder: clientName,
         saleId: sale.id,
+        productRoot: drivePath.productRoot,
+        tenantSlug: drivePath.tenantSlug,
+        storeFolder: drivePath.storeFolder,
+        saleFolder: drivePath.saleFolder,
+        suggestedPath: drivePath.suggestedPath,
         suggestedFolder: `${sale.id} - ${clientName} (${folderMonth})`
       },
+      paymentHistorySummary: (Array.isArray(sale.paymentHistory) ? sale.paymentHistory : []).map((p, i) => ({
+        seq: p.seq || i + 1,
+        amount: p.amount,
+        date: p.date,
+        paymentMethod: p.paymentMethod,
+        paymentProofFile: p.paymentProofFile || null,
+        paymentProofFiles: Array.isArray(p.paymentProofFiles) ? p.paymentProofFiles : []
+      })),
       calendar: {
         summary: `${clientName.split(' ')[0]} · R$ ${valorFinal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} (${sale.id}) · ${paymentStatus}`,
         start: `${dueDate}T09:00:00-03:00`,

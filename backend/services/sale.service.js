@@ -10,8 +10,48 @@ const { invalidateAuditCache } = require('./audit.service');
 const {
   formatRomaneioNumber,
   extractRomaneioFromNotes,
-  extractRomaneioFromFilename
+  extractRomaneioFromFilename,
+  formatNfNumber
 } = require('../utils/dataHelpers');
+const { reconcilePatioSlip } = require('./reconcilePatio.service');
+const crypto = require('crypto');
+
+/** Normaliza proofs do payload: paymentProofFiles[] + paymentProofFile (compat). */
+function normalizeProofFiles(payload = {}) {
+  const list = [];
+  const seen = new Set();
+  const push = (f) => {
+    const v = f && String(f).trim();
+    if (!v || seen.has(v)) return;
+    seen.add(v);
+    list.push(v);
+  };
+  if (Array.isArray(payload.paymentProofFiles)) {
+    payload.paymentProofFiles.forEach(push);
+  }
+  push(payload.paymentProofFile);
+  return list;
+}
+
+function eventProofFields(proofFiles, seq) {
+  const files = Array.isArray(proofFiles) ? proofFiles.filter(Boolean) : [];
+  return {
+    id: crypto.randomBytes(6).toString('hex'),
+    seq: seq || 1,
+    paymentProofFile: files[0] || null,
+    paymentProofFiles: files
+  };
+}
+
+function lastProofFromHistory(history) {
+  if (!Array.isArray(history)) return null;
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const p = history[i];
+    if (p?.paymentProofFile) return p.paymentProofFile;
+    if (Array.isArray(p?.paymentProofFiles) && p.paymentProofFiles[0]) return p.paymentProofFiles[0];
+  }
+  return null;
+}
 
 /**
  * Criação atômica de Venda (VP) com cálculo tributário, geração de romaneio e webhook
@@ -95,13 +135,39 @@ async function createSale(body) {
     productService.ensureProductsRegistered(newSale.items).catch(e => console.warn('Aviso ao auto-cadastrar produtos:', e.message));
   }
 
-  // Auto-cria pesagem vinculada (PSG-seq + saleId = VP)
+  // Concilia captura de pátio (motorista) antes de criar romaneio de escritório
+  // skipPatioReconcile: UI marcou "Não vincular"; patioSlipId força um slip; sem ambos → auto
+  let patioLinked = false;
+  const skipPatio = body.skipPatioReconcile === true || body.patioReconcile === 'skip';
+  if (!skipPatio) {
+    try {
+      const nfNumber = formatNfNumber(body.nfNumber || newSale.nfFile || newSale.nfeKey) || '';
+      const patio = await reconcilePatioSlip({
+        saleId: newSale.id,
+        id: newSale.id,
+        nfeKey: newSale.nfeKey,
+        nfNumber,
+        nfFile: newSale.nfFile,
+        totalKg: newSale.totalKg,
+        truckPlate: newSale.truckPlate,
+        patioSlipId: body.patioSlipId || ''
+      });
+      if (patio.status === 'matched' || patio.status === 'divergent') {
+        patioLinked = true;
+        newSale._patioReconcile = { status: patio.status, slipId: patio.slip?.id };
+      }
+    } catch (patioErr) {
+      console.warn('Aviso: falha na conciliação pátio×venda:', patioErr.message);
+    }
+  }
+
+  // Auto-cria pesagem vinculada (PSG-seq + saleId = VP) se não houver vínculo de pátio
   try {
     const existingSlip = await WeighingSlip.findOne({
       $or: [{ saleId: newSale.id }, { id: `ROM-${newSale.id}` }]
     });
 
-    if (!existingSlip) {
+    if (!existingSlip && !patioLinked) {
       const isBatata = (newSale.items && newSale.items.some(it => it.product?.toLowerCase().includes('batata'))) || (newSale.notes && newSale.notes.toLowerCase().includes('batata'));
       const unitKg = isBatata ? 25 : (newSale.items?.[0]?.boxWeightKg || 29);
       const computedBoxes = Number(newSale.totalVolumes) > 0 ? Number(newSale.totalVolumes) : (Number(newSale.totalKg) > 0 ? Number((Number(newSale.totalKg) / unitKg).toFixed(2)) : 0);
@@ -185,12 +251,36 @@ async function updateSale(id, body) {
     }
     if (Object.keys(slipUpdate).length > 0) {
       await WeighingSlip.findOneAndUpdate(
-        { $or: [{ saleId: updated.id }, { id: `ROM-${updated.id}` }] },
+        {
+          $or: [{ saleId: updated.id }, { id: `ROM-${updated.id}` }],
+          source: { $ne: 'patio' }
+        },
         slipUpdate
       );
     }
   } catch (slipSyncErr) {
     console.warn('Aviso: erro ao sincronizar edição no romaneio vinculado:', slipSyncErr.message);
+  }
+
+  // Re-tenta conciliação pátio quando NF/peso/placa mudam (respeita opt-out)
+  const skipPatioUpd = body.skipPatioReconcile === true || body.patioReconcile === 'skip';
+  if (!skipPatioUpd) {
+    try {
+      if (body.nfeKey || body.nfFile || body.nfNumber || body.totalKg !== undefined || body.truckPlate || body.patioSlipId) {
+        await reconcilePatioSlip({
+          saleId: updated.id,
+          id: updated.id,
+          nfeKey: updated.nfeKey,
+          nfNumber: formatNfNumber(body.nfNumber || updated.nfFile || updated.nfeKey) || '',
+          nfFile: updated.nfFile,
+          totalKg: updated.totalKg,
+          truckPlate: updated.truckPlate,
+          patioSlipId: body.patioSlipId || ''
+        });
+      }
+    } catch (patioErr) {
+      console.warn('Aviso: falha na conciliação pátio na atualização:', patioErr.message);
+    }
   }
 
   sendSaleWebhook('sale.updated', updated);
@@ -218,7 +308,6 @@ async function settleSale(id, payload = {}) {
   const { 
     paidAmount: inputAmount, 
     isPartial, 
-    paymentProofFile, 
     paymentDate, 
     notes,
     paymentMethod = 'PIX',
@@ -227,6 +316,7 @@ async function settleSale(id, payload = {}) {
     checkDueDate = '',
     discountAmount: rawDiscount
   } = payload;
+  const proofFiles = normalizeProofFiles(payload);
   const currentPaid = Number(sale.paidAmount) || 0;
   const remainingBalance = roundMoney(Math.max(0, targetReceivable - currentPaid));
   const discountAmount = roundMoney(Math.max(0, Number(rawDiscount) || 0));
@@ -237,6 +327,10 @@ async function settleSale(id, payload = {}) {
     err.statusCode = 400;
     throw err;
   }
+
+  if (!Array.isArray(sale.paymentHistory)) sale.paymentHistory = [];
+  const nextSeq = sale.paymentHistory.length + 1;
+  const proofFields = eventProofFields(proofFiles, nextSeq);
 
   if (isPartial) {
     const gross = roundMoney(Number(inputAmount) || 0);
@@ -263,8 +357,8 @@ async function settleSale(id, payload = {}) {
     const newAccumulated = roundMoney(Math.min(targetReceivable, currentPaid + paymentValue));
     sale.paidAmount = newAccumulated;
 
-    if (!Array.isArray(sale.paymentHistory)) sale.paymentHistory = [];
     sale.paymentHistory.push({
+      ...proofFields,
       amount: paymentValue,
       discountAmount,
       date: paymentDate || new Date().toISOString().split('T')[0],
@@ -272,7 +366,6 @@ async function settleSale(id, payload = {}) {
       checkNumber: checkNumber || '',
       checkBank: checkBank || '',
       checkDueDate: checkDueDate || '',
-      paymentProofFile: paymentProofFile || null,
       notes: notesTrim || 'Pagamento parcial registrado'
     });
 
@@ -296,8 +389,8 @@ async function settleSale(id, payload = {}) {
     const paymentValue = roundMoney(Math.max(0, remainingBalance - discountAmount));
     sale.paidAmount = roundMoney(currentPaid + paymentValue);
 
-    if (!Array.isArray(sale.paymentHistory)) sale.paymentHistory = [];
     sale.paymentHistory.push({
+      ...proofFields,
       amount: paymentValue,
       discountAmount,
       date: paymentDate || new Date().toISOString().split('T')[0],
@@ -305,7 +398,6 @@ async function settleSale(id, payload = {}) {
       checkNumber: checkNumber || '',
       checkBank: checkBank || '',
       checkDueDate: checkDueDate || '',
-      paymentProofFile: paymentProofFile || null,
       notes: notesTrim || (discountAmount > 0 ? 'Liquidação com desconto' : 'Quitação integral registrada')
     });
 
@@ -331,8 +423,8 @@ async function settleSale(id, payload = {}) {
 
   sale.paymentMethod = paymentMethod || 'PIX';
 
-  if (paymentProofFile) {
-    sale.paymentProofFile = paymentProofFile;
+  if (proofFiles.length) {
+    sale.paymentProofFile = proofFiles[proofFiles.length - 1];
   }
 
   await sale.save();
@@ -368,10 +460,10 @@ async function unsettleSale(id, payload = {}) {
     } else if (sale.paidAmount < targetReceivable - 0.05) {
       sale.paymentStatus = 'Parcial';
       sale.status = sale.nfFile ? 'Faturado' : 'Pendente NF';
-      const lastWithProof = [...sale.paymentHistory].reverse().find(p => p.paymentProofFile);
-      sale.paymentProofFile = lastWithProof ? lastWithProof.paymentProofFile : null;
+      sale.paymentProofFile = lastProofFromHistory(sale.paymentHistory);
     } else {
       sale.paymentStatus = 'Recebido';
+      sale.paymentProofFile = lastProofFromHistory(sale.paymentHistory);
       const isProducerSettled = sale.producerPaymentStatus === 'Pago' || (Number(sale.producerPaidAmount) || 0) >= roundMoney(sale.totalOperation || 0) - 0.05;
       sale.status = isProducerSettled ? 'Concluído' : (sale.nfFile ? 'Faturado' : 'Pendente NF');
     }
@@ -410,7 +502,6 @@ async function settleProducerPayment(id, payload = {}) {
   const { 
     paidAmount: inputAmount, 
     isPartial, 
-    paymentProofFile, 
     paymentDate, 
     notes,
     paymentMethod = 'PIX',
@@ -418,9 +509,14 @@ async function settleProducerPayment(id, payload = {}) {
     checkBank = '',
     checkDueDate = ''
   } = payload;
+  const proofFiles = normalizeProofFiles(payload);
   const currentPaid = Number(sale.producerPaidAmount) || 0;
   // O valor de quitação total do produtor baseia-se no valor total da nota
   const remainingBalance = roundMoney(Math.max(0, totalNF - currentPaid));
+
+  if (!Array.isArray(sale.producerPaymentHistory)) sale.producerPaymentHistory = [];
+  const nextSeq = sale.producerPaymentHistory.length + 1;
+  const proofFields = eventProofFields(proofFiles, nextSeq);
 
   if (isPartial) {
     const paymentValue = roundMoney(Number(inputAmount) || 0);
@@ -439,15 +535,14 @@ async function settleProducerPayment(id, payload = {}) {
     const newAccumulated = roundMoney(Math.min(totalNF, currentPaid + paymentValue));
     sale.producerPaidAmount = newAccumulated;
 
-    if (!Array.isArray(sale.producerPaymentHistory)) sale.producerPaymentHistory = [];
     sale.producerPaymentHistory.push({
+      ...proofFields,
       amount: paymentValue,
       date: paymentDate || new Date().toISOString().split('T')[0],
       paymentMethod: paymentMethod || 'PIX',
       checkNumber: checkNumber || '',
       checkBank: checkBank || '',
       checkDueDate: checkDueDate || '',
-      paymentProofFile: paymentProofFile || null,
       notes: notes || 'Repasse parcial ao produtor registrado'
     });
 
@@ -462,15 +557,14 @@ async function settleProducerPayment(id, payload = {}) {
     const remainingToSettle = roundMoney(Math.max(0, totalNF - currentPaid));
     sale.producerPaidAmount = totalNF;
 
-    if (!Array.isArray(sale.producerPaymentHistory)) sale.producerPaymentHistory = [];
     sale.producerPaymentHistory.push({
+      ...proofFields,
       amount: remainingToSettle > 0 ? remainingToSettle : totalNF,
       date: paymentDate || new Date().toISOString().split('T')[0],
       paymentMethod: paymentMethod || 'PIX',
       checkNumber: checkNumber || '',
       checkBank: checkBank || '',
       checkDueDate: checkDueDate || '',
-      paymentProofFile: paymentProofFile || null,
       notes: notes || 'Repasse integral ao produtor quitado (Valor Total da Nota)'
     });
 
@@ -488,8 +582,8 @@ async function settleProducerPayment(id, payload = {}) {
 
   sale.producerPaymentMethod = paymentMethod || 'PIX';
 
-  if (paymentProofFile) {
-    sale.producerPaymentProofFile = paymentProofFile;
+  if (proofFiles.length) {
+    sale.producerPaymentProofFile = proofFiles[proofFiles.length - 1];
   }
 
   await sale.save();
@@ -524,10 +618,10 @@ async function unsettleProducerPayment(id, payload = {}) {
       sale.producerPaymentProofFile = null;
     } else if (sale.producerPaidAmount < totalNF - 0.01) {
       sale.producerPaymentStatus = 'Parcial';
-      const lastWithProof = [...sale.producerPaymentHistory].reverse().find(p => p.paymentProofFile);
-      sale.producerPaymentProofFile = lastWithProof ? lastWithProof.paymentProofFile : null;
+      sale.producerPaymentProofFile = lastProofFromHistory(sale.producerPaymentHistory);
     } else {
       sale.producerPaymentStatus = 'Pago';
+      sale.producerPaymentProofFile = lastProofFromHistory(sale.producerPaymentHistory);
     }
   } else {
     sale.producerPaymentStatus = 'A Pagar';
@@ -540,6 +634,80 @@ async function unsettleProducerPayment(id, payload = {}) {
   sendSaleWebhook('sale.updated', sale);
   invalidateAuditCache();
 
+  return sale;
+}
+
+/**
+ * Anexa comprovante(s) ao último evento do ledger (ou cria evento documental amount=0).
+ * Não altera paidAmount / saldo.
+ */
+async function appendPaymentProofs(id, payload = {}) {
+  const sale = await Sale.findOne({ id });
+  if (!sale) {
+    const err = new Error('Venda não encontrada');
+    err.statusCode = 404;
+    throw err;
+  }
+  const target = payload.target === 'producer' ? 'producer' : 'client';
+  const proofFiles = normalizeProofFiles(payload);
+  if (!proofFiles.length) {
+    const err = new Error('Informe ao menos um arquivo de comprovante.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (target === 'producer') {
+    if (!Array.isArray(sale.producerPaymentHistory)) sale.producerPaymentHistory = [];
+    if (sale.producerPaymentHistory.length === 0) {
+      sale.producerPaymentHistory.push({
+        ...eventProofFields(proofFiles, 1),
+        amount: 0,
+        date: new Date().toISOString().split('T')[0],
+        paymentMethod: sale.producerPaymentMethod || 'PIX',
+        notes: payload.notes || 'Comprovante anexado (documental)'
+      });
+    } else {
+      const last = sale.producerPaymentHistory[sale.producerPaymentHistory.length - 1];
+      const merged = [
+        ...(Array.isArray(last.paymentProofFiles) ? last.paymentProofFiles : []),
+        last.paymentProofFile,
+        ...proofFiles
+      ].filter(Boolean);
+      const unique = [...new Set(merged)];
+      last.paymentProofFiles = unique;
+      last.paymentProofFile = unique[0] || null;
+      sale.producerPaymentHistory[sale.producerPaymentHistory.length - 1] = last;
+    }
+    sale.producerPaymentProofFile = proofFiles[proofFiles.length - 1];
+  } else {
+    if (!Array.isArray(sale.paymentHistory)) sale.paymentHistory = [];
+    if (sale.paymentHistory.length === 0) {
+      sale.paymentHistory.push({
+        ...eventProofFields(proofFiles, 1),
+        amount: 0,
+        discountAmount: 0,
+        date: new Date().toISOString().split('T')[0],
+        paymentMethod: sale.paymentMethod || 'PIX',
+        notes: payload.notes || 'Comprovante anexado (documental)'
+      });
+    } else {
+      const last = sale.paymentHistory[sale.paymentHistory.length - 1];
+      const merged = [
+        ...(Array.isArray(last.paymentProofFiles) ? last.paymentProofFiles : []),
+        last.paymentProofFile,
+        ...proofFiles
+      ].filter(Boolean);
+      const unique = [...new Set(merged)];
+      last.paymentProofFiles = unique;
+      last.paymentProofFile = unique[0] || null;
+      sale.paymentHistory[sale.paymentHistory.length - 1] = last;
+    }
+    sale.paymentProofFile = proofFiles[proofFiles.length - 1];
+  }
+
+  await sale.save();
+  sendSaleWebhook('sale.updated', sale);
+  invalidateAuditCache();
   return sale;
 }
 
@@ -559,6 +727,24 @@ async function cancelSale(id) {
   }
   sale.status = 'Cancelada';
   await sale.save();
+
+  // Libera capturas de pátio para nova conciliação
+  try {
+    await WeighingSlip.updateMany(
+      { source: 'patio', saleId: id },
+      {
+        $set: {
+          saleId: '',
+          matchStatus: 'unmatched',
+          matchNotes: `Desvinculado: venda ${id} cancelada`,
+          status: 'AguardandoVenda'
+        }
+      }
+    );
+  } catch (patioErr) {
+    console.warn('Aviso: falha ao desvincular pátio no cancelamento:', patioErr.message);
+  }
+
   sendSaleWebhook('sale.cancelled', sale);
   invalidateAuditCache();
   return sale;
@@ -732,6 +918,7 @@ module.exports = {
   unsettleSale,
   settleProducerPayment,
   unsettleProducerPayment,
+  appendPaymentProofs,
   cancelSale,
   deleteSale,
   normalizeSaleNfStatus,

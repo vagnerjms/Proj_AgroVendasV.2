@@ -1,5 +1,6 @@
 /**
  * Planilha Excel (.xls HTML) exclusiva do Fiscal — Contas/Fluxos.
+ * Abas: Resumo | Ledger_Baixas | Ledger_Repasses
  * Não altera os exports de Relatórios (reportExcelBuilder).
  */
 import { formatDate, getCleanFileName } from './formatters';
@@ -64,15 +65,134 @@ function extractProducerName(sale) {
   return 'Sem produtor';
 }
 
+function proofFilesFromEvent(p) {
+  const list = [];
+  const seen = new Set();
+  const push = (f) => {
+    if (!f || seen.has(f)) return;
+    seen.add(f);
+    list.push(f);
+  };
+  push(p?.paymentProofFile);
+  (Array.isArray(p?.paymentProofFiles) ? p.paymentProofFiles : []).forEach(push);
+  return list;
+}
+
 function anexosLabel(sale) {
   const parts = [];
   const evidence = sale.evidenceFile || sale.rawEvidenceFile;
   const nf = sale.nfFile || sale.rawNfFile;
-  const proof = sale.paymentProofFile;
+  const proofs = [];
+  const seen = new Set();
+  const push = (f) => {
+    if (!f || seen.has(f)) return;
+    seen.add(f);
+    proofs.push(f);
+  };
+  (Array.isArray(sale.paymentHistory) ? sale.paymentHistory : []).forEach((p) => {
+    proofFilesFromEvent(p).forEach(push);
+  });
+  push(sale.paymentProofFile);
   if (evidence) parts.push(`Pedido: ${getCleanFileName(evidence)}`);
   if (nf) parts.push(`NF: ${getCleanFileName(nf)}`);
-  if (proof) parts.push(`CP: ${getCleanFileName(proof)}`);
+  if (proofs.length === 1) parts.push(`CP: ${getCleanFileName(proofs[0])}`);
+  else if (proofs.length > 1) {
+    parts.push(`CP×${proofs.length}: ${proofs.map((f, i) => `CP${i + 1}=${getCleanFileName(f)}`).join('; ')}`);
+  }
   return parts.length ? parts.join(' | ') : '—';
+}
+
+function sharedStyles() {
+  return `
+        body { font-family: Arial, Calibri, sans-serif; font-size: 9pt; color: #1e293b; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+        th, td { border: 1px solid #cbd5e1; padding: 5px 7px; font-size: 8pt; vertical-align: top; }
+        .hdr-main { background-color: #091b2e; color: #ffffff; font-weight: bold; font-size: 10pt; padding: 8px 10px; text-align: left; }
+        .hdr-sub { background-color: #1b4363; color: #ffffff; font-weight: bold; font-size: 7.5pt; text-align: center; }
+        .cell-left { text-align: left; mso-number-format: "\\@"; }
+        .cell-center { text-align: center; mso-number-format: "\\@"; }
+        .cell-num { text-align: right; }
+        .cell-money { text-align: right; font-weight: bold; }
+        .cell-money-normal { text-align: right; }
+        .bg-liquidado { background-color: #ecfdf5; color: #065f46; }
+        .bg-aliquidar { background-color: #fffbeb; color: #92400e; }
+        .badge-kpi { border: 1px solid #cbd5e1; background-color: #f8fafc; padding: 8px; }
+        .row-total { background-color: #e2e8f0; font-weight: bold; border-top: 2px solid #64748b; }
+        .sheet-title { font-size: 12pt; font-weight: bold; color: #091b2e; margin: 24px 0 8px; }
+        .sheet-break { page-break-before: always; }
+  `;
+}
+
+function buildLedgerRows(sales, historyKey, filePrefix) {
+  const rows = [];
+  for (const s of sales) {
+    const hist = Array.isArray(s[historyKey]) ? s[historyKey] : [];
+    hist.forEach((p, idx) => {
+      const files = proofFilesFromEvent(p);
+      const seq = p?.seq || idx + 1;
+      const filesLabel = files.length
+        ? files.map((f, i) => `${filePrefix}${String(i + 1).padStart(2, '0')}=${getCleanFileName(f)}`).join('; ')
+        : '—';
+      rows.push({
+        saleId: s.id || '',
+        client: s.client || '',
+        producer: extractProducerName(s),
+        date: p?.date || '',
+        amount: Number(p?.amount) || 0,
+        discount: Number(p?.discountAmount) || 0,
+        method: p?.paymentMethod || '—',
+        seq,
+        filesLabel,
+        notes: p?.notes || ''
+      });
+    });
+  }
+  return rows;
+}
+
+function ledgerTableHtml(title, sheetId, rows, formatMoeda, emptyMsg) {
+  const body = rows.map((r) => `
+      <tr data-ledger-row="${escapeHtml(sheetId)}">
+        <td class="cell-center">${escapeHtml(r.saleId)}</td>
+        <td class="cell-left">${escapeHtml(r.client)}</td>
+        <td class="cell-left">${escapeHtml(r.producer)}</td>
+        <td class="cell-center">${escapeHtml(r.date ? formatDate(r.date) : '—')}</td>
+        <td class="cell-center">${escapeHtml(String(r.seq))}</td>
+        <td class="cell-money bg-liquidado">${r.amount > 0 ? formatMoeda(r.amount) : '—'}</td>
+        <td class="cell-money-normal">${r.discount > 0 ? formatMoeda(r.discount) : '—'}</td>
+        <td class="cell-center">${escapeHtml(r.method)}</td>
+        <td class="cell-left" style="font-size:7.5pt;">${escapeHtml(r.filesLabel)}</td>
+        <td class="cell-left">${escapeHtml(r.notes)}</td>
+      </tr>
+    `).join('');
+
+  return `
+    <div class="sheet-break" id="sheet-${sheetId}" data-sheet="${sheetId}">
+      <div class="sheet-title">${escapeHtml(title)}</div>
+      <table>
+        <thead>
+          <tr>
+            <th colspan="10" class="hdr-main">${escapeHtml(title)}</th>
+          </tr>
+          <tr>
+            <th class="hdr-sub">${DATA_LABELS.vpNumber}</th>
+            <th class="hdr-sub">Loja</th>
+            <th class="hdr-sub">Produtor</th>
+            <th class="hdr-sub">Data</th>
+            <th class="hdr-sub">Seq</th>
+            <th class="hdr-sub">Valor</th>
+            <th class="hdr-sub">Desconto</th>
+            <th class="hdr-sub">${DATA_LABELS.formaPagamento}</th>
+            <th class="hdr-sub">Arquivos</th>
+            <th class="hdr-sub">Observações</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${body || `<tr><td colspan="10" class="cell-center" style="color:#94a3b8;font-style:italic;">${escapeHtml(emptyMsg)}</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 /**
@@ -136,28 +256,12 @@ export function buildFiscalExcelHtml(sales = [], totals = {}, filters = {}) {
     `;
   }).join('');
 
-  return `
-    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: Arial, Calibri, sans-serif; font-size: 9pt; color: #1e293b; margin: 20px; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-        th, td { border: 1px solid #cbd5e1; padding: 5px 7px; font-size: 8pt; vertical-align: top; }
-        .hdr-main { background-color: #091b2e; color: #ffffff; font-weight: bold; font-size: 10pt; padding: 8px 10px; text-align: left; }
-        .hdr-sub { background-color: #1b4363; color: #ffffff; font-weight: bold; font-size: 7.5pt; text-align: center; }
-        .cell-left { text-align: left; mso-number-format: "\\@"; }
-        .cell-center { text-align: center; mso-number-format: "\\@"; }
-        .cell-num { text-align: right; }
-        .cell-money { text-align: right; font-weight: bold; }
-        .cell-money-normal { text-align: right; }
-        .bg-liquidado { background-color: #ecfdf5; color: #065f46; }
-        .bg-aliquidar { background-color: #fffbeb; color: #92400e; }
-        .badge-kpi { border: 1px solid #cbd5e1; background-color: #f8fafc; padding: 8px; }
-        .row-total { background-color: #e2e8f0; font-weight: bold; border-top: 2px solid #64748b; }
-      </style>
-    </head>
-    <body>
+  const baixas = buildLedgerRows(sales, 'paymentHistory', 'CP');
+  const repasses = buildLedgerRows(sales, 'producerPaymentHistory', 'CPProd');
+
+  const resumoSheet = `
+    <div id="sheet-Resumo" data-sheet="Resumo">
+      <div class="sheet-title">Resumo</div>
       <table style="border:none;margin-bottom:12px;">
         <tr>
           <td colspan="19" style="border:none;padding:0;">
@@ -239,6 +343,41 @@ export function buildFiscalExcelHtml(sales = [], totals = {}, filters = {}) {
           </tr>
         </tfoot>
       </table>
+    </div>
+  `;
+
+  return `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="utf-8">
+      <!--[if gte mso 9]>
+      <xml>
+        <x:ExcelWorkbook>
+          <x:ExcelWorksheets>
+            <x:ExcelWorksheet>
+              <x:Name>Resumo</x:Name>
+              <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+            </x:ExcelWorksheet>
+            <x:ExcelWorksheet>
+              <x:Name>Ledger_Baixas</x:Name>
+              <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+            </x:ExcelWorksheet>
+            <x:ExcelWorksheet>
+              <x:Name>Ledger_Repasses</x:Name>
+              <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+            </x:ExcelWorksheet>
+          </x:ExcelWorksheets>
+        </x:ExcelWorkbook>
+      </xml>
+      <![endif]-->
+      <style>
+        ${sharedStyles()}
+      </style>
+    </head>
+    <body>
+      ${resumoSheet}
+      ${ledgerTableHtml('Ledger_Baixas', 'Ledger_Baixas', baixas, formatMoeda, 'Nenhuma baixa no filtro.')}
+      ${ledgerTableHtml('Ledger_Repasses', 'Ledger_Repasses', repasses, formatMoeda, 'Nenhum repasse no filtro.')}
     </body>
     </html>
   `;

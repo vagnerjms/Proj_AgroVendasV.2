@@ -186,19 +186,26 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
     }
   };
 
-  const handleUploadProof = async (saleId, file, target = 'client') => {
-    if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
+  const handleUploadProof = async (saleId, fileOrList, target = 'client') => {
+    const files = Array.isArray(fileOrList)
+      ? fileOrList
+      : (fileOrList ? [fileOrList] : []);
+    if (!files.length) return;
     setUploadingId(`${target}-${saleId}`);
     try {
-      const data = await api.upload('/api/upload', formData);
-      const fname = data?.filename || file.name;
-      const patch = target === 'producer'
-        ? { producerPaymentProofFile: fname }
-        : { paymentProofFile: fname };
-      await api.put(`/api/sales/${saleId}`, patch);
-      showNotification(`Comprovante anexado à ${saleId}.`);
+      const uploaded = [];
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const data = await api.upload('/api/upload', formData);
+        uploaded.push(data?.filename || file.name);
+      }
+      await api.post(`/api/sales/${saleId}/payment-proof`, {
+        target,
+        paymentProofFiles: uploaded,
+        paymentProofFile: uploaded[0]
+      });
+      showNotification(`${uploaded.length} comprovante(s) anexado(s) à ${saleId}.`);
       loadData();
     } catch (err) {
       alert(err.message || 'Erro no upload');
@@ -495,8 +502,8 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
       {/* Tabela unificada Baixas + Rastreio */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-gray-200 bg-gray-50/50 space-y-3">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[200px] max-w-md">
+          <div className="flex flex-nowrap items-center gap-2 min-h-[44px] overflow-x-auto pb-0.5">
+            <div className="relative shrink-0 w-[220px] min-w-[200px] max-w-[280px]">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
               <input
                 type="text"

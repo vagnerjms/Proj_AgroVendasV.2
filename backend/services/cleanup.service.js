@@ -20,7 +20,12 @@ async function cleanupOrphanUploads() {
         paymentHistory: 1,
         producerPaymentHistory: 1 
       }).lean(),
-      WeighingSlip.find({}, { ticketImage: 1, attachment: 1 }).lean()
+      WeighingSlip.find({}, {
+        ticketImage: 1,
+        attachment: 1,
+        nfPhotoFile: 1,
+        scaleRomaneioImage: 1
+      }).lean()
     ]);
 
     const activeFiles = new Set();
@@ -32,11 +37,17 @@ async function cleanupOrphanUploads() {
       if (Array.isArray(s.paymentHistory)) {
         s.paymentHistory.forEach(p => {
           if (p.paymentProofFile) activeFiles.add(p.paymentProofFile);
+          if (Array.isArray(p.paymentProofFiles)) {
+            p.paymentProofFiles.forEach((f) => { if (f) activeFiles.add(f); });
+          }
         });
       }
       if (Array.isArray(s.producerPaymentHistory)) {
         s.producerPaymentHistory.forEach(p => {
           if (p.paymentProofFile) activeFiles.add(p.paymentProofFile);
+          if (Array.isArray(p.paymentProofFiles)) {
+            p.paymentProofFiles.forEach((f) => { if (f) activeFiles.add(f); });
+          }
         });
       }
     });
@@ -44,6 +55,8 @@ async function cleanupOrphanUploads() {
     slips.forEach(sl => {
       if (sl.ticketImage) activeFiles.add(sl.ticketImage);
       if (sl.attachment) activeFiles.add(sl.attachment);
+      if (sl.nfPhotoFile) activeFiles.add(sl.nfPhotoFile);
+      if (sl.scaleRomaneioImage) activeFiles.add(sl.scaleRomaneioImage);
     });
 
     const diskFiles = await fs.promises.readdir(uploadDir);

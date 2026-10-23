@@ -100,10 +100,12 @@ function resolveRomaneioNumber(sale = {}) {
  * Nome canônico de anexo no Google Drive:
  * NF → {romaneio|SEMROM}-NF-{nfDigits}{ext}
  * Pedido → {romaneio|SEMROM}-Pedido{ext}
- * CP → {romaneio|SEMROM}-CP-{nfDigits|disp}{ext}
+ * CP → {romaneio|SEMROM}-CP{seq}-{nfDigits|disp}{ext}  (seq 01, 02…)
+ * CP produtor → …-CPProd{seq}-…
+ * Pátio → Patio-NF-{nf}{ext} | Patio-RomaneioBalanca{ext}
  *
- * @param {'nf'|'pedido'|'cp'|string} kind
- * @param {{ romaneioNumber?: string, nfNumber?: string, ext?: string, originalName?: string }} opts
+ * @param {'nf'|'pedido'|'cp'|'cpprod'|'patio_nf'|'patio_romaneio'|string} kind
+ * @param {{ romaneioNumber?: string, nfNumber?: string, ext?: string, originalName?: string, seq?: number }} opts
  */
 function buildDriveAttachmentName(kind, opts = {}) {
   const rom = formatRomaneioNumber(opts.romaneioNumber) || 'SEMROM';
@@ -117,6 +119,9 @@ function buildDriveAttachmentName(kind, opts = {}) {
   if (!ext.startsWith('.')) ext = `.${ext}`;
   ext = ext.toLowerCase();
 
+  const seqNum = Math.max(1, Number(opts.seq) || 1);
+  const seqPad = String(seqNum).padStart(2, '0');
+
   const k = String(kind || '').toLowerCase();
   if (k === 'nf' || k === 'nfe' || k === 'nota') {
     return `${rom}-NF-${nf}${ext === '.pdf' || ext === '.xml' ? ext : '.pdf'}`;
@@ -124,8 +129,17 @@ function buildDriveAttachmentName(kind, opts = {}) {
   if (k === 'pedido' || k === 'evidence' || k === 'canhoto' || k === 'romaneio') {
     return `${rom}-Pedido${ext}`;
   }
+  if (k === 'cpprod' || k === 'cp_prod' || k === 'comprovante_produtor' || k === 'producer_proof') {
+    return `${rom}-CPProd${seqPad}-${nf}${ext}`;
+  }
   if (k === 'cp' || k === 'comprovante' || k === 'payment' || k === 'paymentproof') {
-    return `${rom}-CP-${nf}${ext}`;
+    return `${rom}-CP${seqPad}-${nf}${ext}`;
+  }
+  if (k === 'patio_nf' || k === 'patio-nf') {
+    return `Patio-NF-${nf}${ext}`;
+  }
+  if (k === 'patio_romaneio' || k === 'patio-romaneio' || k === 'patio_balanca') {
+    return `Patio-RomaneioBalanca${ext}`;
   }
   const safe = String(opts.originalName || 'anexo')
     .split(/[/\\]/)
@@ -136,10 +150,12 @@ function buildDriveAttachmentName(kind, opts = {}) {
 }
 
 /**
- * Classifica um arquivo de venda (nf / pedido / cp) a partir do nome ou campo.
+ * Classifica um arquivo de venda (nf / pedido / cp / patio_*) a partir do nome ou campo.
  */
 function classifySaleAttachment(targetName, sale = {}) {
   const name = String(targetName || '').toLowerCase();
+  if (/^patio-nf/i.test(name) || name.includes('patio-nf')) return 'patio_nf';
+  if (/patio-romaneiobalanca|patio_romaneio|romaneio.?balanca/i.test(name)) return 'patio_romaneio';
   if (sale.nfFile && (targetName === sale.nfFile || name.includes(String(sale.nfFile).toLowerCase()))) {
     return 'nf';
   }
@@ -149,11 +165,96 @@ function classifySaleAttachment(targetName, sale = {}) {
   if (sale.paymentProofFile && (targetName === sale.paymentProofFile || name.includes(String(sale.paymentProofFile).toLowerCase()))) {
     return 'cp';
   }
+  if (sale.producerPaymentProofFile && (targetName === sale.producerPaymentProofFile || name.includes(String(sale.producerPaymentProofFile).toLowerCase()))) {
+    return 'cpprod';
+  }
+  const hist = Array.isArray(sale.paymentHistory) ? sale.paymentHistory : [];
+  for (const p of hist) {
+    const files = [
+      p?.paymentProofFile,
+      ...(Array.isArray(p?.paymentProofFiles) ? p.paymentProofFiles : [])
+    ].filter(Boolean);
+    if (files.some((f) => f === targetName || name.includes(String(f).toLowerCase()))) return 'cp';
+  }
+  const ph = Array.isArray(sale.producerPaymentHistory) ? sale.producerPaymentHistory : [];
+  for (const p of ph) {
+    const files = [
+      p?.paymentProofFile,
+      ...(Array.isArray(p?.paymentProofFiles) ? p.paymentProofFiles : [])
+    ].filter(Boolean);
+    if (files.some((f) => f === targetName || name.includes(String(f).toLowerCase()))) return 'cpprod';
+  }
   if (/(\bnf[-_]|nota|nfe|lancada)/i.test(name) || /^vp\d+\s*-\s*nf-/i.test(name)) return 'nf';
   if (/(pedido|canhoto|romaneio)/i.test(name)) return 'pedido';
-  if (/(comprovante|\bcp[-_]|pix|recibo)/i.test(name)) return 'cp';
+  if (/(cpprod|comprovante.?prod|repasse)/i.test(name)) return 'cpprod';
+  if (/(comprovante|\bcp\d*[-_]|pix|recibo)/i.test(name)) return 'cp';
   if (sale.nfFile && String(sale.nfFile).includes(String(targetName || '').replace(/^\d+-\d+-/, ''))) return 'nf';
   return 'pedido';
+}
+
+/**
+ * Coleta todos os anexos rastreáveis de uma venda (fonte da verdade para webhook/backup).
+ */
+function collectSaleAttachmentTargets(sale = {}) {
+  const clientProofs = [];
+  const producerProofs = [];
+  const seen = new Set();
+
+  const pushUnique = (arr, file) => {
+    if (!file || seen.has(file)) return;
+    seen.add(file);
+    arr.push(file);
+  };
+
+  const hist = Array.isArray(sale.paymentHistory) ? sale.paymentHistory : [];
+  hist.forEach((p) => {
+    pushUnique(clientProofs, p?.paymentProofFile);
+    (Array.isArray(p?.paymentProofFiles) ? p.paymentProofFiles : []).forEach((f) => pushUnique(clientProofs, f));
+  });
+  pushUnique(clientProofs, sale.paymentProofFile);
+
+  const ph = Array.isArray(sale.producerPaymentHistory) ? sale.producerPaymentHistory : [];
+  ph.forEach((p) => {
+    pushUnique(producerProofs, p?.paymentProofFile);
+    (Array.isArray(p?.paymentProofFiles) ? p.paymentProofFiles : []).forEach((f) => pushUnique(producerProofs, f));
+  });
+  pushUnique(producerProofs, sale.producerPaymentProofFile);
+
+  return {
+    nf: sale.nfFile || null,
+    evidence: sale.evidenceFile || null,
+    clientProofs,
+    producerProofs,
+    patioRefs: []
+  };
+}
+
+/**
+ * Path Drive SaaS: AgroVenda/{tenant}/{loja}/{VP}
+ */
+function buildDriveSuggestedPath(opts = {}) {
+  let tenant = String(opts.tenantSlug || process.env.TENANT_SLUG || 'default')
+    .trim()
+    .replace(/[^\w.\-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 64);
+  if (!tenant) tenant = 'default';
+  let store = String(opts.storeName || opts.client || 'Sem_Loja')
+    .trim()
+    .replace(/[^\w.\-À-ú ]+/gi, '_')
+    .replace(/\s+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80);
+  if (!store) store = 'Sem_Loja';
+  const saleId = String(opts.saleId || 'SEMVP').trim() || 'SEMVP';
+  return {
+    productRoot: 'AgroVenda',
+    tenantSlug: tenant,
+    storeFolder: store,
+    saleFolder: saleId,
+    suggestedPath: `AgroVenda/${tenant}/${store}/${saleId}`,
+    suggestedFolder: `${saleId} - ${String(opts.client || store).trim()} (${opts.monthFolder || ''})`.replace(/\(\s*\)$/, '').trim()
+  };
 }
 
 module.exports = {
@@ -163,5 +264,7 @@ module.exports = {
   extractRomaneioFromNotes,
   resolveRomaneioNumber,
   buildDriveAttachmentName,
-  classifySaleAttachment
+  classifySaleAttachment,
+  collectSaleAttachmentTargets,
+  buildDriveSuggestedPath
 };

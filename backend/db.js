@@ -3,7 +3,12 @@ const models = require('./models');
 const { getNextSequence, recalibrateCounters } = require('./services/sequence.service');
 const { initializeDatabase } = require('./services/bootstrap.service');
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://mongodb:27017/agrovenda';
+// Produção/Docker: defina MONGO_URI=mongodb://mongodb:27017/agrovenda
+// Local/dev/test sem env: 127.0.0.1 (evita ENOTFOUND no host `mongodb`)
+const MONGO_URI = process.env.MONGO_URI
+  || (process.env.NODE_ENV === 'production'
+    ? 'mongodb://mongodb:27017/agrovenda'
+    : 'mongodb://127.0.0.1:27017/agrovenda');
 
 /**
  * Conexão resiliente ao MongoDB com retentativas automáticas

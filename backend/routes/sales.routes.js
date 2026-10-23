@@ -138,6 +138,16 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
+// POST /api/sales/:id/payment-proof — anexa comprovante(s) ao ledger sem alterar saldo
+router.post('/:id/payment-proof', async (req, res, next) => {
+  try {
+    const sale = await saleService.appendPaymentProofs(req.params.id, req.body);
+    res.json({ success: true, sale });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/sales/:id/settle (Liquidação Total ou Parcial da Loja via sale.service.js)
 router.post('/:id/settle', async (req, res, next) => {
   try {

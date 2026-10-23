@@ -82,16 +82,16 @@ jobs:
           DISABLE_AUTH_RATE_LIMIT: '1'
         run: |
           mkdir -p backend/uploads
-          # Serve built frontend via backend if configured; else start API + preview
           cd backend && node server.js &
-          sleep 3
+          sleep 5
           cd frontend && npx vite preview --host 0.0.0.0 --port 3000 &
           sleep 5
           curl -sf http://localhost:3001/api/health
-          curl -sf http://localhost:3000 || true
+          curl -sf http://localhost:3000/api/health
       - name: Run Playwright
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:3000
+          E2E_API_URL: http://localhost:3000
           E2E_EMAIL: admin@agrovenda.com.br
           E2E_PASSWORD: Admin123!
         run: npx playwright test

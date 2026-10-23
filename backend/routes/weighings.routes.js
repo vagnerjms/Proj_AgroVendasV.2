@@ -8,9 +8,108 @@ const { escapeRegex } = require('../utils/security');
 const { requireAuth } = require('../middlewares/auth');
 const { uploadDir } = require('../middlewares/upload');
 const saleService = require('../services/sale.service');
+const { formatNfNumber } = require('../utils/dataHelpers');
+const { findPatioCandidates, reconcilePatioSlip } = require('../services/reconcilePatio.service');
 
 // Protect all weighings endpoints with JWT authentication
 router.use(requireAuth);
+
+/**
+ * GET /api/weighings/patio/candidates?nfeKey=&nfNumber=&truckPlate=
+ * Lista capturas de pátio ainda sem venda (para Nova Venda).
+ */
+router.get('/patio/candidates', async (req, res) => {
+  try {
+    const candidates = await findPatioCandidates({
+      nfeKey: req.query.nfeKey,
+      nfNumber: req.query.nfNumber,
+      nfFile: req.query.nfFile,
+      truckPlate: req.query.truckPlate
+    });
+    res.json({ candidates });
+  } catch (err) {
+    console.error('Erro ao listar candidatos de pátio:', err);
+    res.status(500).json({ error: 'Erro ao buscar capturas de pátio' });
+  }
+});
+
+/**
+ * POST /api/weighings/patio/reconcile
+ * Body: { saleId, nfeKey, nfNumber, totalKg, truckPlate, patioSlipId? }
+ */
+router.post('/patio/reconcile', async (req, res) => {
+  try {
+    const result = await reconcilePatioSlip(req.body || {});
+    res.json(result);
+  } catch (err) {
+    console.error('Erro na conciliação pátio:', err);
+    res.status(500).json({ error: err.message || 'Erro na conciliação' });
+  }
+});
+
+/**
+ * POST /api/weighings/patio
+ * Captura do motorista: placa + foto NF + romaneio balança (+ chave/nº NF).
+ * NÃO cria venda/VP. status = AguardandoVenda, saleId vazio.
+ */
+router.post('/patio', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const plate = String(body.truckPlate || '').trim().toUpperCase();
+    if (!plate) {
+      return res.status(400).json({ error: 'Informe a placa do caminhão.' });
+    }
+    const nfPhoto = body.nfPhotoFile || '';
+    const scaleImg = body.scaleRomaneioImage || body.ticketImage || '';
+    if (!nfPhoto && !scaleImg) {
+      return res.status(400).json({ error: 'Anexe a foto da NF e/ou o romaneio da balança.' });
+    }
+
+    const origin = Number(body.originWeightKg) || 0;
+    const dest = Number(body.destWeightKg) || 0;
+    const diff = Math.abs(origin - dest);
+    const diffPct = origin > 0 ? Number(((diff / origin) * 100).toFixed(2)) : 0;
+    const nextSeq = await getNextSequence('weighing_slip_id', WeighingSlip, 'PSG-');
+    const slipId = `PSG-${String(nextSeq).padStart(3, '0')}`;
+    const nfeKey = String(body.nfeKey || '').replace(/\D/g, '');
+    const nfNumber = formatNfNumber(body.nfNumber || body.nfFile || nfeKey) || String(body.nfNumber || '').replace(/\D/g, '');
+
+    const newSlip = new WeighingSlip({
+      id: slipId,
+      saleId: '',
+      client: body.client || 'Aguardando vinculação',
+      product: body.product || 'A definir',
+      truckPlate: plate,
+      driverName: body.driverName || req.user?.name || 'Motorista',
+      date: body.date || new Date().toISOString().split('T')[0],
+      originWeightKg: origin,
+      destWeightKg: dest,
+      humidityPct: Number(body.humidityPct) || 14.0,
+      impurityPct: Number(body.impurityPct) || 1.0,
+      discountKg: Number(body.discountKg) || 0,
+      netWeightKg: dest > 0 ? dest - (Number(body.discountKg) || 0) : origin,
+      weightDifferenceKg: diff,
+      weightDifferencePct: diffPct,
+      tolerancePct: Number(body.tolerancePct) || 0.25,
+      status: 'AguardandoVenda',
+      resolutionNotes: body.resolutionNotes || 'Captura pátio/motorista',
+      ticketImage: scaleImg || nfPhoto,
+      attachment: scaleImg || nfPhoto,
+      source: 'patio',
+      nfeKey,
+      nfNumber,
+      nfPhotoFile: nfPhoto,
+      scaleRomaneioImage: scaleImg,
+      matchStatus: 'unmatched'
+    });
+
+    await newSlip.save();
+    res.status(201).json(newSlip);
+  } catch (err) {
+    console.error('Erro ao registrar captura de pátio:', err);
+    res.status(500).json({ error: `Erro ao registrar pátio: ${err.message}` });
+  }
+});
 
 // GET /api/weighings (Supports optional page/limit pagination with X-Total-Count)
 router.get('/', async (req, res) => {

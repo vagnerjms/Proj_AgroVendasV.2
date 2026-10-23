@@ -26,6 +26,18 @@ jest.mock('../services/cleanup.service', () => ({
   startCleanupScheduler: jest.fn()
 }));
 
+jest.mock('../services/paymentProofParser.service', () => ({
+  parse: jest.fn().mockResolvedValue({
+    suggested: { paidAmount: 100, paymentDate: '2026-01-01', paymentMethod: 'PIX', notes: '' },
+    confidence: 'high',
+    source: 'text_pdf',
+    rawHints: { textLength: 40 }
+  }),
+  parseMoneyBr: jest.requireActual('../services/paymentProofParser.service').parseMoneyBr,
+  parseDateBr: jest.requireActual('../services/paymentProofParser.service').parseDateBr,
+  detectMethod: jest.requireActual('../services/paymentProofParser.service').detectMethod
+}));
+
 const request = require('supertest');
 const path = require('path');
 const fs = require('fs');
@@ -165,6 +177,67 @@ describe('threshold close — functions & branches', () => {
     const cancelled = await saleService.deleteSale(sale.id);
     expect(cancelled.status).toBe('Cancelada');
     spy.mockRestore();
+  });
+
+  test('POST /api/sales/:id/payment-proof anexa ao ledger', async () => {
+    const auth = await authHeader();
+    const headers = auth.headers;
+    const sale = await saleService.createSale({
+      client: 'Loja PP',
+      origin: 'Bruno Peres',
+      saleDate: '2025-01-01',
+      totalOperation: 2000,
+      valorTotalVP: 2000,
+      items: [{ product: 'Cenoura', valorTotalVP: 2000 }],
+      feeValue: 3
+    });
+    const res = await request(app)
+      .post(`/api/sales/${sale.id}/payment-proof`)
+      .set(headers)
+      .send({ paymentProofFiles: ['a.pdf', 'b.pdf'], paymentProofFile: 'a.pdf' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.sale.paymentHistory[0].paymentProofFiles).toEqual(
+      expect.arrayContaining(['a.pdf', 'b.pdf'])
+    );
+
+    const bad = await request(app)
+      .post(`/api/sales/${sale.id}/payment-proof`)
+      .set(headers)
+      .send({});
+    expect(bad.status).toBe(400);
+  });
+
+  test('payment-proof/parse autofill + erro sem arquivo', async () => {
+    const auth = await authHeader();
+    const headers = auth.headers;
+    const ProofParser = require('../services/paymentProofParser.service');
+
+    const empty = await request(app)
+      .post('/api/payment-proof/parse')
+      .set(headers);
+    expect(empty.status).toBe(400);
+
+    const proofFile = path.join(uploadDir, `${Date.now()}-cp-parse.pdf`);
+    fs.writeFileSync(proofFile, '%PDF-1.4');
+    const ok = await request(app)
+      .post('/api/payment-proof/parse')
+      .set(headers)
+      .field('remainingBalance', '1000')
+      .attach('file', proofFile);
+    expect(ok.status).toBe(200);
+    expect(ok.body.suggested.paidAmount).toBe(100);
+    expect(ok.body.filename).toBeTruthy();
+
+    ProofParser.parse.mockRejectedValueOnce(new Error('ocr fail'));
+    const fail = await request(app)
+      .post('/api/payment-proof/parse')
+      .set(headers)
+      .attach('file', proofFile);
+    expect(fail.status).toBe(400);
+    expect(fail.body.confidence).toBe('none');
+
+    try { fs.unlinkSync(proofFile); } catch (_) {}
   });
 
   test('upload parse fail unlink.catch + ensureProductsRegistered.catch; backup unlink.catch', async () => {

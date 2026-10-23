@@ -8,8 +8,8 @@ const WeighingSlipSchema = new mongoose.Schema({
   truckPlate: { type: String, required: true },
   driverName: { type: String, default: 'Motorista' },
   date: { type: String, required: true },
-  originWeightKg: { type: Number, required: true },
-  destWeightKg: { type: Number, required: true },
+  originWeightKg: { type: Number, default: 0 },
+  destWeightKg: { type: Number, default: 0 },
   humidityPct: { type: Number, default: 14.0 },
   impurityPct: { type: Number, default: 1.0 },
   discountKg: { type: Number, default: 0 },
@@ -21,12 +21,23 @@ const WeighingSlipSchema = new mongoose.Schema({
   resolutionNotes: { type: String, default: '' },
   resolvedAt: { type: Date, default: null },
   ticketImage: { type: String, default: '' },
-  attachment: { type: String, default: '' }
+  attachment: { type: String, default: '' },
+  /** Captura do módulo motorista (pátio) — distinto da venda */
+  source: { type: String, default: 'office' }, // office | patio
+  nfeKey: { type: String, default: '' },
+  nfNumber: { type: String, default: '' },
+  nfPhotoFile: { type: String, default: '' },
+  scaleRomaneioImage: { type: String, default: '' },
+  matchStatus: { type: String, default: '' }, // '' | matched | divergent | unmatched
+  matchNotes: { type: String, default: '' }
 });
 
 WeighingSlipSchema.index({ saleId: 1 });
 WeighingSlipSchema.index({ client: 1, date: -1 });
 WeighingSlipSchema.index({ status: 1 });
+WeighingSlipSchema.index({ nfeKey: 1 });
+WeighingSlipSchema.index({ nfNumber: 1 });
+WeighingSlipSchema.index({ source: 1, status: 1 });
 
 const WeighingSlip = mongoose.models.WeighingSlip || mongoose.model('WeighingSlip', WeighingSlipSchema);
 

@@ -100,7 +100,7 @@ describe('branches ≥90 — utils & middleware', () => {
       .toBe('00012-NF-28042894.pdf');
     expect(buildDriveAttachmentName('pedido', { originalName: 'semext' })).toBe('SEMROM-Pedido.bin');
     expect(buildDriveAttachmentName('payment', { romaneioNumber: '9', nfNumber: '1234567', originalName: 'a.jpeg' }))
-      .toBe('00009-CP-1234567.jpeg');
+      .toBe('00009-CP01-1234567.jpeg');
     expect(buildDriveAttachmentName('x', { originalName: 'dir\\foto final.png' })).toBe('SEMROM-foto_final.png');
     expect(classifySaleAttachment('canhoto-scan.jpg', {})).toBe('pedido');
     expect(classifySaleAttachment('cp-loja.pdf', {})).toBe('cp');

@@ -64,6 +64,8 @@ const SaleSchema = new mongoose.Schema({
   paymentMethod: { type: String, default: 'PIX' },
   paymentHistory: [
     {
+      id: { type: String, default: '' },
+      seq: { type: Number, default: 0 },
       amount: { type: Number, default: 0 },
       discountAmount: { type: Number, default: 0 },
       date: { type: String, default: '' },
@@ -72,6 +74,7 @@ const SaleSchema = new mongoose.Schema({
       checkBank: { type: String, default: '' },
       checkDueDate: { type: String, default: '' },
       paymentProofFile: { type: String, default: null },
+      paymentProofFiles: { type: [String], default: [] },
       notes: { type: String, default: '' },
       createdAt: { type: Date, default: Date.now }
     }
@@ -82,6 +85,8 @@ const SaleSchema = new mongoose.Schema({
   producerPaymentProofFile: { type: String, default: null },
   producerPaymentHistory: [
     {
+      id: { type: String, default: '' },
+      seq: { type: Number, default: 0 },
       amount: { type: Number, default: 0 },
       date: { type: String, default: '' },
       paymentMethod: { type: String, default: 'PIX' },
@@ -89,6 +94,7 @@ const SaleSchema = new mongoose.Schema({
       checkBank: { type: String, default: '' },
       checkDueDate: { type: String, default: '' },
       paymentProofFile: { type: String, default: null },
+      paymentProofFiles: { type: [String], default: [] },
       notes: { type: String, default: '' },
       createdAt: { type: Date, default: Date.now }
     }

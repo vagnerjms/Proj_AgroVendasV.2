@@ -4,6 +4,7 @@ const fs = require('fs');
 const { upload } = require('../middlewares/upload');
 const { requireAuth } = require('../middlewares/auth');
 const NfeParserService = require('../services/nfeParser.service');
+const PaymentProofParser = require('../services/paymentProofParser.service');
 const productService = require('../services/product.service');
 const { cleanupOrphanUploads } = require('../services/cleanup.service');
 
@@ -61,6 +62,36 @@ router.post('/nfe/parse', requireAuth, (req, res) => {
       }
       console.error('Erro ao processar NF-e:', parseErr);
       res.status(400).json({ error: `Erro no processamento da NF-e: ${parseErr.message}` });
+    }
+  });
+});
+
+// POST /api/payment-proof/parse — autofill de baixa a partir do comprovante
+router.post('/payment-proof/parse', requireAuth, (req, res) => {
+  upload.single('file')(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ error: `Erro no upload do comprovante: ${err.message}` });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhum arquivo de comprovante enviado' });
+    }
+    try {
+      const remainingBalance = req.body?.remainingBalance != null
+        ? Number(req.body.remainingBalance)
+        : undefined;
+      const parsed = await PaymentProofParser.parse(req.file.path, req.file.originalname, {
+        remainingBalance
+      });
+      parsed.filename = req.file.filename;
+      res.json({ success: true, ...parsed });
+    } catch (parseErr) {
+      console.error('Erro ao processar comprovante:', parseErr);
+      res.status(400).json({
+        error: `Erro no processamento do comprovante: ${parseErr.message}`,
+        filename: req.file.filename,
+        confidence: 'none',
+        suggested: {}
+      });
     }
   });
 });

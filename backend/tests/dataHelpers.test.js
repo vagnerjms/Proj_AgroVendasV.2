@@ -159,14 +159,31 @@ describe('buildDriveAttachmentName', () => {
       .toBe('00003-Pedido.webp');
 
     expect(buildDriveAttachmentName('cp', { romaneioNumber: '4', nfNumber: '55', ext: '.png' }))
-      .toBe('00004-CP-disp.png');
+      .toBe('00004-CP01-disp.png');
     expect(buildDriveAttachmentName('comprovante', {
       romaneioNumber: '4',
       nfNumber: '28040001',
-      ext: '.pdf'
-    })).toBe('00004-CP-28040001.pdf');
+      ext: '.pdf',
+      seq: 2
+    })).toBe('00004-CP02-28040001.pdf');
     expect(buildDriveAttachmentName('paymentproof', { romaneioNumber: '4', ext: '.pdf' }))
-      .toBe('00004-CP-disp.pdf');
+      .toBe('00004-CP01-disp.pdf');
+    expect(buildDriveAttachmentName('cpprod', { romaneioNumber: '4', nfNumber: '28040001', ext: '.pdf', seq: 1 }))
+      .toBe('00004-CPProd01-28040001.pdf');
+    expect(buildDriveAttachmentName('patio_nf', { nfNumber: '123456', ext: '.jpeg' }))
+      .toBe('Patio-NF-123456.jpeg');
+    expect(buildDriveAttachmentName('patio_romaneio', { ext: '.jpg' }))
+      .toBe('Patio-RomaneioBalanca.jpg');
+    expect(buildDriveAttachmentName('cp_prod', { romaneioNumber: '1', nfNumber: '111111', ext: '.pdf' }))
+      .toBe('00001-CPProd01-111111.pdf');
+    expect(buildDriveAttachmentName('producer_proof', { romaneioNumber: '1', ext: 'pdf', seq: 3 }))
+      .toBe('00001-CPProd03-disp.pdf');
+    expect(buildDriveAttachmentName('patio-nf', { nfNumber: '99', originalName: 'x.png' }))
+      .toBe('Patio-NF-disp.png');
+    expect(buildDriveAttachmentName('patio_balanca', { ext: '.webp' }))
+      .toBe('Patio-RomaneioBalanca.webp');
+    expect(buildDriveAttachmentName('nf', { romaneioNumber: '1', nfNumber: '1', ext: '.png' }))
+      .toBe('00001-NF-disp.pdf');
 
     expect(buildDriveAttachmentName('outro', {
       romaneioNumber: '5',
@@ -192,5 +209,14 @@ describe('classifySaleAttachment', () => {
       nfFile: 'clean.pdf'
     })).toBe('nf');
     expect(classifySaleAttachment('arquivo-generico.bin', {})).toBe('pedido');
+    expect(classifySaleAttachment('Patio-NF-123.jpeg', {})).toBe('patio_nf');
+    expect(classifySaleAttachment('Patio-RomaneioBalanca.jpg', {})).toBe('patio_romaneio');
+    expect(classifySaleAttachment('hist.pdf', {
+      paymentHistory: [{ paymentProofFiles: ['hist.pdf'] }]
+    })).toBe('cp');
+    expect(classifySaleAttachment('prod-pay.pdf', {
+      producerPaymentHistory: [{ paymentProofFiles: ['prod-pay.pdf'] }]
+    })).toBe('cpprod');
+    expect(classifySaleAttachment('x.pdf', { producerPaymentProofFile: 'x.pdf' })).toBe('cpprod');
   });
 });

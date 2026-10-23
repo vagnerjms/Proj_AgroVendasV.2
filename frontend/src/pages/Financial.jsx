@@ -20,6 +20,7 @@ import { calculateLiquidation, calculateFunrural } from '../utils/calculations';
 import { nfDisplayLabel, resolveRomaneioNumber, quantityOf, formatQuantity, resolveProductUnit } from '../utils/dataHelpers';
 import { DATA_LABELS } from '../constants/dataLabels';
 import { downloadFiscalExcel } from '../utils/fiscalExcelBuilder';
+import { slicePage } from '../utils/pagination';
 import SettleModal from '../components/sales/SettleModal';
 import MultiStoreSelect from '../components/reports/MultiStoreSelect';
 import MultiProductSelect from '../components/reports/MultiProductSelect';
@@ -96,7 +97,7 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [selectedProducers, setSelectedProducers] = useState([]);
   const [currentPage, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(15);
+  const pageSize = 15;
   const [settleSaleModal, setSettleSaleModal] = useState(null);
   const [settleTarget, setSettleTarget] = useState('client');
   const [notification, setNotification] = useState('');
@@ -301,13 +302,11 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
     }, { vp: 0, nf: 0, funrural: 0, previdencia: 0, rat: 0, senar: 0 });
   }, [funruralRows]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredSales.length / pageSize));
-  useEffect(() => {
-    if (currentPage > totalPages) setPage(1);
-  }, [totalPages, currentPage]);
+  const { totalPages, safePage, pageItems: paginatedSales } = slicePage(filteredSales, currentPage, pageSize);
 
-  const startIndex = (currentPage - 1) * pageSize;
-  const paginatedSales = filteredSales.slice(startIndex, startIndex + pageSize);
+  useEffect(() => {
+    if (currentPage !== safePage) setPage(safePage);
+  }, [currentPage, safePage]);
 
   const handleDownloadFiscalExcel = () => {
     downloadFiscalExcel(filteredSales, totalsFiltered, {
@@ -693,13 +692,13 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
 
         {totalPages > 1 && (
           <div className="p-3 border-t border-gray-200 bg-gray-50/60 flex items-center justify-between text-xs">
-            <span>Página {currentPage} / {totalPages}</span>
+            <span>Página {safePage} / {totalPages}</span>
             <div className="flex gap-1.5">
-              <button type="button" disabled={currentPage === 1} onClick={() => setPage(p => Math.max(1, p - 1))}
+              <button type="button" disabled={safePage === 1} onClick={() => setPage(p => Math.max(1, p - 1))}
                 className="px-3 py-1.5 bg-white border rounded-lg disabled:opacity-40 cursor-pointer flex items-center gap-1">
                 <ChevronLeft className="w-3.5 h-3.5" /> Anterior
               </button>
-              <button type="button" disabled={currentPage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              <button type="button" disabled={safePage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 className="px-3 py-1.5 bg-white border rounded-lg disabled:opacity-40 cursor-pointer flex items-center gap-1">
                 Próxima <ChevronRight className="w-3.5 h-3.5" />
               </button>

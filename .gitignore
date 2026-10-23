@@ -8,3 +8,12 @@ backend/coverage/
 .env
 *.log
 docs/
+
+# Pacotes de backup/restore e dumps do Drive — sobem só pela UI de backup, não pelo git
+backups/
+*.archive
+*.zip
+
+# Artefatos locais de runtime / build
+backend/uploads/
+frontend/dist/

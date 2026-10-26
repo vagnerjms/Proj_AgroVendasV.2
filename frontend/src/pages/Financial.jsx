@@ -21,6 +21,7 @@ import { nfDisplayLabel, resolveRomaneioNumber, quantityOf, formatQuantity, reso
 import { DATA_LABELS } from '../constants/dataLabels';
 import { downloadFiscalExcel } from '../utils/fiscalExcelBuilder';
 import { slicePage } from '../utils/pagination';
+import { matchesAfterInit } from '../utils/multiFilterGate';
 import SettleModal from '../components/sales/SettleModal';
 import MultiStoreSelect from '../components/reports/MultiStoreSelect';
 import MultiProductSelect from '../components/reports/MultiProductSelect';
@@ -150,15 +151,23 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
     }
   }, [uniqueProducers]);
 
-  const productMatches = (sale) => {
-    if (selectedProducts.length === 0) return false;
-    return selectedProducts.includes(extractProductName(sale));
-  };
+  const storeMatches = (sale) => matchesAfterInit({
+    initialized: storesInitRef.current,
+    selected: selectedStores,
+    value: sale.client
+  });
 
-  const producerMatches = (sale) => {
-    if (selectedProducers.length === 0) return false;
-    return selectedProducers.includes(extractProducerName(sale));
-  };
+  const productMatches = (sale) => matchesAfterInit({
+    initialized: productsInitRef.current,
+    selected: selectedProducts,
+    value: extractProductName(sale)
+  });
+
+  const producerMatches = (sale) => matchesAfterInit({
+    initialized: producersInitRef.current,
+    selected: selectedProducers,
+    value: extractProducerName(sale)
+  });
 
   const showNotification = (msg) => {
     setNotification(msg);
@@ -222,9 +231,8 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
       if (statusFilter === 'PENDING' && liq.isFullySettled) return false;
       if (statusFilter === 'PARTIAL' && !liq.isPartial) return false;
 
-      // vazio = nenhuma loja / produto / produtor
-      if (selectedStores.length === 0) return false;
-      if (!selectedStores.includes(s.client)) return false;
+      // após init: vazio = nenhum; antes da init: não excluir (padrão Agenda)
+      if (!storeMatches(s)) return false;
       if (!productMatches(s)) return false;
       if (!producerMatches(s)) return false;
 
@@ -266,8 +274,7 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
   const funruralRows = useMemo(() => {
     return sales
       .filter(s => {
-        if (selectedStores.length === 0) return false;
-        if (!selectedStores.includes(s.client)) return false;
+        if (!storeMatches(s)) return false;
         if (!productMatches(s)) return false;
         if (!producerMatches(s)) return false;
         if (!searchTerm.trim()) return true;
@@ -328,8 +335,8 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
           <p className="text-xs text-gray-500 mt-0.5">Consulta dedicada das alíquotas (1,63% s/ NF). Não opera baixas nesta tela.</p>
         </div>
 
-        <div className="flex flex-col lg:flex-row lg:items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[200px] max-w-md">
+        <div className="space-y-3">
+          <div className="relative w-full">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
             <input
               type="text"
@@ -339,16 +346,23 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
               className="w-full pl-9 pr-8 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#091b2e] outline-none"
             />
           </div>
-          <MultiStoreSelect
-            stores={uniqueLojas}
-            selectedStores={selectedStores}
-            onChange={setSelectedStores}
-          />
-          <MultiProductSelect
-            products={uniqueProducts}
-            selectedProducts={selectedProducts}
-            onChange={setSelectedProducts}
-          />
+          <div className={`flex flex-wrap items-center gap-2 ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+            <MultiStoreSelect
+              stores={uniqueLojas}
+              selectedStores={selectedStores}
+              onChange={setSelectedStores}
+            />
+            <MultiProductSelect
+              products={uniqueProducts}
+              selectedProducts={selectedProducts}
+              onChange={setSelectedProducts}
+            />
+            <MultiProducerSelect
+              producers={uniqueProducers}
+              selectedProducers={selectedProducers}
+              onChange={setSelectedProducers}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -370,8 +384,8 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-200 bg-gray-50/60">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="px-5 py-3 border-b border-gray-200 bg-gray-50/60 overflow-visible relative z-10">
             <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
               Detalhamento por venda — VP, NF e FUNRURAL
@@ -399,7 +413,11 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {funruralRows.length === 0 ? (
+                {loading ? (
+                  <tr><td colSpan={12} className="py-10 text-center text-gray-400">Carregando...</td></tr>
+                ) : sales.length === 0 ? (
+                  <tr><td colSpan={12} className="py-10 text-center text-gray-400">Nenhuma venda na base — restaure o backup reconciliado.</td></tr>
+                ) : funruralRows.length === 0 ? (
                   <tr><td colSpan={12} className="py-10 text-center text-gray-400">Nenhuma venda no filtro.</td></tr>
                 ) : funruralRows.map(({ sale: s, liq, fr }) => (
                   <tr key={s.id} className="hover:bg-gray-50">
@@ -499,25 +517,25 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
       </div>
 
       {/* Tabela unificada Baixas + Rastreio */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gray-50/50 space-y-3">
-          <div className="flex flex-nowrap items-center gap-2 min-h-[44px] overflow-x-auto pb-0.5">
-            <div className="relative shrink-0 w-[220px] min-w-[200px] max-w-[280px]">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-                placeholder="VP, NF, romaneio, loja, produtor, produto..."
-                className="w-full pl-9 pr-8 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#091b2e] outline-none"
-              />
-              {searchTerm && (
-                <button type="button" onClick={() => setSearchTerm('')} className="absolute right-2.5 top-2.5 text-gray-400 cursor-pointer">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+        <div className="p-4 border-b border-gray-200 bg-gray-50/50 space-y-3 overflow-visible relative z-10">
+          <div className="relative w-full">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+              placeholder="VP, NF, romaneio, loja, produtor, produto..."
+              className="w-full pl-9 pr-8 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#091b2e] outline-none"
+            />
+            {searchTerm && (
+              <button type="button" onClick={() => setSearchTerm('')} className="absolute right-2.5 top-2.5 text-gray-400 cursor-pointer">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
 
+          <div className={`flex flex-wrap items-center gap-2 min-h-[36px] ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
             <MultiStoreSelect
               stores={uniqueLojas}
               selectedStores={selectedStores}
@@ -598,6 +616,8 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr><td colSpan={17} className="py-12 text-center text-gray-400">Carregando...</td></tr>
+              ) : sales.length === 0 ? (
+                <tr><td colSpan={17} className="py-12 text-center text-gray-400 italic">Nenhuma venda na base — restaure o backup reconciliado.</td></tr>
               ) : paginatedSales.length === 0 ? (
                 <tr><td colSpan={17} className="py-12 text-center text-gray-400 italic">Nenhum título encontrado.</td></tr>
               ) : (

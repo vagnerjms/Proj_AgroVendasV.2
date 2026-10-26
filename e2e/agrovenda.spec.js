@@ -50,13 +50,25 @@ test.describe('AgroVenda e2e', () => {
     expect(/\bplaca\b/i.test(body)).toBeFalsy();
   });
 
-  test('5. Fiscal: filtros produto/loja e labels Produto', async ({ page }) => {
+  test('5. Fiscal: filtros produto/loja/produtor e busca', async ({ page }) => {
     await ensureApp(page);
     await openFiscal(page);
     const body = await page.locator('body').innerText();
     expect(/produto/i.test(body)).toBeTruthy();
     expect(/lojas|loja/i.test(body)).toBeTruthy();
+    expect(/produtor/i.test(body)).toBeTruthy();
     expect(/baixas|receber|saldo/i.test(body)).toBeTruthy();
+    await expect(
+      page.getByPlaceholder(/vp.*nf.*romaneio|loja.*produtor|buscar|pesquisar/i).first()
+    ).toBeVisible({ timeout: 10000 });
+  });
+
+  test('1b. Dashboard: Filtrar Período e dois campos de data', async ({ page }) => {
+    await ensureApp(page);
+    await expect(page.getByRole('button', { name: /filtrar per[ií]odo/i }).first()).toBeVisible({
+      timeout: 10000
+    });
+    await expect(page.locator('input[type="date"]')).toHaveCount(2);
   });
 
   test('6. Agenda não tem botão Receber/Repassar de liquidação', async ({ page }) => {

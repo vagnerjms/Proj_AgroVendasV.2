@@ -7,7 +7,16 @@ frontend/node_modules/
 backend/coverage/
 .env
 *.log
-docs/
+
+# docs/: versionar Markdown; dumps/artefatos ficam locais
+docs/**/*.json
+docs/**/*.html
+docs/**/*.csv
+docs/**/*.xlsx
+docs/**/*.xls
+docs/**/*.pdf
+docs/export-mocks/**
+!docs/export-mocks/README.md
 
 # Pacotes de backup/restore e dumps do Drive — sobem só pela UI de backup, não pelo git
 backups/

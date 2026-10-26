@@ -63,7 +63,7 @@ export default function MultiProductSelect({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center justify-between gap-2 bg-white border text-xs rounded-lg px-3 py-2 outline-none font-semibold transition-all shadow-sm cursor-pointer min-w-[210px] max-w-[320px] ${
+        className={`flex items-center justify-between gap-2 bg-white border text-xs rounded-lg px-3 py-2 outline-none font-semibold transition-all shadow-sm cursor-pointer min-w-[160px] max-w-[280px] ${
           isCustomSelected || isNoneSelected
             ? 'border-emerald-600 ring-2 ring-emerald-600/20 text-emerald-950 bg-emerald-50/30'
             : 'border-gray-300 text-gray-800 hover:bg-gray-50'

@@ -64,36 +64,30 @@ export default function Dashboard({ setCurrentPage }) {
   return (
     <div className="p-4 sm:p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
       {/* Date Filter Bar */}
-      <form onSubmit={handleFilter} className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
+      <form onSubmit={handleFilter} className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1">
           <label className="text-xs font-semibold text-gray-600">Data Inicial:</label>
-          <div className="relative">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#091b2e] focus:border-transparent outline-none shadow-sm"
-              placeholder="dd/mm/aaaa"
-            />
-          </div>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#091b2e] focus:border-transparent outline-none shadow-sm"
+          />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-1">
           <label className="text-xs font-semibold text-gray-600">Data Final:</label>
-          <div className="relative">
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#091b2e] focus:border-transparent outline-none shadow-sm"
-              placeholder="dd/mm/aaaa"
-            />
-          </div>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2 focus:ring-2 focus:ring-[#091b2e] focus:border-transparent outline-none shadow-sm"
+          />
         </div>
 
         <button
           type="submit"
-          className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-semibold px-5 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
+          className="shrink-0 bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-semibold px-5 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-1.5 cursor-pointer"
         >
           Filtrar Período
         </button>
@@ -106,7 +100,7 @@ export default function Dashboard({ setCurrentPage }) {
               setEndDate('');
               fetchDashboard('', '');
             }}
-            className="text-xs text-gray-500 hover:text-gray-700 underline ml-2"
+            className="shrink-0 self-end text-xs text-gray-500 hover:text-gray-700 underline py-2"
           >
             Limpar filtro
           </button>

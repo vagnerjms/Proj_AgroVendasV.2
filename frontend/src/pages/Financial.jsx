@@ -21,6 +21,7 @@ import { nfDisplayLabel, resolveRomaneioNumber, quantityOf, formatQuantity, reso
 import { DATA_LABELS } from '../constants/dataLabels';
 import { downloadFiscalExcel } from '../utils/fiscalExcelBuilder';
 import { slicePage } from '../utils/pagination';
+import { matchesAfterInit } from '../utils/multiFilterGate';
 import SettleModal from '../components/sales/SettleModal';
 import MultiStoreSelect from '../components/reports/MultiStoreSelect';
 import MultiProductSelect from '../components/reports/MultiProductSelect';
@@ -150,23 +151,23 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
     }
   }, [uniqueProducers]);
 
-  const storeMatches = (sale) => {
-    if (!storesInitRef.current) return true;
-    if (selectedStores.length === 0) return false;
-    return selectedStores.includes(sale.client);
-  };
+  const storeMatches = (sale) => matchesAfterInit({
+    initialized: storesInitRef.current,
+    selected: selectedStores,
+    value: sale.client
+  });
 
-  const productMatches = (sale) => {
-    if (!productsInitRef.current) return true;
-    if (selectedProducts.length === 0) return false;
-    return selectedProducts.includes(extractProductName(sale));
-  };
+  const productMatches = (sale) => matchesAfterInit({
+    initialized: productsInitRef.current,
+    selected: selectedProducts,
+    value: extractProductName(sale)
+  });
 
-  const producerMatches = (sale) => {
-    if (!producersInitRef.current) return true;
-    if (selectedProducers.length === 0) return false;
-    return selectedProducers.includes(extractProducerName(sale));
-  };
+  const producerMatches = (sale) => matchesAfterInit({
+    initialized: producersInitRef.current,
+    selected: selectedProducers,
+    value: extractProducerName(sale)
+  });
 
   const showNotification = (msg) => {
     setNotification(msg);

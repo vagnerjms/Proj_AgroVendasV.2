@@ -122,19 +122,34 @@ test.describe('Traceability & pátio', () => {
     await page.getByText(/financeiro\s*&\s*fiscal/i).first().click();
     await page.waitForTimeout(600);
     await page.getByText(/contas e fluxo/i).first().click();
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1500);
 
-    const toolbar = page.locator('body');
-    const text = await toolbar.innerText();
-    expect(/filtro|loja|produtor|status|per[ií]odo|buscar/i.test(text)).toBeTruthy();
+    const search = page.getByPlaceholder(/vp.*nf.*romaneio|loja.*produtor|buscar|pesquisar/i).first();
+    await expect(search).toBeVisible({ timeout: 10000 });
+
+    // Linha de Multi* sem scroll horizontal forçado (flex-wrap)
+    const filterRow = page.locator('div.flex.flex-wrap').filter({
+      has: page.getByRole('button', { name: /loja|produto|produtor/i })
+    }).first();
+    if (await filterRow.isVisible({ timeout: 5000 }).catch(() => false)) {
+      const box = await filterRow.evaluate((el) => ({
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth
+      }));
+      expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth + 2);
+    }
+
+    const body = await page.locator('body').innerText();
+    const emptyBase = /nenhuma venda na base|restaure o backup/i.test(body);
+    const storeOk = /todas as lojas|\d+\s+loja/i.test(body);
+    const stuckNone = /nenhuma loja/i.test(body) && !emptyBase;
+    expect(emptyBase || storeOk).toBeTruthy();
+    expect(stuckNone).toBeFalsy();
 
     // Toolbar não some ao focar busca (regressão de layout)
-    const search = page.getByPlaceholder(/buscar|pesquisar|vp|loja/i).first();
-    if (await search.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await search.focus();
-      await page.waitForTimeout(300);
-      await expect(page.getByText(/contas|fluxo|fiscal/i).first()).toBeVisible();
-    }
+    await search.focus();
+    await page.waitForTimeout(300);
+    await expect(page.getByText(/fiscal\s*[—\-–]\s*baixas|contas|fluxo/i).first()).toBeVisible();
 
     await page.getByText(/^comercial$/i).first().click().catch(() => {});
     await page.waitForTimeout(400);
@@ -142,8 +157,8 @@ test.describe('Traceability & pátio', () => {
     if (await newSaleNav.isVisible({ timeout: 5000 }).catch(() => false)) {
       await newSaleNav.click();
       await page.waitForTimeout(1000);
-      const body = await page.locator('body').innerText();
-      expect(/nova venda|opera[cç][aã]o|nf-e|xml/i.test(body)).toBeTruthy();
+      const saleBody = await page.locator('body').innerText();
+      expect(/nova venda|opera[cç][aã]o|nf-e|xml/i.test(saleBody)).toBeTruthy();
     }
   });
 });

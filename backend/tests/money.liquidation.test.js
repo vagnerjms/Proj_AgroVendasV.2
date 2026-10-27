@@ -2,6 +2,8 @@ const {
   roundMoney,
   calculateCommission,
   getSaleCommercialValue,
+  getClientOpenBalance,
+  sumClientDiscounts,
   calculateFiscalDeductions,
   calculateCommercialNet
 } = require('../utils/money');
@@ -59,5 +61,15 @@ describe('money — liquidação VP vs NF', () => {
     const saldo = roundMoney(Math.max(0, vp - paid));
     expect(saldo).toBe(10000);
     expect(paid < vp - 0.05).toBe(true);
+  });
+
+  test('desconto negociado abate saldo aberto (pago + desconto)', () => {
+    const sale = {
+      valorTotalVP: 55800,
+      paidAmount: 54665.52,
+      paymentHistory: [{ amount: 54665.52, discountAmount: 1134.48 }]
+    };
+    expect(sumClientDiscounts(sale)).toBeCloseTo(1134.48, 2);
+    expect(getClientOpenBalance(sale)).toBe(0);
   });
 });

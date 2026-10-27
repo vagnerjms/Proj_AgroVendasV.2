@@ -110,8 +110,17 @@ export function getValorTotalVP(sale = {}) {
 }
 
 /**
+ * Soma descontos negociados no histórico da loja (abatimento do VP, não deixa saldo aberto).
+ */
+export function sumClientDiscounts(sale = {}) {
+  const hist = Array.isArray(sale.paymentHistory) ? sale.paymentHistory : [];
+  return roundMoney(hist.reduce((acc, h) => acc + (Number(h?.discountAmount) || 0), 0));
+}
+
+/**
  * Calcula a conciliação financeira completa de uma venda com suporte a liquidação parcial.
  * Ledger loja (receber) = VP comercial | Ledger produtor (Thais) = NF.
+ * Desconto manual conta como cobertura do título (pago + desconto ≥ VP → quitado).
  */
 export function calculateLiquidation(sale = {}) {
   const itemValorNF = roundMoney(Number(sale.valorTotalNF) || Number(sale.totalOperation) || Number(sale.valorNF) || 0);
@@ -129,15 +138,17 @@ export function calculateLiquidation(sale = {}) {
   const valorVP = roundMoney(valorVPRaw > 0 ? valorVPRaw : itemValorNF);
 
   const paidClient = roundMoney(Number(sale.paidAmount) || 0);
+  const totalDiscount = sumClientDiscounts(sale);
+  const coveredClient = roundMoney(paidClient + totalDiscount);
   const paidProducer = roundMoney(Number(sale.producerPaidAmount) || 0);
 
-  // Recebimento da loja: base VP
+  // Recebimento da loja: base VP; desconto negociado abate o saldo
   const isClientSettled =
     sale.paymentStatus === 'Recebido' ||
     sale.status === 'Concluído' ||
-    (valorVP > 0 && paidClient >= valorVP - 0.05);
+    (valorVP > 0 && coveredClient >= valorVP - 0.05);
   const isClientPartial =
-    !isClientSettled && (sale.paymentStatus === 'Parcial' || paidClient > 0);
+    !isClientSettled && (sale.paymentStatus === 'Parcial' || paidClient > 0 || totalDiscount > 0);
 
   const valorLiquidado = isClientSettled
     ? (paidClient > 0 ? paidClient : valorVP)
@@ -145,9 +156,7 @@ export function calculateLiquidation(sale = {}) {
 
   const valorALiquidar = isClientSettled
     ? 0
-    : (isClientPartial
-      ? roundMoney(Math.max(0, valorVP - paidClient))
-      : valorVP);
+    : roundMoney(Math.max(0, valorVP - coveredClient));
 
   // Repasse ao produtor: base NF (SEM NF = 0 a pagar)
   const producerTarget = itemValorNF;
@@ -177,6 +186,8 @@ export function calculateLiquidation(sale = {}) {
     funrural,
     totalLiquido,
     paidAmount: paidClient,
+    totalDiscount,
+    coveredAmount: coveredClient,
     producerPaidAmount: paidProducer,
     valorLiquidado,
     valorALiquidar,

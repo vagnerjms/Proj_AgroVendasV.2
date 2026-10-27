@@ -127,14 +127,20 @@ async function getStoresSummary({ startDate, endDate, producer }) {
       cxsVendidas = Number((cxsVendidas + itemCaixas).toFixed(2));
 
       // Ledger loja = VP | Ledger produtor (baixa Fiscal) = NF (não misturar pagos)
+      // Desconto negociado abate o saldo (não fica como a receber)
       const pagoCliente = roundMoney(Number(s.paidAmount) || 0);
+      const descontoCliente = roundMoney(
+        (Array.isArray(s.paymentHistory) ? s.paymentHistory : [])
+          .reduce((acc, h) => acc + (Number(h?.discountAmount) || 0), 0)
+      );
+      const cobertoCliente = roundMoney(pagoCliente + descontoCliente);
       const pagoProdutor = roundMoney(Number(s.producerPaidAmount) || 0);
 
       const isQuitadoLoja =
         s.paymentStatus === 'Recebido' ||
         s.status === 'Concluído' ||
-        (valorVP > 0 && pagoCliente >= valorVP - 0.05);
-      const isParcialLoja = !isQuitadoLoja && (s.paymentStatus === 'Parcial' || pagoCliente > 0);
+        (valorVP > 0 && cobertoCliente >= valorVP - 0.05);
+      const isParcialLoja = !isQuitadoLoja && (s.paymentStatus === 'Parcial' || pagoCliente > 0 || descontoCliente > 0);
 
       let itemLiquidado = 0;
       let itemALiquidar = 0;
@@ -144,7 +150,7 @@ async function getStoresSummary({ startDate, endDate, producer }) {
         itemALiquidar = 0;
       } else if (isParcialLoja) {
         itemLiquidado = pagoCliente;
-        itemALiquidar = roundMoney(Math.max(0, valorVP - pagoCliente));
+        itemALiquidar = roundMoney(Math.max(0, valorVP - cobertoCliente));
       } else {
         itemLiquidado = 0;
         itemALiquidar = valorVP;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Plus, Search, CheckCircle2, AlertTriangle, Smartphone } from 'lucide-react';
 import { api } from '../services/api';
 import WeighingKpiCards from '../components/weighings/WeighingKpiCards';
 import WeighingTable from '../components/weighings/WeighingTable';
@@ -248,13 +248,26 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
             Romaneios de Pesagem & Divergências de Carga
           </h1>
         </div>
-        <button
-          onClick={() => setShowNewModal(true)}
-          className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow flex items-center gap-1.5 transition-all cursor-pointer"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Lançar Romaneio
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href="/m"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Abrir módulo pátio / motorista em nova aba"
+            className="bg-white hover:bg-gray-50 text-[#091b2e] border border-gray-300 text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <Smartphone className="w-3.5 h-3.5" />
+            Pátio / Motorista
+          </a>
+          <button
+            type="button"
+            onClick={() => setShowNewModal(true)}
+            className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Lançar Romaneio
+          </button>
+        </div>
       </div>
 
       {/* Notifications */}

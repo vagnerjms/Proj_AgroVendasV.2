@@ -167,15 +167,16 @@ describe('sale.service — settle / unsettle loja', () => {
       paymentMethod: 'Cheque'
     });
 
-    expect(withDisc.paymentStatus).toBe('Parcial');
-    expect(withDisc.paidAmount).toBeCloseTo(9500 + (vp - 9500 - 413.79), 2);
+    // Desconto abate o título: pago + descontos ≥ VP → Recebido (VP/NF intactos)
+    // Saldo aberto após 1º lançamento já descontava os R$500 → quitação = 40000 − 413.79
+    expect(withDisc.paymentStatus).toBe('Recebido');
+    expect(withDisc.paidAmount).toBeCloseTo(9500 + (vp - 9500 - 500 - 413.79), 2);
     expect(withDisc.paymentHistory).toHaveLength(2);
     expect(withDisc.paymentHistory[1].discountAmount).toBeCloseTo(413.79, 2);
     expect(withDisc.paymentHistory[1].notes).toMatch(/Ajuste acerto/);
-    // VP comercial / NF não são alterados pelo desconto
     expect(Number(withDisc.totalOperation)).toBe(Number(sale.totalOperation));
 
-    // Sem NF + desconto → permanece Pendente NF; defaults de método/cheque
+    // Sem NF + desconto que quita o VP → Recebido; status doc permanece Pendente NF
     const semNf = await saleService.createSale(baseBody({
       nfFile: null,
       nfeKey: '',
@@ -191,7 +192,7 @@ describe('sale.service — settle / unsettle loja', () => {
       checkBank: null,
       checkDueDate: null
     });
-    expect(discSemNf.paymentStatus).toBe('Parcial');
+    expect(discSemNf.paymentStatus).toBe('Recebido');
     expect(discSemNf.status).toBe('Pendente NF');
     expect(discSemNf.paymentHistory[0].paymentMethod).toBe('PIX');
     expect(discSemNf.paidAmount).toBeCloseTo(vp - 100, 2);

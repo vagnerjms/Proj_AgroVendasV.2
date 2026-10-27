@@ -179,6 +179,27 @@ function getSaleCommercialValue(sale) {
 }
 
 /**
+ * Soma dos descontos manuais no ledger da loja (abatimento negociado do VP).
+ * Não altera VP/NF; conta como cobertura do título junto com paidAmount.
+ */
+function sumClientDiscounts(sale) {
+  const hist = Array.isArray(sale?.paymentHistory) ? sale.paymentHistory : [];
+  return roundMoney(hist.reduce((acc, h) => acc + (Number(h?.discountAmount) || 0), 0));
+}
+
+/**
+ * Saldo em aberto da loja: VP − (pago em dinheiro + descontos negociados).
+ */
+function getClientOpenBalance(sale, targetReceivable) {
+  const target = roundMoney(
+    targetReceivable != null ? targetReceivable : getSaleCommercialValue(sale)
+  );
+  const paid = roundMoney(Number(sale?.paidAmount) || 0);
+  const discounts = sumClientDiscounts(sale);
+  return roundMoney(Math.max(0, target - paid - discounts));
+}
+
+/**
  * Prestação de contas estilo planilha "Valores por carga":
  * - FUNRURAL sobre a NF; se SEM NF, estimado sobre o VP comercial
  * - Líquido pelo VP = VP − FUNRURAL − Frete − Comissão (amarelas; em branco = 0)
@@ -217,5 +238,7 @@ module.exports = {
   calculateCommission,
   calculateLiquidationValue,
   getSaleCommercialValue,
+  sumClientDiscounts,
+  getClientOpenBalance,
   calculateCommercialNet
 };

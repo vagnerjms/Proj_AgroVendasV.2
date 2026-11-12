@@ -269,7 +269,9 @@ export default function BackupRestore({ setCurrentPage }) {
                   {restoreFile ? restoreFile.name : 'Clique para selecionar o arquivo .json de backup'}
                 </span>
                 <span className="text-[11px] text-gray-400 block">
-                  {restoreFile ? `${(restoreFile.size / 1024).toFixed(1)} KB` : 'Suporta arquivos agrovenda_backup_*.json'}
+                  {restoreFile
+                    ? `${(restoreFile.size / (1024 * 1024)).toFixed(2)} MB`
+                    : 'Pacotes reconciliados (~25 MB) ok — limite de restore: 100 MB'}
                 </span>
               </label>
             </div>

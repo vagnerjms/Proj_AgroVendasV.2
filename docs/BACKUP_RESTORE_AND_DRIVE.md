@@ -1,6 +1,6 @@
 # Backup, restore e Google Drive (SaaS)
 
-**Atualizado:** 23 de outubro de 2026  
+**Atualizado:** 12 de novembro de 2026  
 **Versão app:** 2.0.0
 
 Runbook operacional. Detalhes de teste: [TESTING.md](./TESTING.md). E2E/n8n: [E2E_CRITICAL_FLOWS.md](./E2E_CRITICAL_FLOWS.md).
@@ -11,17 +11,20 @@ Runbook operacional. Detalhes de teste: [TESTING.md](./TESTING.md). E2E/n8n: [E2
 
 | Uso | Arquivo (local, **fora do git**) |
 |-----|----------------------------------|
-| **Restore VPS / produção** | `backups/agrovenda_backup_reconciliado_rotas_2026-10-23.json` |
-| Fonte bruta (não restaurar direto) | `backups/agrovenda_backup_completo_2026-10-23.json` |
+| **Restore VPS / produção** | `backups/agrovenda_backup_reconciliado_rotas_2026-11-03.json` |
+| Fonte bruta (não restaurar direto) | `backups/agrovenda_backup_completo_2026-11-03 (1).json` |
+| Histórico 23/10 | `backups/agrovenda_backup_reconciliado_rotas_2026-10-23.json` |
 | Pipeline antigo (zerado, 01/10) | Ver [RECONCILIACAO_BACKUP_2026-10-01.md](./RECONCILIACAO_BACKUP_2026-10-01.md) — histórico |
+
+**Limite de upload na UI:** restore aceita até **100 MB** (`backupUpload`). Anexos do dia a dia continuam em 15 MB. Pacote atual ~24 MB.
 
 Validação local:
 
 ```bash
-npm run validate:restore -- backups/agrovenda_backup_reconciliado_rotas_2026-10-23.json
+npm run validate:restore -- backups/agrovenda_backup_reconciliado_rotas_2026-11-03.json
 ```
 
-Esperado (out/2026): 48 vendas, 0 issues; Badin pago R$ 104.809,95; saldo aberto 09718 (VP008) R$ 7.510,58.
+Esperado (nov/2026): Rubi quitada (VP 409.890,35 / pagos 396.475,25); Badin/W&A conforme pacote.
 
 ### Scripts
 
@@ -85,8 +88,13 @@ Smoke: [E2E_CRITICAL_FLOWS.md](./E2E_CRITICAL_FLOWS.md) § Checklist ops — n8n
 
 ## 5. Ordem sugerida na VPS
 
-1. Deploy do código (PR) + reimport n8n.
-2. Copiar o JSON reconciliado para a VPS (scp) — **não** via git.
-3. Restore pela UI com confirmação.
-4. Conferir Badin/W&A e pastas `default/{loja}/{VP}`.
-5. Lixeira manual dos clones flat no Drive.
+1. Deploy do código (branch) + rebuild do container app:
+   ```bash
+   git pull
+   docker compose build app && docker compose up -d app
+   ```
+2. **Nginx** (se estiver na frente do app): garantir `client_max_body_size 100m;` no `server`/`location` da API — senão o proxy corta o JSON ~24 MB antes do Node.
+3. Restore pela UI (Configurações → Restaurar) com `agrovenda_backup_reconciliado_rotas_2026-11-03.json` — arquivo fica **fora do git**; selecione no navegador a partir da máquina local.
+4. Alternativa sem UI: `BACKUP_PATH=... MONGO_URI=... ALLOW_REMOTE_RESTORE=1 node backend/scripts/restore_from_docs_backup.js` (dentro do host/container com volume de uploads).
+5. Conferir Rubi/Badin/W&A e pastas `default/{loja}/{VP}`.
+6. Lixeira manual dos clones flat no Drive (se ainda houver).

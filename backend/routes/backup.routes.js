@@ -1,14 +1,29 @@
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
-const { upload } = require('../middlewares/upload');
+const { backupUpload, BACKUP_RESTORE_MAX_BYTES } = require('../middlewares/upload');
 const { requireAuth, requirePermission } = require('../middlewares/auth');
 const backupService = require('../services/backup.service');
 
 const RESTORE_CONFIRM_PHRASE = 'RESTAURAR';
+const BACKUP_RESTORE_MAX_MB = Math.round(BACKUP_RESTORE_MAX_BYTES / (1024 * 1024));
 
 function parseTruthy(value) {
   return value === true || value === 'true' || value === '1' || value === 1;
+}
+
+function handleBackupUpload(req, res, next) {
+  backupUpload.single('backupFile')(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        error: `Backup excede o limite de ${BACKUP_RESTORE_MAX_MB} MB. Use um pacote menor ou restaure via script no servidor.`
+      });
+    }
+    return res.status(400).json({
+      error: err.message || 'Erro no upload do arquivo de backup'
+    });
+  });
 }
 
 // Proteger todas as rotas de backup (apenas usuários autenticados com permissão de backup)
@@ -39,7 +54,7 @@ router.get('/export', async (req, res, next) => {
 });
 
 // POST /api/backup/restore
-router.post('/restore', upload.single('backupFile'), async (req, res, next) => {
+router.post('/restore', handleBackupUpload, async (req, res, next) => {
   try {
     const confirmPhrase = req.body?.confirmPhrase;
     if (confirmPhrase !== RESTORE_CONFIRM_PHRASE) {

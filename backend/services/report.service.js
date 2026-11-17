@@ -348,7 +348,9 @@ async function triggerN8nReport(user, body) {
     ? 'Por Produtor (Valor comercial)'
     : activeTab === 'corretor'
       ? 'Resultado AgroVenda'
-      : 'Por Loja (Valores por carga)';
+      : activeTab === 'fiscal'
+        ? 'Fiscal (Contas / Fluxos)'
+        : 'Por Loja (Valores por carga)';
 
   const payload = {
     event: 'report.generated',

@@ -2,7 +2,7 @@
  * Unit tests — export Excel exclusivo do Fiscal (Contas/Fluxos).
  */
 import { describe, it, expect } from 'vitest';
-import { buildFiscalExcelHtml } from '../src/utils/fiscalExcelBuilder.js';
+import { buildFiscalExcelHtml, groupFiscalSalesByLoja } from '../src/utils/fiscalExcelBuilder.js';
 
 const sampleSale = {
   id: 'VP0100',
@@ -20,7 +20,7 @@ const sampleSale = {
   evidenceFile: '09733-pedido.jpeg',
   nfFile: 'NF-001.pdf',
   paymentProofFile: 'cp-001.pdf',
-  items: [{ product: 'Cenoura', quantity: 100, kg: 2900, valorTotalVP: 50000 }],
+  items: [{ product: 'Cenoura', quantity: 100, kg: 2900, valorTotalVP: 50000, unit: 'Caixas' }],
   paymentHistory: [
     {
       seq: 1,
@@ -35,7 +35,7 @@ const sampleSale = {
 };
 
 describe('buildFiscalExcelHtml', () => {
-  it('inclui colunas do Fiscal, Observações, desconto e totais do filtro', () => {
+  it('layout loja a loja com produto, unidade, financeiro Fiscal e observações no bloco', () => {
     const html = buildFiscalExcelHtml(
       [sampleSale],
       { vp: 50000, nf: 40000, recebido: 49586.21, saldo: 413.79, caixas: 100 },
@@ -49,22 +49,22 @@ describe('buildFiscalExcelHtml', () => {
     );
 
     expect(html).toMatch(/FISCAL \(CONTAS \/ FLUXOS\)/i);
-    expect(html).toMatch(/Observações/i);
-    expect(html).toMatch(/Obs\. desconto/i);
-    expect(html).toMatch(/Desconto/i);
+    expect(html).toMatch(/RESUMO POR LOJA/i);
+    expect(html).toMatch(/Detalhamento por loja/i);
+    expect(html).toMatch(/hdr-loja/);
+    expect(html).toMatch(/LOJA ALPHA/i);
+    expect(html).toContain('Cenoura');
+    expect(html).toMatch(/unidade cadastrada/i);
     expect(html).toMatch(/Valor Recebido/i);
     expect(html).toMatch(/Saldo a receber/i);
-    expect(html).toMatch(/Forma pgto/i);
+    expect(html).toMatch(/Valor negociado/i);
     expect(html).toContain('VP0100');
     expect(html).toContain('Loja Alpha');
-    expect(html).toContain('Bruno Peres');
-    expect(html).toContain('Cenoura');
     expect(html).toContain('Ajuste acerto manual');
     expect(html).toMatch(/Gap cheque vs VP/);
-    expect(html).toContain('Cheque');
-    expect(html).toMatch(/Pedido:.*09733-pedido/i);
-    expect(html).toMatch(/TOTAL \(filtro\)/i);
+    expect(html).toMatch(/Observações/i);
     expect(html).toMatch(/Status:\s*<b>Parcial<\/b>/i);
+    expect(html).toMatch(/TOTAL GERAL/i);
     expect(html).not.toMatch(/>\s*Ações\s*</i);
   });
 
@@ -116,7 +116,6 @@ describe('buildFiscalExcelHtml', () => {
 
     const baixaRows = html.match(/data-ledger-row="Ledger_Baixas"/g) || [];
     expect(baixaRows.length).toBe(2);
-    expect(html).toMatch(/CP×2/i);
 
     const repasseRows = html.match(/data-ledger-row="Ledger_Repasses"/g) || [];
     expect(repasseRows.length).toBe(1);
@@ -141,5 +140,14 @@ describe('buildFiscalExcelHtml', () => {
     const empty = buildFiscalExcelHtml([], {}, {});
     expect(empty).toMatch(/Nenhum título no filtro/i);
     expect(empty).toMatch(/data-sheet="Ledger_Baixas"/);
+  });
+
+  it('agrupa vendas por loja', () => {
+    const groups = groupFiscalSalesByLoja([
+      sampleSale,
+      { ...sampleSale, id: 'VP0102', client: 'Loja Beta', items: [{ product: 'Batata', quantity: 10, unit: 'Sacos' }] }
+    ]);
+    expect(groups.map((g) => g.loja).sort()).toEqual(['Loja Alpha', 'Loja Beta']);
+    expect(groups.find((g) => g.loja === 'Loja Alpha').itens[0].produto).toBe('Cenoura');
   });
 });

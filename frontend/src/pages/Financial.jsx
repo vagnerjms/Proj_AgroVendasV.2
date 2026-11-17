@@ -12,14 +12,17 @@ import {
   Building2,
   Paperclip,
   FileText,
-  Download
+  Download,
+  CloudUpload,
+  FileDown
 } from 'lucide-react';
 import { formatCurrency, formatDate, getCleanFileName } from '../utils/formatters';
 import { api } from '../services/api';
 import { calculateLiquidation, calculateFunrural } from '../utils/calculations';
 import { nfDisplayLabel, resolveRomaneioNumber, quantityOf, formatQuantity, resolveProductUnit } from '../utils/dataHelpers';
 import { DATA_LABELS } from '../constants/dataLabels';
-import { downloadFiscalExcel } from '../utils/fiscalExcelBuilder';
+import { downloadFiscalExcel, buildFiscalExcelHtml } from '../utils/fiscalExcelBuilder';
+import { downloadFiscalPdf } from '../utils/fiscalPdfBuilder';
 import { slicePage } from '../utils/pagination';
 import { matchesAfterInit } from '../utils/multiFilterGate';
 import SettleModal from '../components/sales/SettleModal';
@@ -315,14 +318,81 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
     if (currentPage !== safePage) setPage(safePage);
   }, [currentPage, safePage]);
 
+  const [savingDrive, setSavingDrive] = useState(false);
+  const [driveNotification, setDriveNotification] = useState('');
+  const [driveError, setDriveError] = useState('');
+
+  const fiscalFilterMeta = () => ({
+    statusFilter,
+    selectedStores,
+    selectedProducts,
+    selectedProducers,
+    searchTerm
+  });
+
   const handleDownloadFiscalExcel = () => {
-    downloadFiscalExcel(filteredSales, totalsFiltered, {
-      statusFilter,
-      selectedStores,
-      selectedProducts,
-      selectedProducers,
-      searchTerm
-    });
+    downloadFiscalExcel(filteredSales, totalsFiltered, fiscalFilterMeta());
+  };
+
+  const handleDownloadFiscalPdf = () => {
+    downloadFiscalPdf(filteredSales, totalsFiltered, fiscalFilterMeta());
+  };
+
+  const validateN8nWebhookUrl = (rawUrl) => {
+    const trimmed = String(rawUrl || '').trim();
+    if (!trimmed) return { ok: false, message: 'Informe a URL do webhook do n8n (em Relatórios → Salvar no Drive).' };
+    let parsed;
+    try {
+      parsed = new URL(trimmed);
+    } catch {
+      return { ok: false, message: 'URL de webhook inválida.' };
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return { ok: false, message: 'Webhook deve usar http ou https.' };
+    }
+    if (!/webhook/i.test(parsed.pathname || '')) {
+      return { ok: false, message: 'A URL deve conter o path do webhook (ex.: /webhook/salvar-relatorio).' };
+    }
+    return { ok: true, url: trimmed };
+  };
+
+  const handleSaveFiscalDrive = async () => {
+    const activeUrl = localStorage.getItem('agrovenda_n8n_drive_webhook') || '';
+    const check = validateN8nWebhookUrl(activeUrl);
+    if (!check.ok) {
+      setDriveError(check.message);
+      setTimeout(() => setDriveError(''), 6000);
+      return;
+    }
+
+    setSavingDrive(true);
+    setDriveNotification('');
+    setDriveError('');
+    try {
+      const excelHtml = buildFiscalExcelHtml(filteredSales, totalsFiltered, fiscalFilterMeta());
+      const res = await api.post('/api/reports/trigger-n8n', {
+        webhookUrl: check.url,
+        selectedLoja: selectedStores?.length === 1 ? selectedStores[0] : 'ALL',
+        selectedStores,
+        selectedProduct: selectedProducts?.[0] || 'ALL',
+        selectedProducer: selectedProducers?.[0] || 'ALL',
+        activeTab: 'fiscal',
+        excelHtml
+      });
+      if (res.success) {
+        setDriveNotification('Fiscal salvo no Google Drive com sucesso!');
+      } else {
+        setDriveError(res.message || 'Erro ao processar no n8n.');
+      }
+    } catch (err) {
+      setDriveError(err.message || 'Falha ao conectar com o n8n.');
+    } finally {
+      setSavingDrive(false);
+      setTimeout(() => {
+        setDriveNotification('');
+        setDriveError('');
+      }, 6000);
+    }
   };
 
   // —— Apuração FUNRURAL (tela dedicada) ——
@@ -578,16 +648,46 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
               type="button"
               onClick={handleDownloadFiscalExcel}
               disabled={loading || filteredSales.length === 0}
-              title="Baixar planilha do Fiscal com o filtro atual (inclui Observações)"
+              title="Baixar planilha do Fiscal com o filtro atual (loja a loja)"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#091b2e] text-white hover:bg-[#132c4a] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               Baixar Excel
             </button>
+            <button
+              type="button"
+              onClick={handleDownloadFiscalPdf}
+              disabled={loading || filteredSales.length === 0}
+              title="Abrir PDF (imprimir / salvar como PDF) no layout loja a loja"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-[#091b2e] text-[#091b2e] bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              Baixar PDF
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveFiscalDrive}
+              disabled={loading || filteredSales.length === 0 || savingDrive}
+              title="Salvar Excel Fiscal no Google Drive (webhook n8n configurado em Relatórios)"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <CloudUpload className={`w-3.5 h-3.5 ${savingDrive ? 'animate-bounce' : ''}`} />
+              {savingDrive ? 'Enviando...' : 'Salvar no Drive'}
+            </button>
           </div>
           <p className="text-[11px] text-gray-500">
             {filteredSales.length} registro(s) · somas do filtro: VP {formatCurrency(totalsFiltered.vp)} · Recebido {formatCurrency(totalsFiltered.recebido)} · Saldo {formatCurrency(totalsFiltered.saldo)}
           </p>
+          {driveNotification && (
+            <p className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
+              {driveNotification}
+            </p>
+          )}
+          {driveError && (
+            <p className="text-[11px] font-semibold text-red-800 bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5">
+              {driveError}
+            </p>
+          )}
         </div>
 
         <div className="overflow-x-auto">

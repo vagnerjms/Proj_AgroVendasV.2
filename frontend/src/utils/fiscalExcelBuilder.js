@@ -1,6 +1,6 @@
 /**
  * Planilha Excel (.xls HTML) exclusiva do Fiscal — Contas/Fluxos.
- * Abas: Resumo | Ledger_Baixas | Ledger_Repasses
+ * Abas: Resumo (blocos por loja) | Ledger_Baixas | Ledger_Repasses
  * Não altera os exports de Relatórios (reportExcelBuilder).
  */
 import { formatDate, getCleanFileName } from './formatters';
@@ -13,6 +13,8 @@ import {
   resolveProductUnit
 } from './dataHelpers';
 import { DATA_LABELS } from '../constants/dataLabels';
+
+const COL_DETALHE = 9; // Data|Rom|NF|Produto|Qtd|VP|NF$|Recebido|Saldo
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -45,7 +47,7 @@ function settlementDiscountInfo(sale) {
   };
 }
 
-function extractProductName(sale) {
+export function extractProductName(sale) {
   if (sale.items?.[0]?.product) return sale.items[0].product;
   if (sale.product) return sale.product;
   if (sale.notes) {
@@ -78,48 +80,87 @@ function proofFilesFromEvent(p) {
   return list;
 }
 
-function anexosLabel(sale) {
-  const parts = [];
-  const evidence = sale.evidenceFile || sale.rawEvidenceFile;
-  const nf = sale.nfFile || sale.rawNfFile;
-  const proofs = [];
-  const seen = new Set();
-  const push = (f) => {
-    if (!f || seen.has(f)) return;
-    seen.add(f);
-    proofs.push(f);
+function round2(n) {
+  return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+}
+
+function enrichSale(sale) {
+  const liq = calculateLiquidation(sale);
+  const disc = settlementDiscountInfo(sale);
+  const unit = resolveProductUnit(sale);
+  const qtdRaw = quantityOf(sale);
+  const obsParts = [];
+  if (sale.notes) obsParts.push(String(sale.notes));
+  if (disc.note) obsParts.push(`Desconto: ${disc.note}`);
+  return {
+    sale,
+    liq,
+    disc,
+    produto: extractProductName(sale),
+    produtor: extractProducerName(sale),
+    qtdLabel: formatQuantity(qtdRaw, unit),
+    qtdRaw: Number(qtdRaw) || 0,
+    unit: unit || '',
+    rom: resolveRomaneioNumber(sale) || '—',
+    nf: nfDisplayLabel(sale),
+    statusText: `${liq.statusLabel || ''}${liq.isPartial && liq.percentPaid ? ` (${liq.percentPaid.toFixed(0)}%)` : ''}`,
+    formaPgto: paymentMethodLabel(sale),
+    obsResumo: obsParts.length ? obsParts.join(' · ') : null
   };
-  (Array.isArray(sale.paymentHistory) ? sale.paymentHistory : []).forEach((p) => {
-    proofFilesFromEvent(p).forEach(push);
-  });
-  push(sale.paymentProofFile);
-  if (evidence) parts.push(`Pedido: ${getCleanFileName(evidence)}`);
-  if (nf) parts.push(`NF: ${getCleanFileName(nf)}`);
-  if (proofs.length === 1) parts.push(`CP: ${getCleanFileName(proofs[0])}`);
-  else if (proofs.length > 1) {
-    parts.push(`CP×${proofs.length}: ${proofs.map((f, i) => `CP${i + 1}=${getCleanFileName(f)}`).join('; ')}`);
+}
+
+export function groupFiscalSalesByLoja(sales = []) {
+  const map = new Map();
+  for (const s of sales) {
+    const loja = (s.client || 'Sem loja').trim() || 'Sem loja';
+    if (!map.has(loja)) map.set(loja, []);
+    map.get(loja).push(enrichSale(s));
   }
-  return parts.length ? parts.join(' | ') : '—';
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'))
+    .map(([loja, itens]) => {
+      const totals = itens.reduce(
+        (acc, r) => {
+          acc.vp = round2(acc.vp + (r.liq.valorVP || 0));
+          acc.nf = round2(acc.nf + (r.liq.valorTotalNF || 0));
+          acc.recebido = round2(acc.recebido + (r.liq.valorLiquidado || 0));
+          acc.saldo = round2(acc.saldo + (r.liq.valorALiquidar || 0));
+          acc.qtd = round2(acc.qtd + (r.qtdRaw || 0));
+          acc.n += 1;
+          return acc;
+        },
+        { vp: 0, nf: 0, recebido: 0, saldo: 0, qtd: 0, n: 0 }
+      );
+      return { loja, itens, totals };
+    });
 }
 
 function sharedStyles() {
   return `
         body { font-family: Arial, Calibri, sans-serif; font-size: 9pt; color: #1e293b; margin: 20px; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
-        th, td { border: 1px solid #cbd5e1; padding: 5px 7px; font-size: 8pt; vertical-align: top; }
-        .hdr-main { background-color: #091b2e; color: #ffffff; font-weight: bold; font-size: 10pt; padding: 8px 10px; text-align: left; }
-        .hdr-sub { background-color: #1b4363; color: #ffffff; font-weight: bold; font-size: 7.5pt; text-align: center; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+        th, td { border: 1px solid #cbd5e1; padding: 5px 7px; font-size: 8pt; vertical-align: middle; text-align: center; }
         .cell-left { text-align: left; mso-number-format: "\\@"; }
         .cell-center { text-align: center; mso-number-format: "\\@"; }
         .cell-num { text-align: right; }
         .cell-money { text-align: right; font-weight: bold; }
         .cell-money-normal { text-align: right; }
+        .hdr-main { background-color: #091b2e; color: #ffffff; font-weight: bold; font-size: 10pt; padding: 8px 10px; text-align: left; }
+        .hdr-sub { background-color: #1b4363; color: #ffffff; font-weight: bold; font-size: 7.5pt; text-align: center; }
+        .hdr-loja { background-color: #f1f5f9; color: #0f172a; font-weight: bold; font-size: 10pt; padding: 7px 10px; text-align: left; border-bottom: 2px solid #94a3b8; }
+        .hdr-id { background-color: #1b4363; color: #ffffff; font-weight: bold; font-size: 7.5pt; }
+        .hdr-qtd { background-color: #d7e5dc; color: #1e3a2f; font-weight: bold; font-size: 7.5pt; }
+        .hdr-fin { background-color: #dde5ef; color: #1e293b; font-weight: bold; font-size: 7.5pt; }
         .bg-liquidado { background-color: #ecfdf5; color: #065f46; }
         .bg-aliquidar { background-color: #fffbeb; color: #92400e; }
         .badge-kpi { border: 1px solid #cbd5e1; background-color: #f8fafc; padding: 8px; }
+        .row-subtotal-loja { background-color: #f8fafc; font-weight: bold; border-top: 2px solid #cbd5e1; }
         .row-total { background-color: #e2e8f0; font-weight: bold; border-top: 2px solid #64748b; }
         .sheet-title { font-size: 12pt; font-weight: bold; color: #091b2e; margin: 24px 0 8px; }
         .sheet-break { page-break-before: always; }
+        .obs-box { border: 1px solid #cbd5e1; border-top: none; background: #f8fafc; padding: 6px 8px; font-size: 7.5pt; text-align: left; color: #334155; margin-bottom: 18px; }
+        .note { font-size: 8.5pt; color: #64748b; margin: 4px 0 10px; text-align: left; }
+        .spacer td { border: none !important; height: 10pt; background: transparent; padding: 0; }
   `;
 }
 
@@ -195,6 +236,154 @@ function ledgerTableHtml(title, sheetId, rows, formatMoeda, emptyMsg) {
   `;
 }
 
+function resumoPorLojaTable(groups, formatMoeda) {
+  const body = groups.map((g) => `
+    <tr>
+      <td class="cell-left" style="font-weight:bold;">${escapeHtml(g.loja)}</td>
+      <td>${g.totals.n}</td>
+      <td class="cell-num">${escapeHtml(formatQuantity(g.totals.qtd))}</td>
+      <td class="cell-money" style="background-color:#dbeafe;">${formatMoeda(g.totals.vp)}</td>
+      <td class="cell-money-normal">${formatMoeda(g.totals.nf)}</td>
+      <td class="cell-money bg-liquidado">${formatMoeda(g.totals.recebido)}</td>
+      <td class="cell-money bg-aliquidar">${formatMoeda(g.totals.saldo)}</td>
+    </tr>`).join('');
+
+  const geral = groups.reduce(
+    (acc, g) => {
+      acc.n += g.totals.n;
+      acc.qtd = round2(acc.qtd + g.totals.qtd);
+      acc.vp = round2(acc.vp + g.totals.vp);
+      acc.nf = round2(acc.nf + g.totals.nf);
+      acc.recebido = round2(acc.recebido + g.totals.recebido);
+      acc.saldo = round2(acc.saldo + g.totals.saldo);
+      return acc;
+    },
+    { n: 0, qtd: 0, vp: 0, nf: 0, recebido: 0, saldo: 0 }
+  );
+
+  return `
+    <table>
+      <thead>
+        <tr><th colspan="7" class="hdr-main">RESUMO POR LOJA — ${escapeHtml(DATA_LABELS.saldoAReceber).toUpperCase()}</th></tr>
+        <tr>
+          <th class="hdr-sub" style="text-align:left;">Loja</th>
+          <th class="hdr-sub">Cargas</th>
+          <th class="hdr-sub">${DATA_LABELS.quantity}</th>
+          <th class="hdr-sub" style="background-color:#1e3a8a;">${DATA_LABELS.valorNegociadoVP}</th>
+          <th class="hdr-sub">${DATA_LABELS.valorNF}</th>
+          <th class="hdr-sub" style="background-color:#065f46;">Valor Recebido</th>
+          <th class="hdr-sub" style="background-color:#b45309;">${DATA_LABELS.saldoAReceber}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${body || `<tr><td colspan="7" class="cell-center" style="color:#94a3b8;font-style:italic;">Nenhum título no filtro.</td></tr>`}
+      </tbody>
+      <tfoot>
+        <tr class="row-total">
+          <td class="cell-left">TOTAL GERAL</td>
+          <td>${geral.n}</td>
+          <td class="cell-num">${escapeHtml(formatQuantity(geral.qtd))}</td>
+          <td class="cell-money">${formatMoeda(geral.vp)}</td>
+          <td class="cell-money-normal">${formatMoeda(geral.nf)}</td>
+          <td class="cell-money bg-liquidado">${formatMoeda(geral.recebido)}</td>
+          <td class="cell-money bg-aliquidar">${formatMoeda(geral.saldo)}</td>
+        </tr>
+      </tfoot>
+    </table>`;
+}
+
+function detailHeaderRows() {
+  return `
+    <tr>
+      <th colspan="3" class="hdr-id">Identificação</th>
+      <th colspan="2" class="hdr-qtd">Produto / quantidade</th>
+      <th colspan="4" class="hdr-fin">Financeiro</th>
+    </tr>
+    <tr>
+      <th class="hdr-id">Data</th>
+      <th class="hdr-id">${DATA_LABELS.romaneioNumber}</th>
+      <th class="hdr-id">${DATA_LABELS.nfNumber}</th>
+      <th class="hdr-qtd">Produto</th>
+      <th class="hdr-qtd">${DATA_LABELS.quantity}</th>
+      <th class="hdr-fin" style="background-color:#1e3a8a;color:#fff;">${DATA_LABELS.valorNegociadoVP}</th>
+      <th class="hdr-fin">${DATA_LABELS.valorNF}</th>
+      <th class="hdr-fin" style="background-color:#065f46;color:#fff;">Valor Recebido</th>
+      <th class="hdr-fin" style="background-color:#b45309;color:#fff;">${DATA_LABELS.saldoAReceber}</th>
+    </tr>`;
+}
+
+function lojaBlocksHtml(groups, formatMoeda) {
+  if (!groups.length) {
+    return `<p class="note" style="font-style:italic;">Nenhum título no filtro.</p>`;
+  }
+
+  return groups.map((g, idx) => {
+    const nome = String(g.loja || '').toUpperCase();
+    const obsList = g.itens
+      .map((r) => {
+        if (!r.obsResumo) return null;
+        return `Rom. ${r.rom} (${r.sale.id || '—'}): ${r.obsResumo}`;
+      })
+      .filter(Boolean);
+
+    const rows = g.itens.map((r) => `
+      <tr>
+        <td class="cell-center">${escapeHtml(formatDate(r.sale.saleDate))}</td>
+        <td class="cell-center" style="font-weight:bold;color:#173e27;">${escapeHtml(r.rom)}</td>
+        <td class="cell-center">${escapeHtml(r.nf)}</td>
+        <td class="cell-left">${escapeHtml(r.produto)}</td>
+        <td class="cell-num">${escapeHtml(r.qtdLabel)}</td>
+        <td class="cell-money" style="background-color:#dbeafe;">${formatMoeda(r.liq.valorVP)}</td>
+        <td class="cell-money-normal">${formatMoeda(r.liq.valorTotalNF)}</td>
+        <td class="cell-money bg-liquidado">${r.liq.valorLiquidado > 0 ? formatMoeda(r.liq.valorLiquidado) : '—'}</td>
+        <td class="cell-money bg-aliquidar">${r.liq.valorALiquidar > 0 ? formatMoeda(r.liq.valorALiquidar) : '—'}</td>
+      </tr>`).join('');
+
+    const block = `
+    <table style="margin-bottom:0;">
+      <thead>
+        <tr>
+          <th colspan="${COL_DETALHE}" class="hdr-loja">
+            <span style="text-transform:uppercase;">${escapeHtml(nome)}</span>
+            <span style="font-weight:normal;color:#475569;margin-left:8px;font-size:8.5pt;">
+              (${g.totals.n} carga${g.totals.n === 1 ? '' : 's'})
+            </span>
+            <span style="float:right;font-weight:normal;font-size:8.5pt;color:#334155;">
+              VP: <b>${formatMoeda(g.totals.vp)}</b>
+              &nbsp;|&nbsp; NF: <b>${formatMoeda(g.totals.nf)}</b>
+              &nbsp;|&nbsp; Recebido: <b>${formatMoeda(g.totals.recebido)}</b>
+              &nbsp;|&nbsp; ${DATA_LABELS.saldoAReceber}: <b>${formatMoeda(g.totals.saldo)}</b>
+            </span>
+          </th>
+        </tr>
+        ${detailHeaderRows()}
+      </thead>
+      <tbody>${rows}</tbody>
+      <tfoot>
+        <tr class="row-subtotal-loja">
+          <td colspan="4" class="cell-left">TOTAL ${escapeHtml(nome.split(/\s+/)[0])}</td>
+          <td class="cell-num">${escapeHtml(formatQuantity(g.totals.qtd))}</td>
+          <td class="cell-money">${formatMoeda(g.totals.vp)}</td>
+          <td class="cell-money-normal">${formatMoeda(g.totals.nf)}</td>
+          <td class="cell-money bg-liquidado">${formatMoeda(g.totals.recebido)}</td>
+          <td class="cell-money bg-aliquidar">${formatMoeda(g.totals.saldo)}</td>
+        </tr>
+      </tfoot>
+    </table>
+    <div class="obs-box">
+      <b>Observações</b>
+      ${obsList.length
+        ? `<ul style="margin:4px 0 0;padding-left:16px;">${obsList.map((o) => `<li>${escapeHtml(o)}</li>`).join('')}</ul>`
+        : '<div style="margin-top:2px;color:#64748b;">Nenhuma observação neste bloco.</div>'}
+    </div>`;
+
+    const spacer = idx < groups.length - 1
+      ? `<table style="border:none;margin:0;width:100%;"><tr class="spacer"><td colspan="${COL_DETALHE}">&nbsp;</td></tr><tr class="spacer"><td colspan="${COL_DETALHE}">&nbsp;</td></tr></table>`
+      : '';
+    return block + spacer;
+  }).join('');
+}
+
 /**
  * @param {object[]} sales - vendas já filtradas (filteredSales)
  * @param {object} totals - totalsFiltered { vp, nf, recebido, saldo, caixas }
@@ -225,37 +414,7 @@ export function buildFiscalExcelHtml(sales = [], totals = {}, filters = {}) {
     return 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  const rowsHtml = sales.map((s) => {
-    const liq = calculateLiquidation(s);
-    const disc = settlementDiscountInfo(s);
-    const statusText = `${liq.statusLabel || ''}${liq.isPartial && liq.percentPaid ? ` (${liq.percentPaid.toFixed(0)}%)` : ''}`;
-    const qtd = formatQuantity(quantityOf(s), resolveProductUnit(s));
-
-    return `
-      <tr>
-        <td class="cell-center">${escapeHtml(formatDate(s.saleDate))}</td>
-        <td class="cell-center" style="font-weight:bold;color:#173e27;">${escapeHtml(s.id || '')}</td>
-        <td class="cell-center">${escapeHtml(resolveRomaneioNumber(s) || '—')}</td>
-        <td class="cell-center">${escapeHtml(nfDisplayLabel(s))}</td>
-        <td class="cell-left">${escapeHtml(s.client || '')}</td>
-        <td class="cell-left">${escapeHtml(extractProducerName(s))}</td>
-        <td class="cell-left">${escapeHtml(extractProductName(s))}</td>
-        <td class="cell-num">${escapeHtml(qtd)}</td>
-        <td class="cell-money" style="background-color:#dbeafe;">${formatMoeda(liq.valorVP)}</td>
-        <td class="cell-money-normal">${formatMoeda(liq.valorTotalNF)}</td>
-        <td class="cell-money bg-liquidado">${liq.valorLiquidado > 0 ? formatMoeda(liq.valorLiquidado) : '—'}</td>
-        <td class="cell-money-normal">${disc.totalDiscount > 0 ? formatMoeda(disc.totalDiscount) : '—'}</td>
-        <td class="cell-money bg-aliquidar">${liq.valorALiquidar > 0 ? formatMoeda(liq.valorALiquidar) : '—'}</td>
-        <td class="cell-center">${escapeHtml(s.dueDate ? formatDate(s.dueDate) : '—')}</td>
-        <td class="cell-center">${escapeHtml(statusText)}</td>
-        <td class="cell-center">${escapeHtml(paymentMethodLabel(s))}</td>
-        <td class="cell-left" style="font-size:7.5pt;">${escapeHtml(anexosLabel(s))}</td>
-        <td class="cell-left">${escapeHtml(s.notes || '')}</td>
-        <td class="cell-left">${escapeHtml(disc.note || '')}</td>
-      </tr>
-    `;
-  }).join('');
-
+  const groups = groupFiscalSalesByLoja(sales);
   const baixas = buildLedgerRows(sales, 'paymentHistory', 'CP');
   const repasses = buildLedgerRows(sales, 'producerPaymentHistory', 'CPProd');
 
@@ -264,16 +423,17 @@ export function buildFiscalExcelHtml(sales = [], totals = {}, filters = {}) {
       <div class="sheet-title">Resumo</div>
       <table style="border:none;margin-bottom:12px;">
         <tr>
-          <td colspan="19" style="border:none;padding:0;">
+          <td colspan="7" style="border:none;padding:0;">
             <div style="font-size:14pt;font-weight:bold;color:#091b2e;">AGROVENDA — FISCAL (CONTAS / FLUXOS)</div>
-            <div style="font-size:9pt;color:#64748b;margin-top:3px;">
+            <div class="note">
               Emissão: <b>${hojeFormatado}</b> |
               Status: <b>${escapeHtml(statusStr)}</b> |
               Lojas: <b>${escapeHtml(lojasStr)}</b> |
               Produtos: <b>${escapeHtml(produtosStr)}</b> |
               Produtores: <b>${escapeHtml(produtoresStr)}</b> |
               Busca: <b>${escapeHtml(buscaStr)}</b> |
-              Registros: <b>${sales.length}</b>
+              Registros: <b>${sales.length}</b><br/>
+              Quantidade na <b>unidade cadastrada</b> do produto. Layout loja a loja (filtro atual).
             </div>
           </td>
         </tr>
@@ -300,49 +460,12 @@ export function buildFiscalExcelHtml(sales = [], totals = {}, filters = {}) {
         </tr>
       </table>
 
-      <table>
-        <thead>
-          <tr>
-            <th colspan="19" class="hdr-main">DETALHAMENTO — BAIXAS E COBRANÇA (FILTRO ATUAL)</th>
-          </tr>
-          <tr>
-            <th class="hdr-sub">Data</th>
-            <th class="hdr-sub">${DATA_LABELS.vpNumber}</th>
-            <th class="hdr-sub">${DATA_LABELS.romaneioNumber}</th>
-            <th class="hdr-sub">${DATA_LABELS.nfNumber}</th>
-            <th class="hdr-sub">Loja</th>
-            <th class="hdr-sub">Produtor</th>
-            <th class="hdr-sub">Produto</th>
-            <th class="hdr-sub">${DATA_LABELS.quantity}</th>
-            <th class="hdr-sub" style="background-color:#1e3a8a;">${DATA_LABELS.valorNegociadoVP}</th>
-            <th class="hdr-sub">${DATA_LABELS.valorNF}</th>
-            <th class="hdr-sub" style="background-color:#065f46;">Valor Recebido</th>
-            <th class="hdr-sub">Desconto</th>
-            <th class="hdr-sub" style="background-color:#b45309;">${DATA_LABELS.saldoAReceber}</th>
-            <th class="hdr-sub">Vencimento</th>
-            <th class="hdr-sub">Status</th>
-            <th class="hdr-sub">${DATA_LABELS.formaPagamento}</th>
-            <th class="hdr-sub">Anexos</th>
-            <th class="hdr-sub">Observações</th>
-            <th class="hdr-sub">Obs. desconto</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rowsHtml || `<tr><td colspan="19" class="cell-center" style="color:#94a3b8;font-style:italic;">Nenhum título no filtro.</td></tr>`}
-        </tbody>
-        <tfoot>
-          <tr class="row-total">
-            <td colspan="7" class="cell-left">TOTAL (filtro)</td>
-            <td class="cell-num">${escapeHtml(formatQuantity(totals.caixas || 0))}</td>
-            <td class="cell-money">${formatMoeda(totals.vp)}</td>
-            <td class="cell-money-normal">${formatMoeda(totals.nf)}</td>
-            <td class="cell-money bg-liquidado">${formatMoeda(totals.recebido)}</td>
-            <td class="cell-center">—</td>
-            <td class="cell-money bg-aliquidar">${formatMoeda(totals.saldo)}</td>
-            <td colspan="6"></td>
-          </tr>
-        </tfoot>
-      </table>
+      ${resumoPorLojaTable(groups, formatMoeda)}
+
+      <div style="font-size:11pt;font-weight:bold;color:#0f172a;margin:16px 0 8px;text-transform:uppercase;">
+        Detalhamento por loja
+      </div>
+      ${lojaBlocksHtml(groups, formatMoeda)}
     </div>
   `;
 
@@ -387,7 +510,7 @@ export function downloadFiscalExcel(sales, totals, filters = {}) {
   const html = buildFiscalExcelHtml(sales, totals, filters);
   const dateStr = new Date().toISOString().split('T')[0];
   const fileName = `Fiscal_Contas_${dateStr}.xls`;
-  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const blob = new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

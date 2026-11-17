@@ -57,12 +57,24 @@ const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 15 * 1024 * 1024 // 15MB
+    fileSize: 15 * 1024 * 1024 // 15MB — anexos do dia a dia (NF/CP/fotos)
+  }
+});
+
+/** Upload dedicado ao restore de backup JSON (pacotes reconciliados ~25MB+). */
+const BACKUP_RESTORE_MAX_BYTES = 100 * 1024 * 1024; // 100MB
+const backupUpload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: BACKUP_RESTORE_MAX_BYTES
   }
 });
 
 module.exports = {
   upload,
+  backupUpload,
+  BACKUP_RESTORE_MAX_BYTES,
   uploadDir,
   sanitizeFilename
 };

@@ -8,10 +8,14 @@ jest.mock('../services/backup.service', () => ({
   countSalesWithPayments: jest.fn().mockResolvedValue(0)
 }));
 
+const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const request = require('supertest');
 const { connectTestDB, disconnectTestDB, clearCollections } = require('./setup');
 const { authHeader } = require('./helpers');
 const backupService = require('../services/backup.service');
+const { BACKUP_RESTORE_MAX_BYTES, upload } = require('../middlewares/upload');
 
 let app;
 
@@ -77,5 +81,36 @@ describe('backup restore guards', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(backupService.restoreBackup).toHaveBeenCalledTimes(1);
+  });
+
+  test('backupUpload aceita pacote > 15MB (acima do upload genérico)', async () => {
+    expect(BACKUP_RESTORE_MAX_BYTES).toBe(100 * 1024 * 1024);
+    expect(upload.limits.fileSize).toBe(15 * 1024 * 1024);
+    expect(BACKUP_RESTORE_MAX_BYTES).toBeGreaterThan(upload.limits.fileSize);
+
+    const { headers } = await authHeader();
+    const tmp = path.join(os.tmpdir(), `agrovenda-restore-over15-${Date.now()}.json`);
+    // ~16MB — acima do limite genérico de anexos, abaixo do limite de restore
+    const payload = JSON.stringify({
+      database: { sales: [], clients: [], products: [], weighingSlips: [] },
+      files: [],
+      pad: 'x'.repeat(16 * 1024 * 1024)
+    });
+    fs.writeFileSync(tmp, payload);
+
+    try {
+      const res = await request(app)
+        .post('/api/backup/restore')
+        .set(headers)
+        .field('confirmPhrase', 'RESTAURAR')
+        .field('acknowledgePaymentsLoss', 'true')
+        .attach('backupFile', tmp);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(backupService.restoreBackup).toHaveBeenCalledTimes(1);
+    } finally {
+      fs.unlinkSync(tmp);
+    }
   });
 });

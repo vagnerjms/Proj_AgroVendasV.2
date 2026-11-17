@@ -16,7 +16,7 @@ const fs = require('fs');
 process.env.MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/agrovenda';
 
 const { connectDB } = require('../db');
-const Sale = require('../models/Sale.model');
+const { Sale } = require('../models');
 const saleService = require('../services/sale.service');
 
 const CONSOLIDADO_PATH = process.env.CONSOLIDADO_PATH

@@ -3,6 +3,7 @@ import { Package, Trash2, Plus } from 'lucide-react';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 import { formatQuantity, resolveProductUnit } from '../../utils/dataHelpers';
 import { DATA_LABELS } from '../../constants/dataLabels';
+import { roundQty2 } from '../../utils/packaging';
 
 /** Options: root products + indented children when parentProductId hierarchy exists */
 function buildProductOptions(products = []) {
@@ -121,14 +122,14 @@ export default function SaleItemsTable({
       {/* LISTA DE PRODUTOS DA VENDA */}
       <div className="space-y-4">
         {saleItems.map((item, index) => {
-          const isItemGranel = (item.unit && (item.unit.includes('Granel') || item.unit.includes('(kg)'))) || (item.product && (item.product.toLowerCase().includes('cebola') || item.product.includes('Granel') || item.product.includes('(kg)'))) || Number(item.boxWeightKg) === 1;
+          const isItemGranel = (item.unit && (item.unit.includes('Granel') || item.unit.includes('(kg)'))) || (item.product && (item.product.toLowerCase().includes('cebola') || item.product.toLowerCase().includes('alho') || item.product.includes('Granel') || item.product.includes('(kg)'))) || Number(item.boxWeightKg) === 1;
           const isItemSacas = !isItemGranel && (item.unit?.toLowerCase().includes('saca') || item.unit?.toLowerCase().includes('sc') || item.product?.toLowerCase().includes('batata'));
           const unitShort = isItemGranel ? 'kg' : (isItemSacas ? 'sc' : 'cx');
           const itemKg = parseNum(item.totalKg);
           const boxW = parseNum(item.boxWeightKg) || (isItemGranel ? 1 : 29);
-          const itemVol = isItemGranel ? itemKg : (boxW > 0 ? (itemKg / boxW) : 0);
-          const itemP = parseNum(item.pricePerKg);
-          const itemNfVal = item.totalNf !== '' && item.totalNf !== undefined ? parseNum(item.totalNf) : (itemKg * itemP);
+          const itemVol = item.quantity !== '' && item.quantity !== undefined && item.quantity !== null
+            ? parseNum(item.quantity)
+            : (isItemGranel ? itemKg : (boxW > 0 ? roundQty2(itemKg / boxW) : 0));
           const itemQuote = parseNum(item.dailyQuote);
           const isQuoteKg = (itemQuote > 0 && itemQuote <= 10.0) || isItemGranel;
           // Valor negociado = quantidade × cotação do dia (nunca usa NF como fallback)
@@ -201,12 +202,11 @@ export default function SaleItemsTable({
                     onChange={(e) => onItemFieldChange(index, 'unit', e.target.value)}
                     className="w-full bg-white border border-gray-300 text-xs rounded-lg px-2.5 py-2 font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-[#1d5a37]"
                   >
-                    <option value="Caixas (29kg)">Caixas (29kg) — Cenoura / Padrão</option>
+                    <option value="Caixas (29kg)">Caixas (29kg) — Cenoura</option>
                     <option value="Caixas (20kg)">Caixas / Sacos (20kg) — Beterraba</option>
-                    <option value="Sacas (50kg)">Sacas (50kg) — Batata Especial</option>
-                    <option value="Sacas (25kg)">Sacas (25kg) — Batata / Cebola</option>
+                    <option value="Sacas (25kg)">Sacas (25kg) — Batata</option>
                     <option value="Sacas (60kg)">Sacas (60kg) — Grãos / Soja / Milho</option>
-                    <option value="Granel (kg)">Granel (kg) — Raízes / Granel</option>
+                    <option value="Granel (kg)">Granel (kg) — Cebola / Alho</option>
                   </select>
                 </div>
 
@@ -217,12 +217,11 @@ export default function SaleItemsTable({
                   <input
                     type="number"
                     step="0.1"
-                    disabled={isItemGranel}
+                    readOnly
+                    tabIndex={-1}
                     value={item.boxWeightKg}
-                    onChange={(e) => onItemFieldChange(index, 'boxWeightKg', e.target.value)}
-                    className={`w-full border rounded-lg px-2.5 py-2 text-xs font-bold outline-none ${
-                      isItemGranel ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 'bg-white border-gray-300 text-gray-900'
-                    }`}
+                    title="Definido pelo cadastro do produto (travado)"
+                    className="w-full border rounded-lg px-2.5 py-2 text-xs font-bold outline-none bg-gray-100 text-gray-600 border-gray-200 cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -245,19 +244,20 @@ export default function SaleItemsTable({
                   />
                 </div>
 
-                {/* Quantidade */}
+                {/* Quantidade — editável (2 casas) */}
                 <div>
                   <label className="block text-[10px] font-bold text-gray-700 mb-0.5">
-                    2. {DATA_LABELS.quantity}
+                    2. {DATA_LABELS.quantity} ({unitShort})
                   </label>
-                  <div className="w-full bg-gray-50 border border-gray-200 text-xs rounded-lg px-2 py-1.5 font-extrabold text-gray-900 flex items-baseline gap-1.5 min-w-0">
-                    <span className="tabular-nums">
-                      {formatQuantity(itemVol, '', isItemGranel ? 0 : 2)}
-                    </span>
-                    <span className="text-[10px] font-semibold text-gray-500 truncate" title={item.unit || resolveProductUnit(item)}>
-                      {item.unit || resolveProductUnit(item)}
-                    </span>
-                  </div>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    value={item.quantity !== undefined && item.quantity !== null ? item.quantity : ''}
+                    onChange={(e) => onItemFieldChange(index, 'quantity', e.target.value)}
+                    className="w-full bg-white border border-gray-300 text-xs rounded-lg px-2 py-1.5 font-extrabold text-gray-900 outline-none focus:ring-2 focus:ring-[#1d5a37]"
+                    title={item.unit || resolveProductUnit(item)}
+                  />
                 </div>
 
                 {/* Preço NF — somente leitura */}

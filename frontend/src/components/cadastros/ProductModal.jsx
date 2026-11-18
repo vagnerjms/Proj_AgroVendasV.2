@@ -1,5 +1,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import { resolveCanonicalPackaging } from '../../utils/packaging';
 
 export default function ProductModal({
   isOpen,
@@ -31,9 +32,20 @@ export default function ProductModal({
             <input
               type="text"
               required
-              placeholder="Ex: Soja Grão Comercial Safra 25/26"
+              placeholder="Ex: Batata Especial / Cenoura / Cebola"
               value={productForm.name}
-              onChange={e => setProductForm({ ...productForm, name: e.target.value })}
+              onChange={e => {
+                const name = e.target.value;
+                const canon = resolveCanonicalPackaging(name);
+                const applyCanon = /batata|cenoura|cebola|alho/i.test(name);
+                setProductForm({
+                  ...productForm,
+                  name,
+                  ...(applyCanon
+                    ? { unitKg: canon.unitKg, defaultUnit: canon.defaultUnit }
+                    : {})
+                });
+              }}
               className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e]"
             />
           </div>
@@ -63,9 +75,23 @@ export default function ProductModal({
               value={productForm.defaultUnit}
               onChange={e => {
                 const u = e.target.value;
+                const nameL = String(productForm.name || '').toLowerCase();
+                if (/batata/.test(nameL)) {
+                  setProductForm({ ...productForm, defaultUnit: 'Sacas (25kg)', unitKg: 25 });
+                  return;
+                }
+                if (/cebola|alho/.test(nameL)) {
+                  setProductForm({ ...productForm, defaultUnit: 'Granel (kg)', unitKg: 1 });
+                  return;
+                }
+                if (/cenoura/.test(nameL)) {
+                  setProductForm({ ...productForm, defaultUnit: 'Caixas (29kg)', unitKg: 29 });
+                  return;
+                }
                 let kg = productForm.unitKg;
-                if (u === 'Caixas (cx)') kg = 29;
-                else if (u === 'Sacas (sc)') kg = 60;
+                if (u === 'Caixas (29kg)' || u === 'Caixas (cx)') kg = 29;
+                else if (u === 'Sacas (25kg)') kg = 25;
+                else if (u === 'Sacas (sc)' || u === 'Sacas (60kg)') kg = 60;
                 else if (u === 'Granel (kg)') kg = 1;
                 else if (u === 'Toneladas (ton)') kg = 1000;
                 else if (u === 'Bins (bin)') kg = 400;
@@ -75,9 +101,12 @@ export default function ProductModal({
               }}
               className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e] font-semibold text-gray-800"
             >
+              <option value="Caixas (29kg)">Caixas (29kg) — Cenoura</option>
+              <option value="Sacas (25kg)">Sacas (25kg) — Batata</option>
+              <option value="Granel (kg)">Granel (kg) — Cebola / Alho</option>
               <option value="Caixas (cx)">Caixas (cx)</option>
               <option value="Sacas (sc)">Sacas (sc)</option>
-              <option value="Granel (kg)">Granel (kg)</option>
+              <option value="Sacas (60kg)">Sacas (60kg)</option>
               <option value="Toneladas (ton)">Toneladas (ton)</option>
               <option value="Bins (bin)">Bins (bin)</option>
               <option value="Fardos / Pacotes (fd)">Fardos / Pacotes (fd)</option>
@@ -87,15 +116,23 @@ export default function ProductModal({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Peso Unitário (kg) *</label>
+            <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+              Peso Unitário (kg) *
+              {/batata|cenoura|cebola|alho/i.test(productForm.name || '') && (
+                <span className="ml-1 text-[10px] text-emerald-700 font-bold">(padrão fixo)</span>
+              )}
+            </label>
             <input
               type="number"
               step="0.1"
               required
-              placeholder="Ex: 29, 60, 20..."
+              readOnly={/batata|cenoura|cebola|alho/i.test(productForm.name || '')}
+              placeholder="Ex: 25, 29, 1..."
               value={productForm.unitKg}
               onChange={e => setProductForm({ ...productForm, unitKg: e.target.value })}
-              className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e] font-bold text-gray-900"
+              className={`w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-[#091b2e] font-bold text-gray-900 ${
+                /batata|cenoura|cebola|alho/i.test(productForm.name || '') ? 'bg-gray-100 cursor-not-allowed' : ''
+              }`}
             />
           </div>
         </div>

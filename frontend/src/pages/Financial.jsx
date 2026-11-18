@@ -334,8 +334,16 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
     downloadFiscalExcel(filteredSales, totalsFiltered, fiscalFilterMeta());
   };
 
-  const handleDownloadFiscalPdf = () => {
-    downloadFiscalPdf(filteredSales, totalsFiltered, fiscalFilterMeta());
+  const handleDownloadFiscalPdf = async () => {
+    setDriveError('');
+    try {
+      await downloadFiscalPdf(filteredSales, totalsFiltered, fiscalFilterMeta());
+      setDriveNotification('PDF Fiscal gerado com sucesso.');
+      setTimeout(() => setDriveNotification(''), 4000);
+    } catch (err) {
+      console.error(err);
+      setDriveError(err?.message || 'Falha ao gerar o PDF Fiscal.');
+    }
   };
 
   const validateN8nWebhookUrl = (rawUrl) => {
@@ -658,7 +666,7 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
               type="button"
               onClick={handleDownloadFiscalPdf}
               disabled={loading || filteredSales.length === 0}
-              title="Abrir PDF (imprimir / salvar como PDF) no layout loja a loja"
+              title="Baixar PDF real (template Márcio, 1 loja por página) com o filtro atual"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-[#091b2e] text-[#091b2e] bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <FileDown className="w-3.5 h-3.5" />

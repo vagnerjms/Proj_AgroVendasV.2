@@ -25,7 +25,7 @@ RUN apk add --no-cache \
     harfbuzz \
     ca-certificates \
     ttf-freefont \
-    font-noto-core
+    fontconfig
 
 # Setup backend
 COPY backend/package*.json ./backend/

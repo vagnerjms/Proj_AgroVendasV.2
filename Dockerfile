@@ -14,6 +14,18 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+# Chromium do sistema (Alpine) para Playwright gerar PDF Fiscal
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    font-noto-core
 
 # Setup backend
 COPY backend/package*.json ./backend/

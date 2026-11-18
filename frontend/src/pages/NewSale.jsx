@@ -31,6 +31,11 @@ import SaleFiscalSummary from '../components/sales/SaleFiscalSummary';
 import CityUfSelect from '../components/forms/CityUfSelect';
 import NfeMatchingCards from '../components/sales/NfeMatchingCards';
 import SaleCommissionCard from '../components/sales/SaleCommissionCard';
+import {
+  resolveCanonicalPackaging,
+  packagingFromUnitLabel,
+  roundQty2
+} from '../utils/packaging';
 
 export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, onCancelEdit }) {
   // Operation types
@@ -96,6 +101,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     product: '',
     unit: 'Caixas (29kg)',
     boxWeightKg: 29,
+    quantity: '',
     totalKg: '',
     pricePerKg: '',
     totalNf: '',
@@ -253,16 +259,22 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       if (editingSale.items && editingSale.items.length > 0) {
         const loaded = editingSale.items.map((it, idx) => {
           const rawProd = it.product || 'Cenoura';
-          const isGr = rawProd.toLowerCase().includes('cebola') || rawProd.toLowerCase().includes('granel') || it.unit?.includes('Granel');
-          const isBatata = rawProd.toLowerCase().includes('batata') || it.unit?.toLowerCase().includes('saca') || it.unit?.includes('25kg');
-          const bw = it.boxWeightKg || (isGr ? 1 : (isBatata ? 25 : 29));
+          const canon = resolveCanonicalPackaging(rawProd);
+          const bw = Number(it.boxWeightKg) > 0 ? Number(it.boxWeightKg) : canon.boxWeightKg;
           const kg = it.kg || (it.quantity ? it.quantity * bw : 0);
+          const qty = it.quantity != null
+            ? roundQty2(it.quantity)
+            : (bw > 0 && kg ? roundQty2(kg / bw) : 0);
           const pKg = it.pricePerKg || (kg > 0 && it.total ? (it.total / kg) : (it.price || 0));
+          const unitLabel = /batata/i.test(rawProd)
+            ? 'Sacas (25kg)'
+            : (it.unit || canon.unit);
           return {
             id: Date.now() + idx,
             product: rawProd,
-            unit: it.unit || (isGr ? 'Granel (kg)' : (isBatata ? 'Sacas (25kg)' : 'Caixas (29kg)')),
-            boxWeightKg: bw,
+            unit: unitLabel.includes('50kg') && /batata/i.test(rawProd) ? 'Sacas (25kg)' : unitLabel,
+            boxWeightKg: /batata/i.test(rawProd) ? 25 : bw,
+            quantity: qty ? String(qty) : '',
             totalKg: kg ? String(kg) : '',
             pricePerKg: pKg ? Number(Number(pKg).toFixed(4)).toString() : '',
             totalNf: it.total ? Number(Number(it.total).toFixed(2)).toString() : '',
@@ -272,12 +284,16 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         setSaleItems(loaded);
       } else {
         const rawProd = 'Cenoura';
+        const canon = resolveCanonicalPackaging(rawProd);
+        const kg = editingSale.totalKg || 0;
+        const qty = kg && canon.boxWeightKg ? roundQty2(kg / canon.boxWeightKg) : 0;
         setSaleItems([{
           id: Date.now(),
           product: rawProd,
-          unit: 'Caixas (29kg)',
-          boxWeightKg: 29,
-          totalKg: editingSale.totalKg ? String(editingSale.totalKg) : '',
+          unit: canon.unit,
+          boxWeightKg: canon.boxWeightKg,
+          quantity: qty ? String(qty) : '',
+          totalKg: kg ? String(kg) : '',
           pricePerKg: editingSale.totalKg > 0 && editingSale.totalOperation ? Number((editingSale.totalOperation / editingSale.totalKg).toFixed(4)).toString() : '',
           totalNf: editingSale.totalOperation ? String(editingSale.totalOperation) : '',
           dailyQuote: editingSale.dailyQuote ? String(editingSale.dailyQuote) : ''
@@ -344,18 +360,22 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   const handleItemProductSelect = (index, prodName) => {
     setSaleItems(prev => {
       const copy = [...prev];
-      const it = { ...copy[index], product: prodName };
       const catalogProd = products.find(p => p.name === prodName);
-      if (catalogProd) {
-        const defUnit = catalogProd.defaultUnit || (catalogProd.unitKg === 1 ? 'Granel (kg)' : (catalogProd.name.toLowerCase().includes('batata') ? 'Sacas (25kg)' : 'Caixas (29kg)'));
-        it.unit = defUnit;
-        it.boxWeightKg = defUnit.includes('Granel') || defUnit.includes('(kg)') || catalogProd.unitKg === 1 ? 1 : (catalogProd.unitKg || (catalogProd.name.toLowerCase().includes('batata') ? 25 : 29));
+      const canon = resolveCanonicalPackaging(prodName, catalogProd);
+      const it = {
+        ...copy[index],
+        product: prodName,
+        unit: canon.unit,
+        boxWeightKg: canon.boxWeightKg
+      };
+      const qty = parseNum(it.quantity);
+      if (qty > 0) {
+        it.totalKg = String(roundQty2(qty * canon.boxWeightKg));
       } else {
-        const nameL = prodName.toLowerCase();
-        const isCebola = nameL.includes('cebola') || nameL.includes('granel');
-        const isBatata = nameL.includes('batata');
-        it.unit = isCebola ? 'Granel (kg)' : (isBatata ? 'Sacas (25kg)' : 'Caixas (29kg)');
-        it.boxWeightKg = isCebola ? 1 : (isBatata ? 25 : 29);
+        const kg = parseNum(it.totalKg);
+        if (kg > 0 && canon.boxWeightKg > 0) {
+          it.quantity = String(roundQty2(kg / canon.boxWeightKg));
+        }
       }
       const kg = parseNum(it.totalKg);
       const p = parseNum(it.pricePerKg);
@@ -371,11 +391,27 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
     setSaleItems(prev => {
       const copy = [...prev];
       const it = { ...copy[index], [field]: value };
-      const kg = parseNum(field === 'totalKg' ? value : it.totalKg);
+      let kg = parseNum(field === 'totalKg' ? value : it.totalKg);
       const p = parseNum(field === 'pricePerKg' ? value : it.pricePerKg);
       const nf = parseNum(field === 'totalNf' ? value : it.totalNf);
+      const bw = parseNum(it.boxWeightKg) || packagingFromUnitLabel(it.unit) || 29;
 
-      if (field === 'totalKg') {
+      if (field === 'quantity') {
+        const qty = parseNum(value);
+        it.quantity = value;
+        if (bw > 0) {
+          kg = roundQty2(qty * bw);
+          it.totalKg = qty > 0 ? String(kg) : '';
+        }
+        if (kg > 0 && p > 0) {
+          it.totalNf = Number((kg * p).toFixed(2)).toFixed(2);
+        }
+      } else if (field === 'totalKg') {
+        if (bw > 0 && kg > 0) {
+          it.quantity = String(roundQty2(kg / bw));
+        } else if (!value) {
+          it.quantity = '';
+        }
         if (kg > 0 && p > 0) {
           const tot = Number((kg * p).toFixed(2));
           it.totalNf = tot > 0 ? tot.toFixed(2) : '';
@@ -394,22 +430,23 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
           it.pricePerKg = unitP > 0 ? unitP.toString() : '';
         }
       } else if (field === 'unit') {
-        if (value.includes('Granel') || value.includes('(kg)')) {
-          it.boxWeightKg = 1;
-        } else if (value.includes('50kg')) {
-          it.boxWeightKg = 50;
-        } else if (value.includes('25kg')) {
-          it.boxWeightKg = 25;
-        } else if (value.includes('20kg')) {
-          it.boxWeightKg = 20;
-        } else if (value.includes('29kg')) {
-          it.boxWeightKg = 29;
-        } else if (value.includes('60kg')) {
-          it.boxWeightKg = 60;
+        // Peso vem do rótulo da embalagem; batata nunca 50 kg
+        let nextBw = packagingFromUnitLabel(value);
+        if (/batata/i.test(it.product || '')) {
+          nextBw = 25;
+          it.unit = 'Sacas (25kg)';
+        } else if (nextBw == null) {
+          nextBw = /granel/i.test(value) ? 1 : 29;
         }
-      } else if (field === 'boxWeightKg') {
-        it.boxWeightKg = parseNum(value) || 1;
+        it.boxWeightKg = nextBw;
+        const qty = parseNum(it.quantity);
+        if (qty > 0) {
+          it.totalKg = String(roundQty2(qty * nextBw));
+        } else if (kg > 0 && nextBw > 0) {
+          it.quantity = String(roundQty2(kg / nextBw));
+        }
       }
+      // boxWeightKg é somente leitura na UI — ignorar edições manuais
       copy[index] = it;
       return copy;
     });
@@ -433,10 +470,13 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   const totalWeightKg = saleItems.reduce((acc, it) => acc + parseNum(it.totalKg), 0);
   
   const totalVolumes = saleItems.reduce((acc, it) => {
+    if (it.quantity !== '' && it.quantity !== undefined && it.quantity !== null) {
+      return acc + parseNum(it.quantity);
+    }
     const kg = parseNum(it.totalKg);
     const bw = parseNum(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : (it.unit?.includes('25kg') || it.product?.toLowerCase().includes('batata') ? 25 : 29));
-    const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
-    return acc + (isGr ? kg : (bw > 0 ? (kg / bw) : 0));
+    const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && (it.product.toLowerCase().includes('cebola') || it.product.toLowerCase().includes('alho'))) || bw === 1;
+    return acc + (isGr ? kg : (bw > 0 ? roundQty2(kg / bw) : 0));
   }, 0);
 
   const totalCaixas29kg = saleItems.reduce((acc, it) => {
@@ -765,22 +805,34 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
 
     try {
       const formattedItems = saleItems.map(it => {
-        const kg = parseNum(it.totalKg);
-        const bw = parseNum(it.boxWeightKg) || (it.unit?.includes('Granel') ? 1 : (it.unit?.includes('25kg') || it.product?.toLowerCase().includes('batata') ? 25 : 29));
-        const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && it.product.toLowerCase().includes('cebola')) || bw === 1;
-        const vol = isGr ? kg : (bw > 0 ? (kg / bw) : 0);
+        const canon = resolveCanonicalPackaging(it.product);
+        const bw = /batata/i.test(it.product || '')
+          ? 25
+          : (parseNum(it.boxWeightKg) || packagingFromUnitLabel(it.unit) || canon.boxWeightKg);
+        const isGr = (it.unit && it.unit.includes('Granel')) || (it.product && (/cebola|alho/i.test(it.product))) || bw === 1;
+        let vol = it.quantity !== '' && it.quantity !== undefined ? parseNum(it.quantity) : 0;
+        let kg = parseNum(it.totalKg);
+        if (vol > 0 && bw > 0) {
+          kg = roundQty2(vol * bw);
+        } else if (kg > 0 && bw > 0 && !vol) {
+          vol = roundQty2(kg / bw);
+        }
+        if (isGr && !vol) vol = kg;
         const p = parseNum(it.pricePerKg);
         const itNf = it.totalNf !== '' && it.totalNf !== undefined ? parseNum(it.totalNf) : (kg * p);
         const q = parseNum(it.dailyQuote);
         const isQKg = (q > 0 && q <= 10.0) || isGr;
         const itVP = q > 0 ? (isQKg ? (kg * q) : (vol * q)) : itNf;
+        const unit = /batata/i.test(it.product || '')
+          ? 'Sacas (25kg)'
+          : (it.unit || (isGr ? 'Granel (kg)' : canon.unit));
 
         return {
           product: it.product || 'Produto Agrícola',
-          unit: it.unit || (isGr ? 'Granel (kg)' : (it.product?.toLowerCase().includes('batata') ? 'Sacas (25kg)' : 'Caixas (29kg)')),
+          unit,
           boxWeightKg: bw,
           kg: kg,
-          quantity: vol,
+          quantity: roundQty2(vol),
           price: isGr ? p : (p * bw),
           pricePerKg: p,
           total: itNf,

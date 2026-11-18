@@ -12,6 +12,7 @@ import ClientsTab from '../components/cadastros/ClientsTab';
 import ProductsTab from '../components/cadastros/ProductsTab';
 import ClientModal from '../components/cadastros/ClientModal';
 import ProductModal from '../components/cadastros/ProductModal';
+import { normalizeProductPackagingFields } from '../utils/packaging';
 
 export default function Cadastros({ tab = 'clients', setCurrentPage }) {
   const [clients, setClients] = useState([]);
@@ -197,12 +198,13 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
     if (submittingProduct) return;
     setSubmittingProduct(true);
     try {
+      const payload = normalizeProductPackagingFields(productForm);
       if (editingProduct) {
-        await api.put(`/api/products/${editingProduct.id}`, productForm);
-        showNotification(`Produto ${productForm.name} atualizado com sucesso!`);
+        await api.put(`/api/products/${editingProduct.id}`, payload);
+        showNotification(`Produto ${payload.name} atualizado com sucesso!`);
       } else {
-        await api.post('/api/products', productForm);
-        showNotification(`Produto ${productForm.name} cadastrado com sucesso!`);
+        await api.post('/api/products', payload);
+        showNotification(`Produto ${payload.name} cadastrado com sucesso!`);
       }
       setProductModalOpen(false);
       fetchProducts();

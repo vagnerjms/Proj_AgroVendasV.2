@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildFiscalPdfHtml } from '../src/utils/fiscalPdfBuilder.js';
+import { buildFiscalPdfHtml, groupMarcioSalesByLoja } from '../src/utils/fiscalPdfBuilder.js';
 
 const sampleSales = [
   {
@@ -29,8 +29,8 @@ const sampleSales = [
   }
 ];
 
-describe('fiscal PDF Márcio template', () => {
-  it('contém page-break-before e colunas Márcio', () => {
+describe('fiscal PDF Contas layout', () => {
+  it('contém page-break-before e colunas Contas', () => {
     const html = buildFiscalPdfHtml(sampleSales, {}, { statusFilter: 'ALL' });
     expect(html).toContain('page-break-before: always');
     expect(html).toContain('Valor romaneio');
@@ -47,10 +47,61 @@ describe('fiscal PDF Márcio template', () => {
     expect(html).not.toContain('Saldo a Receber');
   });
 
+  it('usa título genérico sem rótulo Márcio', () => {
+    const html = buildFiscalPdfHtml(sampleSales, {}, {});
+    expect(html).toContain('Fiscal Contas —');
+    expect(html).toContain('AGROVENDA — FISCAL · CONTAS — LOJA POR LOJA');
+    expect(html).not.toContain('TEMPLATE MÁRCIO');
+    expect(html).not.toContain('Fiscal Márcio');
+  });
+
   it('calcula fundo rural 1,63% sobre VP', () => {
     const html = buildFiscalPdfHtml(sampleSales, {}, {});
-    // 41345 * 1.63% ≈ 673.92 (soma componentes)
     expect(html).toMatch(/Fundo Rural/);
     expect(html).toContain('1,63%');
+  });
+
+  it('ordena itens da loja por saleDate crescente', () => {
+    const sameLoja = [
+      {
+        ...sampleSales[0],
+        id: '10190',
+        client: 'MAGALUSI',
+        saleDate: '2026-11-11',
+        romaneioNumber: '10190',
+        valorTotalVP: 1000
+      },
+      {
+        ...sampleSales[0],
+        id: '10170',
+        client: 'MAGALUSI',
+        saleDate: '2026-10-15',
+        romaneioNumber: '10170',
+        valorTotalVP: 2000
+      },
+      {
+        ...sampleSales[0],
+        id: '10185',
+        client: 'MAGALUSI',
+        saleDate: '2026-11-01',
+        romaneioNumber: '10185',
+        valorTotalVP: 3000
+      }
+    ];
+    const groups = groupMarcioSalesByLoja(sameLoja);
+    const mag = groups.find((g) => g.loja === 'MAGALUSI');
+    expect(mag.itens.map((r) => r.saleDateRaw)).toEqual([
+      '2026-10-15',
+      '2026-11-01',
+      '2026-11-11'
+    ]);
+
+    const html = buildFiscalPdfHtml(sameLoja, {}, {});
+    const idx15 = html.indexOf('>10170<');
+    const idx01 = html.indexOf('>10185<');
+    const idx11 = html.indexOf('>10190<');
+    expect(idx15).toBeGreaterThan(-1);
+    expect(idx01).toBeGreaterThan(idx15);
+    expect(idx11).toBeGreaterThan(idx01);
   });
 });

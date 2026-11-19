@@ -1,5 +1,5 @@
 /**
- * PDF Fiscal — template Márcio aprovado (A4 paisagem).
+ * PDF Fiscal — layout Contas aprovado (A4 paisagem).
  * Capa com KPIs + resumo por loja; detalhe 1 loja por página.
  * Colunas: Data | Romaneio | NF | qty/preço por tipo | Valor romaneio | Fundo Rural | Valor a pagar
  */
@@ -111,6 +111,7 @@ function enrichSaleMarcio(sale) {
   }
   return {
     sale,
+    saleDateRaw: String(sale.saleDate || ''),
     data: formatDate(sale.saleDate),
     rom: resolveRomaneioNumber(sale) || '—',
     nfLabel: semNf ? 'SEM NF' : nfDisplayLabel(sale),
@@ -157,11 +158,20 @@ export function groupMarcioSalesByLoja(sales = []) {
   }
   return [...map.entries()]
     .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'))
-    .map(([loja, itens]) => ({ loja, itens, totals: sumRows(itens) }));
+    .map(([loja, itens]) => {
+      itens.sort((a, b) => {
+        const byDate = String(a.saleDateRaw || a.sale?.saleDate || '').localeCompare(
+          String(b.saleDateRaw || b.sale?.saleDate || '')
+        );
+        if (byDate !== 0) return byDate;
+        return String(a.rom || '').localeCompare(String(b.rom || ''));
+      });
+      return { loja, itens, totals: sumRows(itens) };
+    });
 }
 
 /**
- * HTML A4 paisagem — template Márcio (1 loja por página).
+ * HTML A4 paisagem — layout Contas aprovado (1 loja por página).
  */
 export function buildFiscalPdfHtml(sales = [], totals = {}, filters = {}) {
   const hoje = new Date().toLocaleString('pt-BR');
@@ -252,13 +262,13 @@ export function buildFiscalPdfHtml(sales = [], totals = {}, filters = {}) {
       </section>`;
   }).join('');
 
-  void totals; // filtros já aplicados em sales; KPIs vêm do enrich Márcio
+  void totals; // filtros já aplicados em sales; KPIs vêm do enrich Contas
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Fiscal Márcio — ${escapeHtml(hoje)}</title>
+<title>Fiscal Contas — ${escapeHtml(hoje)}</title>
 <style>
   @page { size: A4 landscape; margin: 10mm 10mm 12mm 10mm; }
   * { box-sizing: border-box; }
@@ -306,7 +316,7 @@ export function buildFiscalPdfHtml(sales = [], totals = {}, filters = {}) {
 </style>
 </head>
 <body>
-  <h1>AGROVENDA — FISCAL · CONTAS (TEMPLATE MÁRCIO) — LOJA POR LOJA</h1>
+  <h1>AGROVENDA — FISCAL · CONTAS — LOJA POR LOJA</h1>
   <div class="note">
     Emissão: <b>${escapeHtml(hoje)}</b> · ${sales.length} carga(s) · A4 paisagem.<br/>
     Filtros: Status <b>${escapeHtml(meta.statusStr)}</b> · Lojas <b>${escapeHtml(meta.lojasStr)}</b> ·

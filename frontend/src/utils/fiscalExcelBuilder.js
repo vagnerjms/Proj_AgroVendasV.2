@@ -119,6 +119,11 @@ export function groupFiscalSalesByLoja(sales = []) {
   return [...map.entries()]
     .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'))
     .map(([loja, itens]) => {
+      itens.sort((a, b) => {
+        const byDate = String(a.sale?.saleDate || '').localeCompare(String(b.sale?.saleDate || ''));
+        if (byDate !== 0) return byDate;
+        return String(a.rom || '').localeCompare(String(b.rom || ''));
+      });
       const totals = itens.reduce(
         (acc, r) => {
           acc.vp = round2(acc.vp + (r.liq.valorVP || 0));

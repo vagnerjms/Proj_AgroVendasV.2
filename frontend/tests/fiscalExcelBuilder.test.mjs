@@ -150,4 +150,18 @@ describe('buildFiscalExcelHtml', () => {
     expect(groups.map((g) => g.loja).sort()).toEqual(['Loja Alpha', 'Loja Beta']);
     expect(groups.find((g) => g.loja === 'Loja Alpha').itens[0].produto).toBe('Cenoura');
   });
+
+  it('ordena itens da loja por saleDate crescente', () => {
+    const groups = groupFiscalSalesByLoja([
+      { ...sampleSale, id: 'VP0110', saleDate: '2026-11-11', romaneioNumber: '10190' },
+      { ...sampleSale, id: 'VP0105', saleDate: '2026-10-10', romaneioNumber: '10170' },
+      { ...sampleSale, id: 'VP0108', saleDate: '2026-11-01', romaneioNumber: '10185' }
+    ]);
+    const alpha = groups.find((g) => g.loja === 'Loja Alpha');
+    expect(alpha.itens.map((r) => r.sale.saleDate)).toEqual([
+      '2026-10-10',
+      '2026-11-01',
+      '2026-11-11'
+    ]);
+  });
 });

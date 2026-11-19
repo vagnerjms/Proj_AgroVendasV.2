@@ -666,7 +666,7 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
               type="button"
               onClick={handleDownloadFiscalPdf}
               disabled={loading || filteredSales.length === 0}
-              title="Baixar PDF real (template Márcio, 1 loja por página) com o filtro atual"
+              title="Baixar PDF real (1 loja por página) com o filtro atual"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-[#091b2e] text-[#091b2e] bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               <FileDown className="w-3.5 h-3.5" />

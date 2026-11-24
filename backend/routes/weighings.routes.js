@@ -112,9 +112,10 @@ router.post('/patio', async (req, res) => {
 });
 
 // GET /api/weighings (Supports optional page/limit pagination with X-Total-Count)
+// Com page: retorna { items, total, sums }; sem page: array (compat).
 router.get('/', async (req, res) => {
   try {
-    const { status, search, page, limit } = req.query;
+    const { status, search, page, limit, humidityMax, impurityMax } = req.query;
     let filter = {};
     if (status && status !== 'all') {
       filter.status = status;
@@ -127,20 +128,47 @@ router.get('/', async (req, res) => {
         { saleId: regex },
         { client: regex },
         { truckPlate: regex },
-        { driverName: regex }
+        { driverName: regex },
+        { product: regex }
       ];
+    }
+    if (humidityMax !== undefined && humidityMax !== '' && !Number.isNaN(Number(humidityMax))) {
+      filter.humidityPct = { ...(filter.humidityPct || {}), $lte: Number(humidityMax) };
+    }
+    if (impurityMax !== undefined && impurityMax !== '' && !Number.isNaN(Number(impurityMax))) {
+      filter.impurityPct = { ...(filter.impurityPct || {}), $lte: Number(impurityMax) };
     }
 
     const total = await WeighingSlip.countDocuments(filter);
     res.setHeader('X-Total-Count', total);
 
+    const sumRows = await WeighingSlip.aggregate([
+      { $match: filter },
+      {
+        $group: {
+          _id: null,
+          origin: { $sum: { $ifNull: ['$originWeightKg', 0] } },
+          dest: { $sum: { $ifNull: ['$destWeightKg', 0] } },
+          diff: { $sum: { $ifNull: ['$weightDifferenceKg', 0] } },
+          n: { $sum: 1 }
+        }
+      }
+    ]);
+    const sums = sumRows[0]
+      ? { origin: sumRows[0].origin, dest: sumRows[0].dest, diff: sumRows[0].diff, n: sumRows[0].n }
+      : { origin: 0, dest: 0, diff: 0, n: 0 };
+
     let query = WeighingSlip.find(filter).sort({ date: -1 });
-    if (page && limit) {
+    const paginate = page !== undefined && page !== '';
+    if (paginate) {
       const pageNum = Math.max(1, parseInt(page, 10) || 1);
-      const limitNum = Math.max(1, Math.min(500, parseInt(limit, 10) || 50));
+      const limitNum = Math.max(1, Math.min(500, parseInt(limit, 10) || 10));
       query = query.skip((pageNum - 1) * limitNum).limit(limitNum);
     }
     const slips = await query.lean();
+    if (paginate) {
+      return res.json({ items: slips, total, sums });
+    }
     res.json(slips);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar romaneios' });

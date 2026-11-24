@@ -61,6 +61,12 @@ describe('fiscal PDF Contas layout', () => {
     expect(html).toContain('1,63%');
   });
 
+  it('inclui Frete nas observações quando freightCost > 0', () => {
+    const withFrete = sampleSales.map((s, i) => (i === 0 ? { ...s, freightCost: 1500 } : s));
+    const html = buildFiscalPdfHtml(withFrete, {}, {});
+    expect(html).toMatch(/Frete:\s*R\$\s*1\.500,00/);
+  });
+
   it('ordena itens da loja por saleDate crescente', () => {
     const sameLoja = [
       {

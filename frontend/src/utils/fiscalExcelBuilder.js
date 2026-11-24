@@ -13,6 +13,7 @@ import {
   resolveProductUnit
 } from './dataHelpers';
 import { DATA_LABELS } from '../constants/dataLabels';
+import { freightOf, formatFreightMoney } from './freight';
 
 const COL_DETALHE = 9; // Data|Rom|NF|Produto|Qtd|VP|NF$|Recebido|Saldo
 
@@ -92,6 +93,8 @@ function enrichSale(sale) {
   const obsParts = [];
   if (sale.notes) obsParts.push(String(sale.notes));
   if (disc.note) obsParts.push(`Desconto: ${disc.note}`);
+  const freteLabel = formatFreightMoney(freightOf(sale));
+  if (freteLabel) obsParts.push(`Frete: ${freteLabel}`);
   return {
     sale,
     liq,

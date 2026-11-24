@@ -23,6 +23,7 @@ const SaleSchema = new mongoose.Schema({
   driverName: { type: String, default: '' },
   driverCPF: { type: String, default: '' },
   freightPricePerUnit: { type: Number, default: 0 },
+  freightCost: { type: Number, default: 0 },
   qualityStandard: {
     maxHumidity: { type: Number, default: 14.0 },
     maxImpurity: { type: Number, default: 1.0 },

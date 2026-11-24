@@ -3,17 +3,35 @@ const router = express.Router();
 const { Client, Sale, WeighingSlip, Purchase, getNextSequence } = require('../db');
 const { escapeRegex } = require('../utils/security');
 const { requireAuth } = require('../middlewares/auth');
+const { reconcileFromSales, typeMatchesFilter } = require('../services/clientSync.service');
 
 router.use(requireAuth);
+
+// GET /api/clients/reconcile — parceiros em vendas sem cadastro
+router.get('/reconcile', async (req, res, next) => {
+  try {
+    const result = await reconcileFromSales({ apply: false });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/clients/reconcile — cria missing a partir das vendas
+router.post('/reconcile', async (req, res, next) => {
+  try {
+    const result = await reconcileFromSales({ apply: true });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /api/clients
 router.get('/', async (req, res) => {
   try {
     const { type, search } = req.query;
     let filter = {};
-    if (type && type !== 'all') {
-      filter.type = type;
-    }
     if (search && search.trim()) {
       const escaped = escapeRegex(search.trim());
       const regex = new RegExp(escaped, 'i');
@@ -23,7 +41,10 @@ router.get('/', async (req, res) => {
         { city: regex }
       ];
     }
-    const clients = await Client.find(filter).sort({ name: 1 }).lean();
+    let clients = await Client.find(filter).sort({ name: 1 }).lean();
+    if (type && type !== 'all') {
+      clients = clients.filter((c) => typeMatchesFilter(c.type, type));
+    }
     res.json(clients);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao buscar clientes' });

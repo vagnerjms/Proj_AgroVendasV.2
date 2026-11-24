@@ -13,8 +13,16 @@ export default function WeighingTable({
   onDeleteSlip,
   onPreviewImage,
   vpSortDir = 'asc',
-  onToggleVpSort
+  onToggleVpSort,
+  sums = null
 }) {
+  const footerSums = sums || {
+    origin: slips.reduce((a, s) => a + (Number(s.originWeightKg) || 0), 0),
+    dest: slips.reduce((a, s) => a + (Number(s.destWeightKg) || 0), 0),
+    diff: slips.reduce((a, s) => a + (Number(s.weightDifferenceKg) || 0), 0),
+    n: slips.length
+  };
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
@@ -174,6 +182,19 @@ export default function WeighingTable({
               ))
             )}
           </tbody>
+          {!loading && slips.length > 0 && (
+            <tfoot className="bg-gray-100 font-bold text-xs border-t-2 border-gray-300">
+              <tr>
+                <td className="py-2.5 px-4 text-left" colSpan={3}>
+                  TOTAL filtro ({footerSums.n || 0} romaneio(s))
+                </td>
+                <td className="py-2.5 px-4 text-right">{formatNumber(footerSums.origin, 0)} kg</td>
+                <td className="py-2.5 px-4 text-right">{formatNumber(footerSums.dest, 0)} kg</td>
+                <td className="py-2.5 px-4 text-right">-{formatNumber(footerSums.diff, 0)} kg</td>
+                <td className="py-2.5 px-4" colSpan={3} />
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>

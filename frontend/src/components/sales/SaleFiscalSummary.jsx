@@ -14,11 +14,13 @@ export default function SaleFiscalSummary({
   totalVolumes = 0,
   effectiveTotalNF = 0,
   valorTotalVP = 0,
+  freightCost = 0,
   feeValue = 3.0,
   totalCommission = 0,
   submitting = false
 }) {
   const quantityUnit = resolveProductUnit(saleItems[0] || {});
+  const frete = Number(freightCost) || 0;
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-4 sticky top-6">
@@ -66,6 +68,13 @@ export default function SaleFiscalSummary({
           <span>{DATA_LABELS.valorNF}:</span>
           <span className="font-semibold text-gray-800">{formatCurrency(effectiveTotalNF)}</span>
         </div>
+
+        {frete > 0 && (
+          <div className="flex justify-between text-amber-900 border-t border-gray-100 pt-2">
+            <span className="font-semibold">Frete:</span>
+            <span className="font-bold">{formatCurrency(frete)}</span>
+          </div>
+        )}
 
         <div className="flex justify-between text-gray-800 font-bold border-t border-gray-100 pt-2">
           <span>Comissão AgroVenda ({feeValue}%):</span>

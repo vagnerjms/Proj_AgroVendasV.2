@@ -66,6 +66,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
   
   // Freight & Transport
   const [freightType, setFreightType] = useState('FOB (Retira na Origem)');
+  const [freightCost, setFreightCost] = useState('');
   const [carrierName, setCarrierName] = useState('');
   const [truckPlate, setTruckPlate] = useState('');
   const [driverName, setDriverName] = useState('');
@@ -246,6 +247,11 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
       setNotes(editingSale.notes || '');
       setRomaneioNumber(resolveRomaneioNumber(editingSale) || formatRomaneioNumber(editingSale.romaneioNumber) || '');
       setFreightType(editingSale.freightType || 'FOB (Retira na Origem)');
+      setFreightCost(
+        editingSale.freightCost != null && Number(editingSale.freightCost) > 0
+          ? String(editingSale.freightCost)
+          : ''
+      );
       setCarrierName(editingSale.carrierName || '');
       setTruckPlate(editingSale.truckPlate || '');
       setDriverName(editingSale.driverName || '');
@@ -864,6 +870,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
         dailyQuote: saleItems[0]?.dailyQuote ? Number(saleItems[0].dailyQuote) : 0,
         valorTotalVP: Number(valorTotalVP) || 0,
         freightType,
+        freightCost: parseNum(freightCost) || 0,
         carrierName,
         truckPlate,
         driverName,
@@ -1243,6 +1250,18 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                 />
                 <p className="text-[10px] text-gray-400 mt-1">Preenchido automaticamente pelo nome do anexo (ex.: 09733-01082026.jpeg).</p>
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Valor do Frete (R$)</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Opcional — quando houver frete"
+                  value={freightCost}
+                  onChange={(e) => setFreightCost(e.target.value)}
+                  className="w-full bg-white border border-gray-300 text-gray-800 text-xs rounded-lg px-3 py-2.5 outline-none font-bold focus:ring-2 focus:ring-[#091b2e]"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">Aparece nas Observações (conferência) do PDF/Excel Fiscal.</p>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1265,7 +1284,10 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
                   <option value="BRUNO PERES ROMEIRO (Campo Alegre de Goiás/GO)" />
                   <option value="CARLOS CESAR CANTELE (NOVA PONTE/MG)" />
                   {clients
-                    .filter(c => (c.type || '').toLowerCase().includes('produtor') || c.type === 'Produtor Rural')
+                    .filter(c => {
+                      const t = (c.type || '').toLowerCase();
+                      return t.includes('produtor') || t === 'ambos' || c.type === 'Produtor Rural';
+                    })
                     .map(c => {
                       const formatted = `${c.name}${c.city ? ` (${c.city}/${c.uf || c.state || 'MG'})` : ''}`;
                       return <option key={c.id || c._id} value={formatted} />;
@@ -1329,6 +1351,7 @@ export default function NewSale({ setCurrentPage, onSaleCreated, editingSale, on
             totalVolumes={totalVolumes}
             effectiveTotalNF={effectiveTotalNF}
             valorTotalVP={valorTotalVP}
+            freightCost={parseNum(freightCost) || 0}
             feeValue={feeValue}
             totalCommission={totalCommission}
             submitting={submitting}

@@ -87,6 +87,15 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
     fetchProducts();
   }, []);
 
+  useEffect(() => {
+    const onFocus = () => {
+      fetchClients();
+      fetchProducts();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, []);
+
   const showNotification = (msg) => {
     setSuccessMsg(msg);
     setErrorMsg('');
@@ -236,9 +245,30 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
   // Filtered lists
   const filteredClients = clients.filter(c => {
     const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) || (c.document && c.document.includes(search)) || (c.city && c.city.toLowerCase().includes(search.toLowerCase()));
-    const matchType = clientTypeFilter === 'all' || c.type === clientTypeFilter;
+    const t = c.type || '';
+    const matchType = clientTypeFilter === 'all'
+      || t === clientTypeFilter
+      || (t === 'Ambos' && (clientTypeFilter === 'Comprador' || clientTypeFilter === 'Produtor'));
     return matchSearch && matchType;
   });
+
+  const handleSyncClientsFromSales = async () => {
+    try {
+      const preview = await api.get('/api/clients/reconcile');
+      const n = preview?.missingCount || 0;
+      if (n === 0) {
+        showNotification('Nenhum parceiro pendente — cadastro já está alinhado às vendas.');
+        return;
+      }
+      if (!window.confirm(`Encontrados ${n} parceiro(s) em vendas sem cadastro. Criar agora?`)) return;
+      const result = await api.post('/api/clients/reconcile', {});
+      showNotification(`Sincronizados ${result?.created?.length || 0} de ${n} parceiro(s).`);
+      fetchClients();
+    } catch (err) {
+      console.error(err);
+      showErrorNotification(err.message || 'Falha ao sincronizar clientes das vendas.');
+    }
+  };
 
   const filteredProducts = products.filter(p => {
     return p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase());
@@ -255,15 +285,24 @@ export default function Cadastros({ tab = 'clients', setCurrentPage }) {
           </h1>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {activeTab === 'clients' ? (
-            <button
-              onClick={() => handleOpenClientModal()}
-              className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Novo Parceiro (Cliente / Produtor)
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handleSyncClientsFromSales}
+                className="bg-white hover:bg-emerald-50 text-emerald-900 border border-emerald-300 text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                Sincronizar das vendas
+              </button>
+              <button
+                onClick={() => handleOpenClientModal()}
+                className="bg-[#091b2e] hover:bg-[#132c4a] text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Novo Parceiro (Cliente / Produtor)
+              </button>
+            </>
           ) : (
             <button
               onClick={() => handleOpenProductModal()}

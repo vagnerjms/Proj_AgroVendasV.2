@@ -9,6 +9,7 @@ import {
   nfDisplayLabel,
   resolveRomaneioNumber
 } from './dataHelpers';
+import { freightOf, formatFreightMoney } from './freight';
 
 const TIPOS = [
   { key: 'especial', label: 'Batata Esp.', match: /especial/i },
@@ -104,16 +105,20 @@ function enrichSaleMarcio(sale) {
   const tipos = splitTiposFromSale(sale);
   const quantidadeSacos = TIPOS.reduce((a, t) => a + (tipos[t.key].qty || 0), 0);
   const semNf = !sale.nfFile;
+  const rom = resolveRomaneioNumber(sale) || '—';
+  const freteVal = freightOf(sale);
+  const freteLabel = formatFreightMoney(freteVal);
   const obsParts = [];
   if (sale.notes) {
     const first = String(sale.notes).split(/(?<=\.)\s+/)[0] || String(sale.notes);
     obsParts.push(first.length > 110 ? first.slice(0, 107) + '…' : first);
   }
+  if (freteLabel) obsParts.push(`Frete: ${freteLabel}`);
   return {
     sale,
     saleDateRaw: String(sale.saleDate || ''),
     data: formatDate(sale.saleDate),
-    rom: resolveRomaneioNumber(sale) || '—',
+    rom,
     nfLabel: semNf ? 'SEM NF' : nfDisplayLabel(sale),
     tipos,
     quantidadeSacos,
@@ -123,7 +128,7 @@ function enrichSaleMarcio(sale) {
     valorNf: semNf ? 0 : (Number(sale.totalOperation) || 0),
     semNf,
     destinatario: (sale.client || 'Sem loja').trim() || 'Sem loja',
-    obsResumo: obsParts.length ? `Rom. ${resolveRomaneioNumber(sale) || '—'}: ${obsParts[0]}` : null
+    obsResumo: obsParts.length ? `Rom. ${rom}: ${obsParts.join(' · ')}` : null
   };
 }
 

@@ -21,6 +21,7 @@ const {
   formatNfNumber
 } = require('../utils/dataHelpers');
 const { reconcilePatioSlip } = require('./reconcilePatio.service');
+const { upsertPartnersFromSale } = require('./clientSync.service');
 const crypto = require('crypto');
 
 /** Normaliza proofs do payload: paymentProofFiles[] + paymentProofFile (compat). */
@@ -108,6 +109,8 @@ async function createSale(body) {
     truckPlate: body.truckPlate || '',
     driverName: body.driverName || '',
     driverCPF: body.driverCPF || '',
+    freightPricePerUnit: Number(body.freightPricePerUnit) || 0,
+    freightCost: roundMoney(body.freightCost),
     items: body.items || [],
     feeType: body.feeType || "Porcentagem (%)",
     feeValue: Number(body.feeValue) || 3.0,
@@ -136,6 +139,10 @@ async function createSale(body) {
   });
 
   await newSale.save();
+
+  upsertPartnersFromSale(newSale).catch((e) =>
+    console.warn('Aviso ao sincronizar clientes da venda:', e.message)
+  );
 
   // Auto-cadastra os produtos da venda no catálogo se ainda não existirem
   if (newSale.items && Array.isArray(newSale.items) && newSale.items.length > 0) {
@@ -237,6 +244,10 @@ async function updateSale(id, body) {
     err.statusCode = 404;
     throw err;
   }
+
+  upsertPartnersFromSale(updated).catch((e) =>
+    console.warn('Aviso ao sincronizar clientes da venda:', e.message)
+  );
 
   if (updated.items && Array.isArray(updated.items) && updated.items.length > 0) {
     productService.ensureProductsRegistered(updated.items).catch(e => console.warn('Aviso ao auto-cadastrar produtos:', e.message));

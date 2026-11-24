@@ -123,7 +123,10 @@ export function sumClientDiscounts(sale = {}) {
  * Desconto manual conta como cobertura do título (pago + desconto ≥ VP → quitado).
  */
 export function calculateLiquidation(sale = {}) {
-  const itemValorNF = roundMoney(Number(sale.valorTotalNF) || Number(sale.totalOperation) || Number(sale.valorNF) || 0);
+  const semNf = !sale.nfFile;
+  const itemValorNF = semNf
+    ? 0
+    : roundMoney(Number(sale.valorTotalNF) || Number(sale.totalOperation) || Number(sale.valorNF) || 0);
 
   let funrural = 0;
   if (sale.funrural !== undefined && sale.funrural !== null) {

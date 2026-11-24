@@ -295,8 +295,10 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
       })
       .map(s => {
         const liq = calculateLiquidation(s);
-        const fr = calculateFunrural(liq.valorTotalNF);
-        return { sale: s, liq, fr };
+        const semNf = !s.nfFile;
+        const base = semNf ? liq.valorVP : liq.valorTotalNF;
+        const fr = calculateFunrural(base);
+        return { sale: s, liq, fr, semNf, funruralBase: base };
       });
   }, [sales, selectedStores, selectedProducts, selectedProducers, searchTerm]);
 
@@ -410,7 +412,9 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
         <div>
           <div className="text-xs font-bold text-[#091b2e] uppercase">INICIO / FINANCEIRO & FISCAL</div>
           <h1 className="text-2xl font-extrabold text-gray-900 mt-1">Apuração e Retenção de FUNRURAL</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Consulta dedicada das alíquotas (1,63% s/ NF). Não opera baixas nesta tela.</p>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Alíquotas 1,63%: com NF sobre Valor NF · SEM NF sobre valor do romaneio (VP). Não opera baixas nesta tela.
+          </p>
         </div>
 
         <div className="space-y-3">
@@ -469,7 +473,9 @@ export default function Financial({ view = 'overview', setCurrentPage }) {
               Detalhamento por venda — VP, NF e FUNRURAL
             </h2>
             <p className="text-xs text-gray-500 mt-1">
-              {funruralRows.length} venda(s) · retenção total <strong>{formatCurrency(funruralTotals.funrural)}</strong> sobre NF {formatCurrency(funruralTotals.nf)}.
+              {funruralRows.length} venda(s) · retenção total <strong>{formatCurrency(funruralTotals.funrural)}</strong>
+              {' '}· base NF {formatCurrency(funruralTotals.nf)} · VP {formatCurrency(funruralTotals.vp)}
+              {' '}· SEM NF usa VP.
             </p>
           </div>
           <div className="overflow-x-auto">

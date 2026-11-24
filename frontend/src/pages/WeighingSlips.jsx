@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, CheckCircle2, AlertTriangle, Smartphone } from 'lucide-react';
+import { Plus, Search, CheckCircle2, AlertTriangle, Smartphone, ChevronLeft, ChevronRight } from 'lucide-react';
 import { api } from '../services/api';
 import WeighingKpiCards from '../components/weighings/WeighingKpiCards';
 import WeighingTable from '../components/weighings/WeighingTable';
@@ -8,10 +8,16 @@ import WeighingEditModal from '../components/weighings/WeighingEditModal';
 import WeighingResolveModal from '../components/weighings/WeighingResolveModal';
 import TicketPreviewModal from '../components/weighings/TicketPreviewModal';
 
+const PAGE_SIZE = 10;
+
 export default function WeighingSlips({ initialStatus = 'all', setCurrentPage }) {
   const [slips, setSlips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
+  const [classFilter, setClassFilter] = useState('all'); // all | ok | u14 | i1
+  const [currentPage, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [sums, setSums] = useState({ origin: 0, dest: 0, diff: 0, n: 0 });
   const [search, setSearch] = useState(() => {
     try {
       const saved = sessionStorage.getItem('agrovenda_filter_entity');
@@ -69,14 +75,34 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
   const [errorNotification, setErrorNotification] = useState('');
   const [vpSortDir, setVpSortDir] = useState('asc'); // saleId VP sort
 
-  const fetchSlips = async () => {
+  const classQuery = () => {
+    if (classFilter === 'ok') return { humidityMax: 14, impurityMax: 1 };
+    if (classFilter === 'u14') return { humidityMax: 14 };
+    if (classFilter === 'i1') return { impurityMax: 1 };
+    return {};
+  };
+
+  const fetchSlips = async (page = currentPage) => {
     setLoading(true);
     try {
+      const cq = classQuery();
       const data = await api.get('/api/weighings', {
         status: statusFilter !== 'all' ? statusFilter : undefined,
-        search: search || undefined
+        search: search || undefined,
+        page,
+        limit: PAGE_SIZE,
+        humidityMax: cq.humidityMax,
+        impurityMax: cq.impurityMax
       });
-      setSlips(data || []);
+      if (data && Array.isArray(data.items)) {
+        setSlips(data.items);
+        setTotalCount(Number(data.total) || 0);
+        setSums(data.sums || { origin: 0, dest: 0, diff: 0, n: 0 });
+      } else {
+        setSlips(Array.isArray(data) ? data : []);
+        setTotalCount(Array.isArray(data) ? data.length : 0);
+        setSums({ origin: 0, dest: 0, diff: 0, n: 0 });
+      }
     } catch (err) {
       console.error('Erro ao buscar romaneios:', err);
     } finally {
@@ -85,13 +111,21 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
   };
 
   useEffect(() => {
-    fetchSlips();
-  }, [statusFilter]);
+    setPage(1);
+  }, [statusFilter, classFilter]);
+
+  useEffect(() => {
+    fetchSlips(currentPage);
+  }, [statusFilter, classFilter, currentPage]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    fetchSlips();
+    setPage(1);
+    fetchSlips(1);
   };
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE) || 1);
+  const safePage = Math.min(currentPage, totalPages);
 
   const showNotification = (msg) => {
     setNotification(msg);
@@ -234,7 +268,13 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
     }
   };
 
-  const pendingDivergences = slips.filter(s => s.status === 'Divergente').length;
+  const [pendingDivergences, setPendingDivergences] = useState(0);
+
+  useEffect(() => {
+    api.get('/api/weighings', { status: 'Divergente', page: 1, limit: 1 })
+      .then((d) => setPendingDivergences(Number(d?.total) || 0))
+      .catch(() => {});
+  }, [statusFilter, classFilter, notification]);
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto space-y-6">
@@ -288,7 +328,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
       {/* KPI Cards (Modular) */}
       <WeighingKpiCards
         pendingDivergences={pendingDivergences}
-        slipsCount={slips.length}
+        slipsCount={totalCount}
         onFilterDivergences={() => setStatusFilter('Divergente')}
       />
 
@@ -305,7 +345,7 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
           />
         </form>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -315,6 +355,17 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
             <option value="Divergente">Somente Divergentes</option>
             <option value="Ajustado">Ajustados / Compensados</option>
             <option value="Aprovado">Aprovados (Sem Divergência)</option>
+          </select>
+          <select
+            value={classFilter}
+            onChange={(e) => setClassFilter(e.target.value)}
+            className="bg-white border border-gray-300 text-xs rounded-lg px-3 py-2 outline-none font-semibold text-gray-700 cursor-pointer"
+            title="Filtro de classificação (umidade / impureza)"
+          >
+            <option value="all">Classificação: todas</option>
+            <option value="ok">Dentro do padrão (U≤14% · I≤1%)</option>
+            <option value="u14">Umidade ≤ 14%</option>
+            <option value="i1">Impureza ≤ 1%</option>
           </select>
         </div>
       </div>
@@ -335,7 +386,32 @@ export default function WeighingSlips({ initialStatus = 'all', setCurrentPage })
         onPreviewImage={setPreviewImage}
         vpSortDir={vpSortDir}
         onToggleVpSort={() => setVpSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+        sums={sums}
       />
+
+      <div className="flex items-center justify-between text-xs bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm">
+        <span className="text-gray-600 font-semibold">
+          {totalCount} romaneio(s) · página {safePage}/{totalPages} · {PAGE_SIZE}/página
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={safePage <= 1 || loading}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            className="px-3 py-1.5 bg-white border rounded-lg disabled:opacity-40 cursor-pointer flex items-center gap-1"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" /> Anterior
+          </button>
+          <button
+            type="button"
+            disabled={safePage >= totalPages || loading}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            className="px-3 py-1.5 bg-white border rounded-lg disabled:opacity-40 cursor-pointer flex items-center gap-1"
+          >
+            Próxima <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
 
       {/* Modal: Editar Romaneio (Modular) */}
       <WeighingEditModal
